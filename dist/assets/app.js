@@ -507,20 +507,82 @@
     if (!fromRender) { state.toast = null; saveState(); }
   }
 
-  function startNode(nodeId) {
+  function taskApiErrorMessage(error) {
+    const raw = String(error?.message || '');
+    if (raw.includes('활성화')) return '계정 활성화 후 업무를 시작할 수 있어요.';
+    if (raw.includes('공개 중인') || raw.includes('공개')) return '운영자가 공개한 업무가 아니거나 잠시 중지됐어요.';
+    if (raw.includes('소진')) return '오늘 준비된 업무 수량이 모두 소진됐어요.';
+    if (raw.includes('진행 중')) return '진행 중인 업무를 먼저 마무리해 주세요.';
+    return '업무를 시작하거나 제출하지 못했어요. 잠시 후 다시 시도해 주세요.';
+  }
+
+  async function startNode(nodeId) {
+    if (state.run) { state.run.overlayOpen = true; render(); return; }
+    const node = nodeById(nodeId);
+
+    if (authState.session && config.enableWorkApi === true) {
+      if (!supabaseClient) {
+        showToast('업무 서버가 준비되지 않아 시작할 수 없어요.', 'info');
+        return;
+      }
+      const { data, error } = await supabaseClient
+        .from('task_runs')
+        .insert({ node_id: nodeId, user_id: authState.session.user.id })
+        .select('id,public_id,node_id,status,started_at,expected_completed_at,motion_variant,motion_seed,reward_amount')
+        .single();
+      if (error || !data) {
+        showToast(taskApiErrorMessage(error), 'info');
+        return;
+      }
+
+      const startedAt = Date.parse(data.started_at || '') || Date.now();
+      const expectedAt = Date.parse(data.expected_completed_at || '') || (startedAt + node.time * 1000);
+      const duration = Math.max(1000, expectedAt - startedAt);
+      state.run = {
+        id: data.public_id,
+        dbId: data.id,
+        nodeId: data.node_id || nodeId,
+        startedAt,
+        expectedCompletedAt: expectedAt,
+        duration,
+        progress: Math.min(1, Math.max(0, (Date.now() - startedAt) / duration)),
+        overlayOpen: true,
+        logs: [
+          `[서버] ${node.title} 실행을 승인했어요.`,
+          '[연결] 운영자 공개 원본을 준비하고 있어요.'
+        ],
+        serverBacked: true,
+        rewardAmount: Number(data.reward_amount || 0),
+        motionVariant: data.motion_variant || 'a',
+        motionSeed: data.motion_seed || '',
+        _submitted: false
+      };
+      state.notifications.unshift({ text: `${node.title} 업무가 시작됐어요.`, time: '방금 전', type: 'work' });
+      saveState();
+      render();
+      runFrame = requestAnimationFrame(tickRun);
+      return;
+    }
+
     if (authState.session && config.enableWorkApi !== true) {
       showToast('🔒 실제 작업 제출 API가 연결되기 전에는 회원 계정으로 작업을 시작할 수 없어요.', 'info');
       return;
     }
-    if (state.run) { state.run.overlayOpen = true; render(); return; }
-    const node = nodeById(nodeId);
-    state.run = { id: `RUN-${Date.now().toString().slice(-8)}`, nodeId, startedAt: Date.now(), duration: node.time * 1000, progress: 0, overlayOpen: true, logs: [`[연결] ${node.title} 원본을 준비하고 있어요.`] };
+
+    state.run = {
+      id: `RUN-${Date.now().toString().slice(-8)}`,
+      nodeId,
+      startedAt: Date.now(),
+      duration: node.time * 1000,
+      progress: 0,
+      overlayOpen: true,
+      logs: [`[연결] ${node.title} 원본을 준비하고 있어요.`]
+    };
     state.notifications.unshift({ text: `${node.title} 업무가 시작됐어요.`, time: '방금 전', type: 'work' });
     saveState();
     render();
     runFrame = requestAnimationFrame(tickRun);
   }
-
   function tickRun() {
     if (!state.run) { runFrame = null; return; }
     const now = Date.now();
@@ -552,8 +614,55 @@
     if (log) log.innerHTML = (state.run.logs || []).slice(-5).map((item) => `<div>${esc(item)}</div>`).join('');
   }
 
-  function finishRun(node) {
+  async function finishRun(node) {
     cancelAnimationFrame(runFrame); runFrame = null;
+    const run = state.run;
+    if (!run) return;
+
+    if (run.serverBacked && authState.session && config.enableWorkApi === true) {
+      if (run._submitting) return;
+      run._submitting = true;
+      const { data, error } = await supabaseClient
+        .from('task_runs')
+        .update({ status: 'submitted' })
+        .eq('id', run.dbId)
+        .eq('user_id', authState.session.user.id)
+        .select('public_id,reward_amount,completed_at')
+        .single();
+
+      if (error || !data) {
+        run._submitting = false;
+        run.overlayOpen = true;
+        saveState();
+        render();
+        const message = String(error?.message || '');
+        showToast(message.includes('예상 처리 시간이') ? '서버 시각을 맞추는 중이에요. 곧 자동으로 다시 제출할게요.' : taskApiErrorMessage(error), 'info');
+        if (message.includes('예상 처리 시간이')) {
+          window.setTimeout(() => {
+            if (state.run === run) runFrame = requestAnimationFrame(tickRun);
+          }, 1100);
+        }
+        return;
+      }
+
+      const reward = Number(data.reward_amount || run.rewardAmount || 0);
+      const durationSeconds = Math.max(1, Math.round((Number(data.completed_at ? Date.parse(data.completed_at) : Date.now()) - run.startedAt) / 1000));
+      state.history.unshift({
+        id: data.public_id || run.id,
+        nodeId: node.id,
+        status: '검수 대기',
+        reward,
+        date: '방금 전',
+        duration: `${durationSeconds}초`
+      });
+      state.notifications.unshift({ text: `${node.title} 제출 완료 · 운영 검수 대기`, time: '방금 전', type: 'work' });
+      state.run = null;
+      saveState();
+      render();
+      showToast('✅ 업무 제출이 완료됐어요. 운영 검수 후 보상이 확정됩니다.', 'success');
+      return;
+    }
+
     if (authState.session && config.enableWorkApi !== true) {
       state.run = null;
       saveState();
@@ -561,7 +670,8 @@
       showToast('작업 API 연결이 필요해 연출을 종료했어요. 잔액은 변경되지 않았습니다.', 'info');
       return;
     }
-    state.history.unshift({ id: state.run.id, nodeId: node.id, status: '검수 대기', reward: node.reward, date: '방금 전', duration: `${Math.round(node.time * .95)}초` });
+
+    state.history.unshift({ id: run.id, nodeId: node.id, status: '검수 대기', reward: node.reward, date: '방금 전', duration: `${Math.round(node.time * .95)}초` });
     state.wallet.task += node.reward;
     state.wallet.available += node.reward;
     state.notifications.unshift({ text: `${node.title} 제출 완료 · 운영 검수 대기`, time: '방금 전', type: 'work' });
@@ -570,7 +680,6 @@
     render();
     showToast('✅ 업무 제출이 완료됐어요. 운영 검수 후 보상이 확정됩니다.', 'success');
   }
-
   function drawMotionCanvas() {
     const canvas = document.getElementById('motionCanvas');
     if (!canvas || !state.run) return;
