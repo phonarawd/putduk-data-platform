@@ -18,3 +18,21 @@
 - Supabase 대시보드에서 이메일 인증·리디렉션 URL을 운영 도메인에 맞게 설정합니다.
 - `private` 스키마의 RLS 경고와 `public.rls_auto_enable()` 실행 권한을 검토한 뒤 운영 정책을 적용합니다.
 - 운영자 화면은 관리자 인증·권한별 서버 API를 연결하고 점검한 뒤 공개하세요.
+
+## 기술 기준
+
+버전과 이관 순서는 [기술 기준 문서](docs/toolchain.md)에 고정했습니다. 현재 정적 출시 셸은 유지하면서 Node.js 24 LTS, pnpm 12, Turborepo 기반 워크스페이스로 단계적으로 옮깁니다.
+
+```bash
+corepack pnpm@12.4.2 install --frozen-lockfile
+corepack pnpm@12.4.2 verify
+```
+
+## 기술 기준
+
+버전과 이관 순서는 [기술 기준 문서](docs/toolchain.md)에 고정했습니다. 현재 정적 출시 셸은 유지하면서 Node.js 24 LTS, pnpm 12, Turborepo 기반 워크스페이스로 단계적으로 옮깁니다.
+
+```bash
+corepack pnpm@12.4.2 install --frozen-lockfile
+corepack pnpm@12.4.2 verify
+```
