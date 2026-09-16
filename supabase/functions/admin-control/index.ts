@@ -308,6 +308,86 @@ async function reviewTask(userId: string, payload: JsonRecord) {
   return data;
 }
 
+function verificationStatus(value: unknown): "pending" | "submitted" | "approved" | "rejected" | "expired" {
+  const candidate = String(value || "pending");
+  if (!["pending", "submitted", "approved", "rejected", "expired"].includes(candidate)) {
+    throw new HttpError(400, "협력 자료 상태가 올바르지 않습니다.");
+  }
+  return candidate as "pending" | "submitted" | "approved" | "rejected" | "expired";
+}
+
+function logoUsageStatus(value: unknown): "not_submitted" | "submitted" | "approved" | "expired" {
+  const candidate = String(value || "not_submitted");
+  if (!["not_submitted", "submitted", "approved", "expired"].includes(candidate)) {
+    throw new HttpError(400, "로고 사용 상태가 올바르지 않습니다.");
+  }
+  return candidate as "not_submitted" | "submitted" | "approved" | "expired";
+}
+
+async function getBrand(id: string) {
+  const { data, error } = await admin.from("partner_brands").select("*").eq("id", id).maybeSingle();
+  if (error) {
+    console.error("brand read failed", error);
+    throw new HttpError(503, "협력사 정보를 불러오지 못했습니다.");
+  }
+  if (!data) throw new HttpError(404, "협력사를 찾을 수 없습니다.");
+  return data;
+}
+
+async function updateBrand(userId: string, payload: JsonRecord, action: "update" | "approve" | "publish" | "unpublish") {
+  const brandId = assertUuid(payload.brand_id, "협력사");
+  const before = await getBrand(brandId);
+  const patch: JsonRecord = {};
+
+  if (action === "approve") {
+    patch.verification_status = "approved";
+    patch.logo_usage_status = "approved";
+    patch.verification_note = textValue(payload.verification_note, "확인 메모", 1000, false);
+    const logoPath = textValue(payload.logo_asset_path ?? before.logo_asset_path, "로고 파일 경로", 500, false);
+    if (!logoPath) throw new HttpError(400, "승인 전에 로고 파일 경로를 등록해 주세요.");
+    patch.logo_asset_path = logoPath;
+    patch.published = false;
+  } else if (action === "publish") {
+    if (before.verification_status !== "approved" || before.logo_usage_status !== "approved" || !before.logo_asset_path) {
+      throw new HttpError(400, "협력 자료와 로고 사용 승인을 먼저 완료해 주세요.");
+    }
+    patch.published = true;
+  } else if (action === "unpublish") {
+    patch.published = false;
+  } else {
+    if (payload.verification_status !== undefined) patch.verification_status = verificationStatus(payload.verification_status);
+    if (payload.logo_usage_status !== undefined) patch.logo_usage_status = logoUsageStatus(payload.logo_usage_status);
+    if (payload.verification_note !== undefined) patch.verification_note = textValue(payload.verification_note, "확인 메모", 1000, false);
+    if (payload.logo_asset_path !== undefined) patch.logo_asset_path = textValue(payload.logo_asset_path, "로고 파일 경로", 500, false);
+    if (payload.published !== undefined) {
+      if (Boolean(payload.published)) {
+        if (before.verification_status !== "approved" || before.logo_usage_status !== "approved" || !before.logo_asset_path) {
+          throw new HttpError(400, "협력 자료와 로고 사용 승인을 먼저 완료해 주세요.");
+        }
+      }
+      patch.published = Boolean(payload.published);
+    }
+  }
+
+  if (Object.keys(patch).length === 0) throw new HttpError(400, "변경할 항목이 없습니다.");
+
+  const { data, error } = await admin
+    .from("partner_brands")
+    .update(patch)
+    .eq("id", brandId)
+    .select("id,slug,display_name_ko,legal_name,category,verification_status,verification_note,logo_asset_path,logo_usage_status,published,created_at,updated_at")
+    .single();
+
+  if (error || !data) {
+    console.error("brand update failed", error);
+    throw new HttpError(503, "협력사 설정을 저장하지 못했습니다.");
+  }
+
+  const actionLabel = action === "approve" ? "협력 자료·로고 승인" : action === "publish" ? "협력사 회원 공개" : action === "unpublish" ? "협력사 회원 비공개" : "협력사 설정 수정";
+  await appendAudit(userId, actionLabel, "partner_brand", brandId, textValue(payload.reason, "사유", 240, false), before, data);
+  return data;
+}
+
 async function getNode(id: string) {
   const { data, error } = await admin.from("nodes").select("*").eq("id", id).maybeSingle();
   if (error) {
@@ -502,6 +582,22 @@ Deno.serve(async (request: Request) => {
     if (action === "review_task") {
       await requireRole(user.id, reviewRoles);
       return jsonResponse(request, { ok: true, task_run: await reviewTask(user.id, payload) });
+    }
+
+    if (action === "update_brand") {
+      await requireRole(user.id, contentRoles);
+      return jsonResponse(request, { ok: true, brand: await updateBrand(user.id, payload, "update") });
+    }
+
+    if (action === "approve_brand") {
+      await requireRole(user.id, contentRoles);
+      return jsonResponse(request, { ok: true, brand: await updateBrand(user.id, payload, "approve") });
+    }
+
+    if (action === "publish_brand" || action === "unpublish_brand") {
+      await requireRole(user.id, contentRoles);
+      const actionName = action === "publish_brand" ? "publish" : "unpublish";
+      return jsonResponse(request, { ok: true, brand: await updateBrand(user.id, payload, actionName) });
     }
 
     if (action === "create_node") {
