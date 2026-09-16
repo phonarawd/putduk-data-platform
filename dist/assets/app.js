@@ -1428,7 +1428,7 @@
       drawMotionCanvas();
     }
     if (!document.hidden && authState.session) {
-      hydrateSession(authState.session).then(() => {
+      hydrateSession(authState.session).then(async () => {
         if (isAdmin && authState.adminAuthorized) {
           await loadAdminReviews({ silent: true });
           await loadAdminCatalog({ silent: true });
