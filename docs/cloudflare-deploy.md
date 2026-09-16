@@ -10,6 +10,8 @@
 
 저장소의 `wrangler.toml`, `dist/_headers`, `dist/_redirects`가 정적 배포 설정을 포함합니다.
 
+현재 배포 방식은 정적 산출물을 Cloudflare Pages에 올리는 1단계입니다. Next.js 이관 후에도 `output: "export"`로 만든 정적 결과를 Pages에 올리고, 잔액·작업·관리자 승인처럼 비밀 키가 필요한 변경은 Supabase Edge Functions에서 처리합니다. SSR·Server Actions를 도입하는 시점에는 Pages 설정을 그대로 확장하지 말고 Cloudflare Workers 전환 검토를 별도로 진행합니다.
+
 ## 도메인 연결 후 확인할 주소
 
 - 회원 화면: `/`
@@ -39,3 +41,10 @@ https://운영도메인.example/admin/
 3. 작업 완료·잔액 변경·입출금 상태가 서버 원장과 일치하는지 확인합니다.
 4. KYC 파일 저장소와 운영자 감사 기록의 접근 범위를 확인합니다.
 5. 실제 회원 계정으로 회원 화면과 운영자 계정을 각각 점검합니다.
+
+## Next.js 이관 후 Pages 설정
+
+- 루트 디렉터리: 저장소 루트
+- 빌드 명령: `corepack pnpm@12.4.2 build`
+- 출력 디렉터리: 이관 단계에서 고정한 정적 export 경로
+- 서버 비밀: Pages 환경변수와 정적 번들에 `service_role` 키를 넣지 않음
