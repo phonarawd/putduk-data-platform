@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 180" role="img" aria-labelledby="title">
+  <title>퍼뜩</title>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#12b982"/>
+      <stop offset="1" stop-color="#087557"/>
+    </linearGradient>
+    <linearGradient id="gold" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ffe19a"/>
+      <stop offset="1" stop-color="#c98d28"/>
+    </linearGradient>
+  </defs>
+  <rect width="180" height="180" rx="48" fill="url(#bg)"/>
+  <path d="M44 95c28-50 64-50 92 0-28 50-64 50-92 0Z" fill="none" stroke="#fff" stroke-width="14" stroke-linejoin="round"/>
+  <circle cx="90" cy="95" r="17" fill="url(#gold)" stroke="#fff" stroke-width="5"/>
+</svg>
