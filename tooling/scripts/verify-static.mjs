@@ -1,7 +1,10 @@
 import { access, readFile } from 'node:fs/promises';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 import { join } from 'node:path';
 
 const root = process.cwd();
+const execFileAsync = promisify(execFile);
 const requiredFiles = [
   'dist/index.html',
   'dist/admin/index.html',
@@ -24,6 +27,8 @@ for (const relativePath of requiredFiles) {
 const memberHtml = await readFile(join(root, 'dist/index.html'), 'utf8');
 const adminHtml = await readFile(join(root, 'dist/admin/index.html'), 'utf8');
 const appJs = await readFile(join(root, 'dist/assets/app.js'), 'utf8');
+
+await execFileAsync(process.execPath, ['--check', join(root, 'dist/assets/app.js')]);
 
 if (!memberHtml.includes('lang="ko"') || !adminHtml.includes('lang="ko"')) {
   throw new Error('회원·관리자 문서 언어가 한국어로 설정되어야 합니다.');
