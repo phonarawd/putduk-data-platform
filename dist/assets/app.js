@@ -58,6 +58,7 @@
     adminReviewLoading: false,
     adminReviewError: null,
     adminReviewBusyId: null,
+    lastReviewToastId: null,
     toast: null
   };
 
@@ -196,6 +197,8 @@
   }
 
   async function hydrateSession(session) {
+    const previousHistory = Array.isArray(state.history) ? state.history : [];
+    const previousHistoryMap = new Map(previousHistory.map((item) => [item.id, item.status]));
     authState.session = session || null;
     authState.profile = null;
     authState.error = null;
@@ -251,6 +254,11 @@
           date: new Date(row.created_at).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
           duration: row.completed_at && row.created_at ? `${Math.max(1, Math.round((new Date(row.completed_at) - new Date(row.created_at)) / 1000))}초` : '진행 중'
         }));
+        const newlyApproved = runResult.data.find((row) => row.status === 'approved' && ['검수 대기', '제출 완료'].includes(previousHistoryMap.get(row.public_id)) && state.lastReviewToastId !== row.public_id);
+        if (newlyApproved) {
+          state.lastReviewToastId = newlyApproved.public_id;
+          state.toast = { text: `🎉 ${newlyApproved.public_id} 업무가 검수 완료됐어요. 지갑에 보상이 반영됐습니다.`, kind: 'success' };
+        }
       }
 
 
@@ -767,7 +775,11 @@
     if (!isAdmin && state.memberPage === 'dashboard') drawMemberChart();
     if (isAdmin && state.adminPage === 'overview') drawAdminChart();
     if (state.run && state.run.overlayOpen) requestAnimationFrame(() => { drawMotionCanvas(); if (!runFrame) runFrame = requestAnimationFrame(tickRun); });
-    if (state.toast) showToast(state.toast.text, state.toast.kind, true);
+    if (state.toast) {
+      const pendingToast = state.toast;
+      state.toast = null;
+      showToast(pendingToast.text, pendingToast.kind, true);
+    }
   }
 
   function drawMemberChart() {
