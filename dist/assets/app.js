@@ -12,7 +12,7 @@
     : null;
   const authState = { session: null, profile: null, loading: Boolean(supabaseClient), error: null, adminLoading: isAdmin && Boolean(supabaseClient), adminAuthorized: !isAdmin, adminRoles: [] };
 
-  const companies = [
+  let companies = [
     { id: 'dhl', name: 'DHL', label: '국제 배송 데이터', mark: 'DHL', color: '#d49a17', status: '출처 확인', category: '특송·택배' },
     { id: 'ups', name: 'UPS', label: '운송 이벤트 데이터', mark: 'UPS', color: '#78502c', status: '출처 확인', category: '특송·택배' },
     { id: 'fedex', name: 'FedEx', label: '항공·통관 데이터', mark: 'FX', color: '#5d4fb2', status: '출처 확인', category: '항공·포워딩' },
@@ -23,7 +23,7 @@
     { id: 'gxo', name: 'GXO', label: '창고 재고 데이터', mark: 'GX', color: '#2b5da7', status: '자료 등록 대기', category: '창고·3PL' }
   ];
 
-  const nodes = [
+  let nodes = [
     { id: 'nod-dhl-01', companyId: 'dhl', title: '배송 이벤트 순서 확인', copy: '스캔·이동·도착 기록의 흐름이 맞는지 확인해요.', time: 60, minutes: '1분', reward: 1200, level: '빠른 확인', icon: 'scan-line', color: '#d49a17', available: 86, motion: 'scan' },
     { id: 'nod-alibaba-01', companyId: 'alibaba', title: '상품 속성 정합성 확인', copy: '상품명·규격·옵션 정보가 서로 맞는지 비교해요.', time: 75, minutes: '1~2분', reward: 1800, level: '일반 처리', icon: 'layers-3', color: '#c85b27', available: 42, motion: 'catalog' },
     { id: 'nod-ups-01', companyId: 'ups', title: '운송 예외 사유 분류', copy: '운송 흐름에서 발생한 예외 항목을 기준에 맞게 분류해요.', time: 150, minutes: '2~3분', reward: 2800, level: '일반 처리', icon: 'route', color: '#78502c', available: 31, motion: 'route' },
@@ -132,6 +132,69 @@
     return `${year}-${digits.slice(2, 4)}-${digits.slice(4, 6)}`;
   }
 
+  async function hydratePublishedCatalog() {
+    if (!supabaseClient || !authState.session) return;
+    const [brandResult, nodeResult] = await Promise.all([
+      supabaseClient
+        .from('partner_brands')
+        .select('id,slug,display_name_ko,category,verification_status,logo_usage_status,published')
+        .order('display_name_ko', { ascending: true }),
+      supabaseClient
+        .from('nodes')
+        .select('id,public_id,partner_brand_id,title_ko,description_ko,node_family,difficulty,estimated_seconds,reward_min,reward_max,daily_capacity,motion_profile,motion_version,enabled,catalog_status')
+        .order('created_at', { ascending: false })
+    ]);
+    if (brandResult.error || nodeResult.error) {
+      authState.error = brandResult.error || nodeResult.error;
+      return;
+    }
+    const brandRows = Array.isArray(brandResult.data) ? brandResult.data : [];
+    const nodeRows = Array.isArray(nodeResult.data) ? nodeResult.data : [];
+    const palette = ['#0d9f76', '#d49a17', '#5d4fb2', '#0a7180', '#c85b27', '#2b5da7', '#bc2039', '#78502c'];
+    companies = brandRows.map((row, index) => ({
+      id: row.id,
+      slug: row.slug,
+      name: row.display_name_ko,
+      label: row.category,
+      mark: String(row.display_name_ko || 'PD').slice(0, 3),
+      color: palette[index % palette.length],
+      status: '공개 승인',
+      category: row.category,
+      verified: true,
+      published: true
+    }));
+    const companyColors = Object.fromEntries(companies.map((company) => [company.id, company.color]));
+    nodes = nodeRows.map((row) => ({
+      id: row.id,
+      publicId: row.public_id,
+      companyId: row.partner_brand_id,
+      title: row.title_ko,
+      copy: row.description_ko,
+      time: Number(row.estimated_seconds || 60),
+      minutes: formatDuration(Number(row.estimated_seconds || 60)),
+      reward: Number(row.reward_max ?? row.reward_min ?? 0),
+      rewardMin: Number(row.reward_min ?? 0),
+      rewardMax: Number(row.reward_max ?? row.reward_min ?? 0),
+      level: row.difficulty || '일반 처리',
+      icon: 'scan-line',
+      color: companyColors[row.partner_brand_id] || '#0d9f76',
+      available: Number(row.daily_capacity || 0),
+      motion: row.motion_profile || 'default',
+      motionVersion: row.motion_version || '1.0.0',
+      enabled: row.enabled === true && row.catalog_status === 'published'
+    }));
+    state.companies = companies;
+    state.nodeEnabled = Object.fromEntries(nodes.map((node) => [node.id, node.enabled !== false]));
+  }
+
+  function formatDuration(seconds) {
+    const total = Math.max(1, Math.round(Number(seconds || 60)));
+    if (total < 60) return `${total}초`;
+    const minutes = Math.floor(total / 60);
+    const remainder = total % 60;
+    return remainder ? `${minutes}분 ${remainder}초` : `${minutes}분`;
+  }
+
   async function hydrateSession(session) {
     authState.session = session || null;
     authState.profile = null;
@@ -156,6 +219,7 @@
         .maybeSingle();
       if (profileResult.error) throw profileResult.error;
       authState.profile = profileResult.data || null;
+      await hydratePublishedCatalog();
 
       const walletResult = await supabaseClient
         .from('wallet_accounts')
@@ -373,8 +437,31 @@
     if (window.lucide && typeof window.lucide.createIcons === 'function') window.lucide.createIcons({ attrs: { 'stroke-width': 1.8 } });
   }
 
-  function companyById(id) { return companies.find((company) => company.id === id) || companies[0]; }
-  function nodeById(id) { return nodes.find((node) => node.id === id) || nodes[0]; }
+  function companyById(id) {
+    return companies.find((company) => company.id === id) || companies[0] || {
+      id: 'unknown-company',
+      name: '퍼뜩 협력사',
+      mark: 'PD',
+      color: '#0d9f76',
+      category: '데이터 업무'
+    };
+  }
+  function nodeById(id) {
+    return nodes.find((node) => node.id === id) || {
+      id,
+      companyId: 'unknown-company',
+      title: '업무 정보가 갱신 중이에요',
+      copy: '운영자가 공개한 업무 정보를 불러오는 중입니다.',
+      time: 60,
+      minutes: '1분',
+      reward: 0,
+      level: '확인 중',
+      icon: 'loader-circle',
+      color: '#0d9f76',
+      available: 0,
+      motion: 'default'
+    };
+  }
 
   function navItems() {
     return isAdmin ? [
@@ -1118,7 +1205,17 @@
     const value = filter.dataset.filter;
     document.querySelectorAll('#nodeGrid .node-card').forEach((card, index) => { card.style.display = value === 'all' || nodes[index]?.level === value ? '' : 'none'; });
   });
-  document.addEventListener('visibilitychange', () => { if (state.run) { updateRunDom('현재 작업 상태를 동기화하는 중'); drawMotionCanvas(); } });
+  document.addEventListener('visibilitychange', () => {
+    if (state.run) {
+      updateRunDom('현재 작업 상태를 동기화하는 중');
+      drawMotionCanvas();
+    }
+    if (!document.hidden && authState.session) {
+      hydrateSession(authState.session).then(() => {
+        if (isAdmin && authState.adminAuthorized) return loadAdminReviews({ silent: true });
+      }).then(() => render()).catch(() => {});
+    }
+  });
   window.addEventListener('resize', () => { if (state.run) drawMotionCanvas(); });
 
   initializePwa();
