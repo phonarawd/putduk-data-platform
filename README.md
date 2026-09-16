@@ -27,12 +27,3 @@
 corepack pnpm@12.4.2 install --frozen-lockfile
 corepack pnpm@12.4.2 verify
 ```
-
-## 기술 기준
-
-버전과 이관 순서는 [기술 기준 문서](docs/toolchain.md)에 고정했습니다. 현재 정적 출시 셸은 유지하면서 Node.js 24 LTS, pnpm 12, Turborepo 기반 워크스페이스로 단계적으로 옮깁니다.
-
-```bash
-corepack pnpm@12.4.2 install --frozen-lockfile
-corepack pnpm@12.4.2 verify
-```
