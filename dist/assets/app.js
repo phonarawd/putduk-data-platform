@@ -52,6 +52,12 @@
     companies: companies.map((company, index) => ({ ...company, verified: index < 3, published: index < 3 })),
     nodeEnabled: Object.fromEntries(nodes.map(node => [node.id, true])),
     supportGrant: 10000,
+    adminReviews: [],
+    adminReviewPendingCount: 0,
+    adminReviewCompletedCount: 0,
+    adminReviewLoading: false,
+    adminReviewError: null,
+    adminReviewBusyId: null,
     toast: null
   };
 
@@ -59,6 +65,7 @@
   let state = loadState();
   let runFrame = null;
   let chartInstance = null;
+  let syncTimer = null;
 
   function freshState(userState = false) {
     const next = JSON.parse(JSON.stringify(defaultState));
@@ -166,7 +173,7 @@
 
       const runResult = await supabaseClient
         .from('task_runs')
-        .select('id,public_id,node_id,status,reward_amount,created_at,completed_at,expected_completed_at,motion_variant,motion_seed')
+        .select('id,public_id,node_id,status,reward_amount,started_at,created_at,completed_at,expected_completed_at,motion_variant,motion_seed')
         .eq('user_id', session.user.id)
         .order('created_at', { ascending: false })
         .limit(50);
@@ -267,6 +274,51 @@
     }
   }
 
+  async function adminRequest(action, payload = {}) {
+    if (!isAdmin || !authState.session || !adminFunctionUrl) {
+      throw new Error('운영자 세션이 필요합니다.');
+    }
+    const response = await fetch(adminFunctionUrl, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${authState.session.access_token}`,
+        apikey: config.supabasePublishableKey || '',
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ action, ...payload })
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok || result.ok !== true) {
+      throw new Error(result.error || '운영 요청을 처리하지 못했어요.');
+    }
+    return result;
+  }
+
+  async function loadAdminReviews({ silent = false } = {}) {
+    if (!isAdmin || !authState.adminAuthorized || !authState.session) return;
+    if (!authState.adminRoles.includes('super_admin') && !authState.adminRoles.includes('work_review')) {
+      state.adminReviews = [];
+      state.adminReviewPendingCount = 0;
+      state.adminReviewCompletedCount = 0;
+      state.adminReviewError = '검수 권한이 연결된 운영자 계정에서만 확인할 수 있어요.';
+      return;
+    }
+    state.adminReviewLoading = true;
+    if (!silent) render();
+    try {
+      const result = await adminRequest('list_reviews');
+      state.adminReviews = Array.isArray(result.reviews) ? result.reviews : [];
+      state.adminReviewPendingCount = Number(result.pending_count || 0);
+      state.adminReviewCompletedCount = Number(result.completed_count || 0);
+      state.adminReviewError = null;
+    } catch (error) {
+      state.adminReviewError = error;
+    } finally {
+      state.adminReviewLoading = false;
+      if (!silent) render();
+    }
+  }
+
   async function initializeAuth() {
     if (!supabaseClient) {
       authState.loading = false;
@@ -277,14 +329,28 @@
       const { data, error } = await supabaseClient.auth.getSession();
       if (error) throw error;
       await hydrateSession(data.session);
-      if (isAdmin) await hydrateAdminAuthorization();
+      if (isAdmin) {
+        await hydrateAdminAuthorization();
+        if (authState.adminAuthorized) await loadAdminReviews({ silent: true });
+      }
       supabaseClient.auth.onAuthStateChange((_event, session) => {
         window.setTimeout(async () => {
           await hydrateSession(session);
-          if (isAdmin) await hydrateAdminAuthorization();
+          if (isAdmin) {
+            await hydrateAdminAuthorization();
+            if (authState.adminAuthorized) await loadAdminReviews({ silent: true });
+          }
           render();
         }, 0);
       });
+      if (!syncTimer) {
+        syncTimer = window.setInterval(async () => {
+          if (!authState.session || document.hidden) return;
+          await hydrateSession(authState.session);
+          if (isAdmin && authState.adminAuthorized) await loadAdminReviews({ silent: true });
+          render();
+        }, 30000);
+      }
     } catch (error) {
       authState.loading = false;
       authState.adminLoading = false;
@@ -316,7 +382,7 @@
       { id: 'members', label: '회원 관리', icon: 'users', count: 1284 },
       { id: 'companies', label: '기업 관리', icon: 'building-2', count: 8 },
       { id: 'nodes', label: '업무 카드 관리', icon: 'waypoints', count: 24 },
-      { id: 'reviews', label: '검수 대기', icon: 'clipboard-check', count: 37 },
+      { id: 'reviews', label: '업무 검수', icon: 'clipboard-check', count: state.adminReviewPendingCount || undefined },
       { id: 'finance', label: '입출금 처리', icon: 'wallet-cards', count: 11 },
       { id: 'notifications', label: '공지·알림', icon: 'bell' },
       { id: 'settings', label: '운영 설정', icon: 'sliders-horizontal' }
@@ -353,7 +419,7 @@
   }
 
   function renderTopbar() {
-    const title = isAdmin ? ({ overview: '전체 현황', members: '회원 관리', companies: '기업 관리', nodes: '업무 카드 관리', reviews: '검수 대기', finance: '입출금 처리', notifications: '공지·알림', settings: '운영 설정' }[state.adminPage] || '전체 현황') : ({ dashboard: '내 작업실', nodes: '업무 노드 찾기', history: '내 작업내역', wallet: '지갑·입출금', membership: '멤버십 카드', referrals: '추천인 혜택', support: '도움말' }[state.memberPage] || '내 작업실');
+    const title = isAdmin ? ({ overview: '전체 현황', members: '회원 관리', companies: '기업 관리', nodes: '업무 카드 관리', reviews: '업무 검수', finance: '입출금 처리', notifications: '공지·알림', settings: '운영 설정' }[state.adminPage] || '전체 현황') : ({ dashboard: '내 작업실', nodes: '업무 노드 찾기', history: '내 작업내역', wallet: '지갑·입출금', membership: '멤버십 카드', referrals: '추천인 혜택', support: '도움말' }[state.memberPage] || '내 작업실');
     const memberIdentity = authState.session
       ? `<div class="profile-chip"><span class="avatar">${esc(profileInitial())}</span><span>${esc(profileName())}</span><button class="profile-logout" data-action="logout">로그아웃</button></div>`
       : `<button class="small-button" data-action="open-login">로그인</button>`;
@@ -407,13 +473,25 @@
   }
 
   function renderTimeline() {
-    const items = [
-      { label: '업무 제출', copy: '운송 예외 사유 분류', time: '오늘 00:44', done: true },
-      { label: '검수 완료', copy: '배송 이벤트 순서 확인 · +1,200원', time: '어제 23:19', done: true },
-      { label: '검수 대기', copy: '상품 속성 정합성 확인', time: '어제 21:08', done: false },
-      { label: '다음 추천', copy: '컨테이너 상태 대조', time: '이용 가능', done: false }
-    ];
-    return `<div class="timeline">${items.map((item) => `<div class="timeline-item"><div class="timeline-dot ${item.done ? '' : 'pending'}"></div><div class="timeline-content"><strong>${item.label}</strong><p>${item.copy}</p></div><div class="timeline-time">${item.time}</div></div>`).join('')}</div>`;
+    const statusLabel = {
+      approved: '검수 완료',
+      review_pending: '검수 대기',
+      submitted: '제출 완료',
+      in_progress: '진행 중',
+      rework: '재확인 요청',
+      rejected: '반려',
+      cancelled: '취소'
+    };
+    const recent = state.history.slice(0, 4);
+    if (!recent.length) {
+      return `<div class="empty-state compact"><div class="empty-icon">${icon('clipboard-list', 22)}</div><strong>아직 기록된 업무가 없어요.</strong><p>업무를 제출하면 진행·검수·보상 상태가 이곳에 순서대로 표시됩니다.</p></div>`;
+    }
+    return `<div class="timeline">${recent.map((item) => {
+      const node = nodeById(item.nodeId);
+      const company = companyById(node.companyId);
+      const done = item.status === '검수 완료';
+      return `<div class="timeline-item"><div class="timeline-dot ${done ? '' : 'pending'}"></div><div class="timeline-content"><strong>${esc(statusLabel[item.status] || item.status)}</strong><p>${esc(company.name)} · ${esc(node.title)} · ${esc(item.duration)}</p></div><div class="timeline-time">${esc(item.date)}</div></div>`;
+    }).join('')}</div>`;
   }
 
   function renderNodesPage() {
@@ -477,7 +555,33 @@
   }
 
   function renderAdminReviews() {
-    return `<div class="section-heading" style="margin-top:0"><div><h1 class="page-title">검수 대기</h1><p class="page-copy">회원이 제출한 업무를 확인하고 보상을 확정합니다.</p></div><button class="secondary-button" data-action="refresh">${icon('refresh-cw',16)} 새로고침</button></div><div class="admin-card"><div class="filter-row"><button class="filter-button active">전체 37</button><button class="filter-button">오래된 순</button><button class="filter-button">전문 검수</button><button class="filter-button">재확인 요청</button></div><div class="table-wrap"><table><thead><tr><th>회원</th><th>업무</th><th>제출시간</th><th>정확도</th><th>보상</th><th>상태</th><th></th></tr></thead><tbody><tr><td>김**<br><span style="color:var(--muted);font-size:11px">PDK-26-SG-88491</span></td><td>DHL 배송 이벤트 순서</td><td>00:42</td><td>자동검사 98%</td><td>1,200원</td><td><span class="pill wait">검수 대기</span></td><td><button class="small-button primary" data-action="review-detail">검수하기</button></td></tr><tr><td>이**<br><span style="color:var(--muted);font-size:11px">PDK-26-KR-32018</span></td><td>알리바바 상품 속성</td><td>00:37</td><td>자동검사 94%</td><td>1,800원</td><td><span class="pill wait">검수 대기</span></td><td><button class="small-button primary" data-action="review-detail">검수하기</button></td></tr></tbody></table></div></div>`;
+    const statusLabel = {
+      submitted: '제출 완료',
+      review_pending: '검수 대기',
+      approved: '검수 완료',
+      rework: '재확인 요청',
+      rejected: '반려'
+    };
+    const reviews = Array.isArray(state.adminReviews) ? state.adminReviews : [];
+    const rows = reviews.map((item) => {
+      const pending = ['submitted', 'review_pending'].includes(item.status);
+      const busy = state.adminReviewBusyId === item.id;
+      const status = statusLabel[item.status] || '처리 중';
+      const date = item.updated_at || item.created_at;
+      const when = date ? new Date(date).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '-';
+      return `<tr>
+        <td><strong>${esc(item.member_name)}</strong><br><span style="color:var(--muted);font-size:11px">${esc(item.member_public_id || '')}</span></td>
+        <td><strong>${esc(item.company_name)}</strong><br><span style="color:var(--muted);font-size:11px">${esc(item.node_title)}</span></td>
+        <td>${when}</td>
+        <td>${Math.round(Number(item.progress || 0) * 100)}%</td>
+        <td>${money(item.reward_amount)}</td>
+        <td><span class="pill ${item.status === 'approved' ? 'ok' : 'wait'}">${status}</span></td>
+        <td>${pending ? `<div style="display:flex;gap:6px;flex-wrap:wrap"><button class="small-button primary" data-review-action="approved" data-review-id="${esc(item.id)}" ${busy ? 'disabled' : ''}>${busy ? '처리 중…' : '검수 완료'}</button><button class="small-button" data-review-action="rework" data-review-id="${esc(item.id)}" ${busy ? 'disabled' : ''}>재확인</button><button class="small-button" data-review-action="rejected" data-review-id="${esc(item.id)}" ${busy ? 'disabled' : ''}>반려</button></div>` : `<span style="color:var(--muted);font-size:12px">처리 완료</span>`}</td>
+      </tr>`;
+    }).join('');
+    const body = rows || `<tr><td colspan="7"><div class="empty-state compact"><div class="empty-icon">${icon('clipboard-check', 22)}</div><strong>현재 검수할 업무가 없어요.</strong><p>회원이 업무를 제출하면 이 목록에 자동으로 나타납니다.</p></div></td></tr>`;
+    const error = state.adminReviewError ? `<div class="notice" style="margin-bottom:16px"><span style="color:var(--gold)">${icon('triangle-alert',17)}</span><div>${esc(state.adminReviewError.message || state.adminReviewError)}</div></div>` : '';
+    return `<div class="section-heading" style="margin-top:0"><div><h1 class="page-title">업무 검수</h1><p class="page-copy">제출 완료와 검수 대기 업무를 확인하고, 승인하면 회원 화면에 즉시 검수 완료와 보상이 표시됩니다.</p></div><button class="secondary-button" data-action="refresh-reviews" ${state.adminReviewLoading ? 'disabled' : ''}>${icon('refresh-cw',16)} ${state.adminReviewLoading ? '불러오는 중…' : '새로고침'}</button></div>${error}<div class="admin-stat-grid"><div class="admin-stat"><p>검수 대기</p><strong>${state.adminReviewPendingCount}</strong><span>제출·대기 상태</span></div><div class="admin-stat"><p>검수 완료</p><strong>${state.adminReviewCompletedCount}</strong><span>최근 처리 내역 포함</span></div></div><div class="admin-card"><div class="filter-row"><span class="filter-button active">실제 서버 기록 ${reviews.length}건</span><span class="filter-button">완료하면 회원 지갑에 반영</span></div><div class="table-wrap"><table><thead><tr><th>회원</th><th>업무</th><th>최근 상태 시각</th><th>진행률</th><th>예상 보상</th><th>상태</th><th>처리</th></tr></thead><tbody>${body}</tbody></table></div></div>`;
   }
 
   function renderAdminFinance() {
@@ -919,7 +1023,7 @@
   }
 
   function handleClick(event) {
-    const target = event.target.closest('button, [data-nav], [data-start-node], [data-company-action], [data-toggle-node]');
+    const target = event.target.closest('button, [data-nav], [data-start-node], [data-company-action], [data-toggle-node], [data-review-action]');
     if (!target) return;
     if (target.dataset.authMode) { state.authMode = target.dataset.authMode; render(); return; }
     if (target.dataset.nav) {
@@ -930,6 +1034,7 @@
     if (target.dataset.startNode) { startNode(target.dataset.startNode); return; }
     if (target.dataset.companyAction) { approveCompany(target.dataset.companyAction); return; }
     if (target.dataset.toggleNode) { state.nodeEnabled[target.dataset.toggleNode] = state.nodeEnabled[target.dataset.toggleNode] === false; saveState(); render(); showToast(state.nodeEnabled[target.dataset.toggleNode] ? '✅ 업무 카드가 다시 공개됐어요.' : '⏸ 업무 카드가 잠시 중지됐어요.', state.nodeEnabled[target.dataset.toggleNode] ? 'success' : 'info'); return; }
+    if (target.dataset.reviewAction && target.dataset.reviewId) { submitReviewDecision(target.dataset.reviewId, target.dataset.reviewAction); return; }
     if (target.dataset.menu === 'open') { document.getElementById('sidebar')?.classList.add('open'); document.getElementById('sidebarBackdrop')?.classList.add('open'); return; }
     if (target.dataset.themeToggle !== undefined || target.closest('[data-theme-toggle]')) { state.theme = state.theme === 'dark' ? 'light' : 'dark'; saveState(); render(); return; }
     const action = target.dataset.action;
@@ -954,12 +1059,41 @@
     if (action === 'member-filter') { showToast('회원번호·이메일·휴대폰으로 찾을 수 있어요.', 'info'); return; }
     if (action === 'review-detail') { showToast('검수 상세 화면을 준비했어요. 최종 확정 전 내용을 확인하세요.', 'info'); return; }
     if (action === 'finance-detail') { showToast('입출금 요청의 증빙과 본인확인 상태를 함께 확인하세요.', 'info'); return; }
+    if (action === 'refresh-reviews') { loadAdminReviews({ silent: false }); return; }
     if (action === 'refresh') { showToast('새로운 운영 내역을 불러왔어요.', 'success'); return; }
     if (action === 'add-company') { showToast('기업명·협력 자료·로고 파일을 등록하는 화면을 준비했어요.', 'info'); return; }
     if (action === 'add-node') { showToast('업무명·원본·시간·보상·전용 연출을 입력할 수 있어요.', 'info'); return; }
     if (action === 'edit-node') { showToast('업무 카드 설정을 열었어요.', 'info'); return; }
     if (action === 'new-notice' || action === 'target-notice') { showToast('실제 상태 기반 알림을 설정할 수 있어요.', 'info'); return; }
     if (action === 'save-settings') { const input = document.getElementById('supportGrantInput'); if (input) state.supportGrant = Number(input.value || 0); saveState(); showToast('운영 설정을 저장했어요.', 'success'); return; }
+  }
+
+  async function submitReviewDecision(taskRunId, decision) {
+    if (state.adminReviewBusyId) return;
+    const item = state.adminReviews.find((row) => row.id === taskRunId);
+    if (!item) { showToast('검수 대상 업무를 찾을 수 없어요.', 'info'); return; }
+    const labels = { approved: '검수 완료', rework: '재확인 요청', rejected: '반려' };
+    if (!window.confirm(`${labels[decision]} 처리할까요? 회원 화면과 보상 상태에 바로 반영됩니다.`)) return;
+    let reason = null;
+    if (decision !== 'approved') {
+      reason = window.prompt('회원에게 전달할 운영자 메모를 입력해 주세요. (선택)');
+      if (reason === null) return;
+    }
+    state.adminReviewBusyId = taskRunId;
+    state.adminReviewError = null;
+    render();
+    try {
+      await adminRequest('review_task', { task_run_id: taskRunId, decision, reason: reason || null });
+      state.adminReviewBusyId = null;
+      await loadAdminReviews({ silent: true });
+      render();
+      showToast(decision === 'approved' ? '✅ 검수 완료와 보상 반영을 끝냈어요.' : `처리 결과를 회원에게 안내했어요: ${labels[decision]}`, 'success');
+    } catch (error) {
+      state.adminReviewBusyId = null;
+      state.adminReviewError = error;
+      render();
+      showToast(error.message || '검수 결과를 저장하지 못했어요.', 'info');
+    }
   }
 
   function approveCompany(companyId) {
