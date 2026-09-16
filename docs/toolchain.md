@@ -7,7 +7,9 @@
 - 워크스페이스 실행기: Turborepo `2.10.13`
 - 웹 앱: Next.js 16 + TypeScript (이관 단계에서 호환되는 안정 버전을 고정)
 - 데이터·인증: 기존에 새로 만든 Supabase 프로젝트 하나만 사용
-- 배포: Cloudflare Pages(정적 산출물)에서 시작하고, 서버 검증이 필요한 기능은 Cloudflare Workers/Functions 또는 별도 서버 엔드포인트로 분리
+- 배포 1단계: 현재 `dist/`와 이관 후 Next.js 정적 export를 Cloudflare Pages에 배포
+- 서버 기능: 잔액·작업·관리자 승인·KYC는 Supabase Edge Functions를 기본 경계로 사용
+- 배포 2단계(필요할 때): SSR·Server Actions가 필요해지면 Cloudflare Workers로 분리하고 호환성 점검 후 전환
 
 ## 현재 상태
 
@@ -51,7 +53,9 @@ putduk-data-platform/
 4. 공통 UI와 타입·검증 스키마를 패키지로 분리한다.
 5. 작업 실행·체크포인트·검수·불변 원장·입출금 요청·KYC·감사 로그를 서버 함수와 RLS에 연결한다.
 6. Supabase Auth 리디렉션과 Cloudflare 도메인을 설정한 뒤 모바일·데스크톱·오프라인 복원 시나리오를 점검한다.
-7. 기존 `dist/`를 새 빌드 산출물로 교체하고, CI가 통과할 때만 Cloudflare에 배포한다.
+7. 기존 `dist/`를 새 정적 export 산출물로 교체하고, CI가 통과할 때만 Cloudflare Pages에 배포한다.
+
+Cloudflare의 현재 안내도 정적 Next.js export는 Pages에, 서버 렌더링·Server Actions·route handler가 필요한 전체 앱은 Workers 경로에 두도록 구분한다. Workers 전환 시에는 호환성 점검을 통과한 뒤에만 진행한다.
 
 ## AI 기능 배치
 
