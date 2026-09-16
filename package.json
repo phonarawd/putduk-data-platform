@@ -1,0 +1,21 @@
+{
+  "name": "putduk-data-platform",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@12.4.2",
+  "engines": {
+    "node": ">=24.19.0 <25",
+    "pnpm": ">=12.4.2 <13"
+  },
+  "scripts": {
+    "build": "node tooling/scripts/verify-static.mjs",
+    "verify": "node tooling/scripts/verify-static.mjs",
+    "verify:static": "node tooling/scripts/verify-static.mjs",
+    "lint": "node tooling/scripts/verify-static.mjs",
+    "typecheck": "pnpm --if-present -r typecheck",
+    "test": "pnpm --if-present -r test"
+  },
+  "devDependencies": {
+    "turbo": "2.10.13"
+  }
+}
