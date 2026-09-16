@@ -177,6 +177,136 @@ async function listCatalog() {
   return { brands: brandResult.data || [], nodes: nodeResult.data || [] };
 }
 
+async function listReviews() {
+  const reviewStatuses = ["submitted", "review_pending", "approved", "rework", "rejected"];
+  const { data: runs, error: runError } = await admin
+    .from("task_runs")
+    .select("id,public_id,user_id,node_id,status,reward_amount,progress,created_at,completed_at,updated_at")
+    .in("status", reviewStatuses)
+    .order("updated_at", { ascending: false })
+    .limit(120);
+
+  if (runError) {
+    console.error("review queue read failed", runError);
+    throw new HttpError(503, "검수 목록을 불러오지 못했습니다.");
+  }
+
+  const rows = runs || [];
+  const userIds = [...new Set(rows.map((row) => row.user_id).filter(Boolean))];
+  const nodeIds = [...new Set(rows.map((row) => row.node_id).filter(Boolean))];
+
+  const [profileResult, nodeResult] = await Promise.all([
+    userIds.length
+      ? admin.from("profiles").select("id,public_id,display_name,member_tier").in("id", userIds)
+      : Promise.resolve({ data: [], error: null }),
+    nodeIds.length
+      ? admin.from("nodes").select("id,public_id,partner_brand_id,title_ko,node_family").in("id", nodeIds)
+      : Promise.resolve({ data: [], error: null })
+  ]);
+
+  if (profileResult.error || nodeResult.error) {
+    console.error("review context read failed", profileResult.error || nodeResult.error);
+    throw new HttpError(503, "검수 대상 정보를 불러오지 못했습니다.");
+  }
+
+  const profileMap = new Map((profileResult.data || []).map((row) => [row.id, row]));
+  const nodeMap = new Map((nodeResult.data || []).map((row) => [row.id, row]));
+  const brandIds = [...new Set((nodeResult.data || []).map((row) => row.partner_brand_id).filter(Boolean))];
+  const brandResult = brandIds.length
+    ? await admin.from("partner_brands").select("id,display_name_ko").in("id", brandIds)
+    : { data: [], error: null };
+
+  if (brandResult.error) {
+    console.error("review brand read failed", brandResult.error);
+    throw new HttpError(503, "협력사 정보를 불러오지 못했습니다.");
+  }
+
+  const brandMap = new Map((brandResult.data || []).map((row) => [row.id, row]));
+  const reviews = rows.map((row) => {
+    const profile = profileMap.get(row.user_id);
+    const node = nodeMap.get(row.node_id);
+    const brand = node ? brandMap.get(node.partner_brand_id) : null;
+    return {
+      id: row.id,
+      public_id: row.public_id,
+      user_id: row.user_id,
+      member_public_id: profile?.public_id || null,
+      member_name: profile?.display_name || "퍼뜩 회원",
+      member_tier: profile?.member_tier || "일반 파트너",
+      node_id: row.node_id,
+      node_public_id: node?.public_id || null,
+      company_name: brand?.display_name_ko || "협력사 미지정",
+      node_title: node?.title_ko || "업무 정보 없음",
+      node_family: node?.node_family || null,
+      status: row.status,
+      reward_amount: Number(row.reward_amount || 0),
+      progress: Number(row.progress || 0),
+      created_at: row.created_at,
+      completed_at: row.completed_at,
+      updated_at: row.updated_at
+    };
+  });
+
+  return {
+    reviews,
+    pending_count: reviews.filter((row) => ["submitted", "review_pending"].includes(row.status)).length,
+    completed_count: reviews.filter((row) => ["approved", "rework", "rejected"].includes(row.status)).length
+  };
+}
+
+async function reviewTask(userId: string, payload: JsonRecord) {
+  const taskRunId = assertUuid(payload.task_run_id, "업무 실행");
+  const decision = String(payload.decision || "").trim().toLowerCase();
+  if (!["approved", "rework", "rejected"].includes(decision)) {
+    throw new HttpError(400, "검수 결과를 선택해 주세요.");
+  }
+
+  const reason = textValue(payload.reason, "검수 메모", 1000, false);
+  const score = payload.score === undefined || payload.score === null || payload.score === ""
+    ? null
+    : numberValue(payload.score, "검수 점수", 0, 1);
+  const before = await admin
+    .from("task_runs")
+    .select("id,public_id,user_id,node_id,status,reward_amount,reward_status,progress,created_at,completed_at,updated_at")
+    .eq("id", taskRunId)
+    .maybeSingle();
+
+  if (before.error) {
+    console.error("review target read failed", before.error);
+    throw new HttpError(503, "검수 대상 업무를 확인하지 못했습니다.");
+  }
+  if (!before.data) throw new HttpError(404, "검수 대상 업무를 찾을 수 없습니다.");
+
+  const { data, error } = await admin.rpc("putduk_admin_review_task", {
+    p_task_run_id: taskRunId,
+    p_reviewer_id: userId,
+    p_decision: decision,
+    p_reason: reason,
+    p_score: score
+  });
+
+  if (error || !data) {
+    console.error("review settlement failed", error);
+    const message = String(error?.message || "");
+    if (message.includes("상태") || message.includes("검수") || message.includes("권한")) {
+      throw new HttpError(400, message);
+    }
+    throw new HttpError(503, "검수 결과를 저장하지 못했습니다.");
+  }
+
+  await appendAudit(
+    userId,
+    decision === "approved" ? "업무 검수 완료" : decision === "rework" ? "업무 재확인 요청" : "업무 반려",
+    "task_run",
+    taskRunId,
+    reason,
+    before.data,
+    data
+  );
+
+  return data;
+}
+
 async function getNode(id: string) {
   const { data, error } = await admin.from("nodes").select("*").eq("id", id).maybeSingle();
   if (error) {
