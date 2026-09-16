@@ -59,6 +59,11 @@
     adminReviewError: null,
     adminReviewBusyId: null,
     lastReviewToastId: null,
+    adminCatalog: { brands: [], nodes: [] },
+    adminCatalogLoaded: false,
+    adminCatalogLoading: false,
+    adminCatalogError: null,
+    adminCatalogBusyId: null,
     toast: null
   };
 
@@ -391,6 +396,93 @@
     }
   }
 
+  function adminBrandViews() {
+    const rows = state.adminCatalogLoaded
+      ? (Array.isArray(state.adminCatalog?.brands) ? state.adminCatalog.brands : [])
+      : state.companies;
+    const palette = ['#0d9f76', '#d49a17', '#5d4fb2', '#0a7180', '#c85b27', '#2b5da7', '#bc2039', '#78502c'];
+    return rows.map((row, index) => {
+      const name = row.display_name_ko || row.name || row.legal_name || '협력사';
+      return {
+        ...row,
+        id: row.id,
+        name,
+        label: row.category || row.label || '데이터 업무',
+        mark: String(name).replace(/\s+/g, '').slice(0, 3) || 'PD',
+        color: row.color || palette[index % palette.length],
+        category: row.category || row.label || '데이터 업무',
+        verified: row.verification_status ? row.verification_status === 'approved' : row.verified !== false,
+        logoApproved: row.logo_usage_status ? row.logo_usage_status === 'approved' : row.verified !== false,
+        published: row.published === true
+      };
+    });
+  }
+
+  function adminNodeViews() {
+    const rows = state.adminCatalogLoaded
+      ? (Array.isArray(state.adminCatalog?.nodes) ? state.adminCatalog.nodes : [])
+      : nodes;
+    const brands = adminBrandViews();
+    return rows.map((row) => ({
+      ...row,
+      id: row.id,
+      publicId: row.public_id || row.publicId,
+      companyId: row.partner_brand_id || row.companyId,
+      title: row.title_ko || row.title || '업무 카드',
+      copy: row.description_ko || row.copy || '',
+      time: Number(row.estimated_seconds ?? row.time ?? 60),
+      minutes: row.estimated_seconds ? formatDuration(Number(row.estimated_seconds)) : (row.minutes || formatDuration(Number(row.time || 60))),
+      reward: Number(row.reward_max ?? row.reward ?? row.reward_min ?? 0),
+      rewardMin: Number(row.reward_min ?? row.rewardMin ?? 0),
+      rewardMax: Number(row.reward_max ?? row.rewardMax ?? row.reward_min ?? row.reward ?? 0),
+      level: row.difficulty || row.level || '일반 처리',
+      available: Number(row.daily_capacity ?? row.available ?? 0),
+      motion: row.motion_profile || row.motion || 'default',
+      enabled: row.catalog_status ? row.enabled === true && row.catalog_status === 'published' : row.enabled !== false,
+      catalogStatus: row.catalog_status || (row.enabled === false ? 'paused' : 'published')
+    }));
+  }
+
+  function adminBrandById(id) {
+    return adminBrandViews().find((brand) => brand.id === id) || {
+      id,
+      name: '협력사 미지정',
+      category: '데이터 업무',
+      mark: 'PD',
+      color: '#0d9f76',
+      verified: false,
+      logoApproved: false,
+      published: false
+    };
+  }
+
+  async function loadAdminCatalog({ silent = false } = {}) {
+    if (!isAdmin || !authState.adminAuthorized || !authState.session) return;
+    if (!authState.adminRoles.includes('super_admin') && !authState.adminRoles.includes('content')) {
+      state.adminCatalogLoaded = true;
+      state.adminCatalog = { brands: [], nodes: [] };
+      state.adminCatalogError = '기업·업무 관리 권한이 연결된 운영자 계정에서만 확인할 수 있어요.';
+      return;
+    }
+    state.adminCatalogLoading = true;
+    state.adminCatalogError = null;
+    if (!silent) render();
+    try {
+      const result = await adminRequest('catalog');
+      state.adminCatalog = {
+        brands: Array.isArray(result.brands) ? result.brands : [],
+        nodes: Array.isArray(result.nodes) ? result.nodes : []
+      };
+      state.adminCatalogLoaded = true;
+      state.nodeEnabled = Object.fromEntries(state.adminCatalog.nodes.map((node) => [node.id, node.enabled === true && node.catalog_status === 'published']));
+    } catch (error) {
+      state.adminCatalogError = error;
+    } finally {
+      state.adminCatalogLoading = false;
+      if (!silent) render();
+    }
+  }
+
   async function initializeAuth() {
     if (!supabaseClient) {
       authState.loading = false;
@@ -403,14 +495,20 @@
       await hydrateSession(data.session);
       if (isAdmin) {
         await hydrateAdminAuthorization();
-        if (authState.adminAuthorized) await loadAdminReviews({ silent: true });
+        if (authState.adminAuthorized) {
+          await loadAdminReviews({ silent: true });
+          await loadAdminCatalog({ silent: true });
+        }
       }
       supabaseClient.auth.onAuthStateChange((_event, session) => {
         window.setTimeout(async () => {
           await hydrateSession(session);
           if (isAdmin) {
             await hydrateAdminAuthorization();
-            if (authState.adminAuthorized) await loadAdminReviews({ silent: true });
+            if (authState.adminAuthorized) {
+          await loadAdminReviews({ silent: true });
+          await loadAdminCatalog({ silent: true });
+        }
           }
           render();
         }, 0);
@@ -475,8 +573,8 @@
     return isAdmin ? [
       { id: 'overview', label: '전체 현황', icon: 'layout-dashboard' },
       { id: 'members', label: '회원 관리', icon: 'users', count: 1284 },
-      { id: 'companies', label: '기업 관리', icon: 'building-2', count: 8 },
-      { id: 'nodes', label: '업무 카드 관리', icon: 'waypoints', count: 24 },
+      { id: 'companies', label: '기업 관리', icon: 'building-2', count: state.adminCatalogLoaded ? state.adminCatalog.brands.length : undefined },
+      { id: 'nodes', label: '업무 카드 관리', icon: 'waypoints', count: state.adminCatalogLoaded ? state.adminCatalog.nodes.length : undefined },
       { id: 'reviews', label: '업무 검수', icon: 'clipboard-check', count: state.adminReviewPendingCount || undefined },
       { id: 'finance', label: '입출금 처리', icon: 'wallet-cards', count: 11 },
       { id: 'notifications', label: '공지·알림', icon: 'bell' },
@@ -641,7 +739,7 @@
       return `<tr><td><strong>${esc(item.member_name)}</strong><br><span style="color:var(--muted);font-size:11px">${esc(item.member_public_id || '')}</span></td><td>${esc(item.company_name)} · ${esc(item.node_title)}</td><td>${wait < 1 ? '방금' : `${wait}분`}</td><td>${money(item.reward_amount)}</td><td><button class="small-button primary" data-nav="reviews">확인</button></td></tr>`;
     }).join('');
     const queueBody = queueRows || `<tr><td colspan="5"><div class="empty-state compact"><div class="empty-icon">${icon('clipboard-check', 22)}</div><strong>검수 대기 업무가 없어요.</strong><p>회원 제출이 들어오면 이곳에 표시됩니다.</p></div></td></tr>`;
-    return `<div class="admin-stat-grid"><div class="admin-stat"><p>가입 회원</p><strong>—</strong><span>회원 관리 메뉴에서 확인</span></div><div class="admin-stat"><p>오늘 처리 업무</p><strong>—</strong><span>실제 업무 기록 기준</span></div><div class="admin-stat"><p>검수 대기</p><strong>${state.adminReviewPendingCount}</strong><span style="color:var(--gold)">운영자 확인 필요</span></div><div class="admin-stat"><p>오늘 확정 보상</p><strong>${money(approvedToday)}</strong><span>검수 완료 기준</span></div></div><div class="admin-layout"><div><div class="admin-card"><div class="admin-card-head"><div><h3>오늘의 운영 흐름</h3><p>서버에 기록된 업무 상태를 기준으로 확인합니다.</p></div><span class="status-badge">${icon('activity',13)} 정상</span></div><div class="chart-wrap" style="padding:0;height:250px"><canvas id="adminChart" aria-label="운영 현황"></canvas></div></div><div class="admin-card"><div class="admin-card-head"><div><h3>검수 대기 업무</h3><p>승인하면 회원의 작업내역과 지갑에 즉시 반영됩니다.</p></div><button class="text-link" data-nav="reviews">전체보기</button></div><div class="table-wrap"><table><thead><tr><th>회원</th><th>기업·업무</th><th>대기시간</th><th>예상 보상</th><th></th></tr></thead><tbody>${queueBody}</tbody></table></div></div></div><div><div class="admin-card"><div class="admin-card-head"><div><h3>기업 확인 현황</h3><p>협력 자료 승인 상태를 기준으로 회원 공개 여부를 관리합니다.</p></div><button class="text-link" data-nav="companies">관리</button></div>${state.companies.slice(0,5).map(renderCompanyRow).join('') || '<div class="empty-state compact"><strong>등록된 협력사가 없습니다.</strong></div>'}</div><div class="admin-card"><div class="admin-card-head"><div><h3>운영자가 확인할 일</h3><p>회원에게 노출되는 상태를 실제 기록과 함께 관리합니다.</p></div></div><div class="notice"><span style="color:var(--gold)">${icon('clipboard-check',17)}</span><div><strong>${state.adminReviewPendingCount}건의 검수 대기</strong><br>검수 관리에서 승인·재확인·반려를 선택하세요.</div></div><button class="secondary-button" data-nav="reviews" style="width:100%;margin-top:12px">검수 목록 열기</button></div></div></div>`;
+    return `<div class="admin-stat-grid"><div class="admin-stat"><p>가입 회원</p><strong>—</strong><span>회원 관리 메뉴에서 확인</span></div><div class="admin-stat"><p>오늘 처리 업무</p><strong>—</strong><span>실제 업무 기록 기준</span></div><div class="admin-stat"><p>검수 대기</p><strong>${state.adminReviewPendingCount}</strong><span style="color:var(--gold)">운영자 확인 필요</span></div><div class="admin-stat"><p>오늘 확정 보상</p><strong>${money(approvedToday)}</strong><span>검수 완료 기준</span></div></div><div class="admin-layout"><div><div class="admin-card"><div class="admin-card-head"><div><h3>오늘의 운영 흐름</h3><p>서버에 기록된 업무 상태를 기준으로 확인합니다.</p></div><span class="status-badge">${icon('activity',13)} 정상</span></div><div class="chart-wrap" style="padding:0;height:250px"><canvas id="adminChart" aria-label="운영 현황"></canvas></div></div><div class="admin-card"><div class="admin-card-head"><div><h3>검수 대기 업무</h3><p>승인하면 회원의 작업내역과 지갑에 즉시 반영됩니다.</p></div><button class="text-link" data-nav="reviews">전체보기</button></div><div class="table-wrap"><table><thead><tr><th>회원</th><th>기업·업무</th><th>대기시간</th><th>예상 보상</th><th></th></tr></thead><tbody>${queueBody}</tbody></table></div></div></div><div><div class="admin-card"><div class="admin-card-head"><div><h3>기업 확인 현황</h3><p>협력 자료 승인 상태를 기준으로 회원 공개 여부를 관리합니다.</p></div><button class="text-link" data-nav="companies">관리</button></div>${adminBrandViews().slice(0,5).map(renderCompanyRow).join('') || '<div class="empty-state compact"><strong>등록된 협력사가 없습니다.</strong></div>'}</div><div class="admin-card"><div class="admin-card-head"><div><h3>운영자가 확인할 일</h3><p>회원에게 노출되는 상태를 실제 기록과 함께 관리합니다.</p></div></div><div class="notice"><span style="color:var(--gold)">${icon('clipboard-check',17)}</span><div><strong>${state.adminReviewPendingCount}건의 검수 대기</strong><br>검수 관리에서 승인·재확인·반려를 선택하세요.</div></div><button class="secondary-button" data-nav="reviews" style="width:100%;margin-top:12px">검수 목록 열기</button></div></div></div>`;
   }
 
   function renderCompanyRow(company) {
@@ -653,11 +751,46 @@
   }
 
   function renderAdminCompanies() {
-    return `<div class="section-heading" style="margin-top:0"><div><h1 class="page-title">기업 관리</h1><p class="page-copy">협력 자료, 로고, 공개 상태를 관리합니다.</p></div><button class="primary-button" data-action="add-company">${icon('plus',16)} 기업 등록</button></div><div class="notice" style="margin-bottom:18px"><span style="color:var(--gold)">${icon('file-lock-2',17)}</span><div><strong>공식 표시 기준</strong><br>협력 확인 자료와 로고 사용 자료를 등록한 뒤 공개 승인을 완료해야 회원 화면에 공식 배지가 표시됩니다.</div></div><div class="admin-card"><div class="table-wrap"><table><thead><tr><th>기업</th><th>분야</th><th>협력 자료</th><th>로고</th><th>회원 공개</th><th>관리</th></tr></thead><tbody>${state.companies.map((company) => `<tr><td><div style="display:flex;align-items:center;gap:9px"><div class="company-logo" style="background:${company.color}">${esc(company.mark)}</div><strong>${esc(company.name)}</strong></div></td><td>${esc(company.category)}</td><td><span class="pill ${company.verified ? 'ok' : 'wait'}">${company.verified ? '등록·승인' : '자료 등록 필요'}</span></td><td><span class="pill ${company.verified ? 'ok' : 'wait'}">${company.verified ? '사용 승인' : '파일 필요'}</span></td><td><span class="pill ${company.published ? 'ok' : ''}">${company.published ? '공개 중' : '비공개'}</span></td><td><button class="small-button ${company.verified ? '' : 'primary'}" data-company-action="${company.id}">${company.verified ? '자료 보기' : '등록하기'}</button></td></tr>`).join('')}</tbody></table></div></div>`;
+    const brands = adminBrandViews();
+    const errorText = state.adminCatalogError ? String(state.adminCatalogError.message || state.adminCatalogError) : '';
+    const accessNote = state.adminCatalogError
+      ? '<div class="notice" style="margin-bottom:18px"><span style="color:var(--gold)">' + icon('triangle-alert',17) + '</span><div><strong>기업 목록을 불러오지 못했어요.</strong><br>' + esc(errorText) + ' <button class="text-link" data-action="refresh-catalog">다시 불러오기</button></div></div>'
+      : state.adminCatalogLoading
+        ? '<div class="notice" style="margin-bottom:18px"><span style="color:var(--gold)">' + icon('loader-circle',17) + '</span><div><strong>기업 정보를 불러오는 중이에요.</strong><br>회원에게 공개될 자료를 서버에서 확인하고 있어요.</div></div>'
+        : '<div class="notice" style="margin-bottom:18px"><span style="color:var(--gold)">' + icon('file-lock-2',17) + '</span><div><strong>공식 표시 기준</strong><br>협력 확인 자료와 로고 사용 자료를 등록한 뒤 승인하고, 회원 공개를 눌러야 회원 화면에 표시됩니다.</div></div>';
+    const rows = brands.map((company) => {
+      const verified = company.verification_status === 'approved' || company.verified === true;
+      const logoApproved = company.logo_usage_status === 'approved' || company.logoApproved === true;
+      const published = company.published === true;
+      const action = !verified || !logoApproved ? 'approve' : published ? 'unpublish' : 'publish';
+      const label = action === 'approve' ? '자료·로고 승인' : action === 'publish' ? '회원 공개' : '회원 비공개';
+      const buttonClass = action === 'publish' || action === 'approve' ? 'primary' : '';
+      const detail = company.logo_asset_path
+        ? '<small style="display:block;color:var(--muted);max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + esc(company.logo_asset_path) + '">로고 경로 등록됨</small>'
+        : '<small style="display:block;color:var(--muted)">로고 경로 미등록</small>';
+      return '<tr><td><div style="display:flex;align-items:center;gap:9px"><div class="company-logo" style="background:' + company.color + '">' + esc(company.mark) + '</div><div><strong>' + esc(company.name) + '</strong>' + detail + '</div></div></td><td>' + esc(company.category) + '</td><td><span class="pill ' + (verified ? 'ok' : 'wait') + '">' + (verified ? '승인 완료' : company.verification_status === 'submitted' ? '자료 확인 필요' : '자료 미등록') + '</span></td><td><span class="pill ' + (logoApproved ? 'ok' : 'wait') + '">' + (logoApproved ? '사용 승인' : company.logo_usage_status === 'submitted' ? '사용 확인 필요' : '파일 필요') + '</span></td><td><span class="pill ' + (published ? 'ok' : '') + '">' + (published ? '공개 중' : '비공개') + '</span></td><td><button class="small-button ' + buttonClass + '" data-brand-action="' + action + '" data-brand-id="' + esc(company.id) + '">' + label + '</button></td></tr>';
+    }).join('');
+    const body = rows || '<tr><td colspan="6"><div class="empty-state compact"><div class="empty-icon">' + icon('building-2',22) + '</div><strong>등록된 협력사가 없어요.</strong><p>운영자 권한으로 협력사 자료를 먼저 등록해 주세요.</p></div></td></tr>';
+    return '<div class="section-heading" style="margin-top:0"><div><h1 class="page-title">기업 관리</h1><p class="page-copy">협력 자료, 로고, 회원 공개 상태를 서버에서 관리합니다.</p></div><button class="primary-button" data-action="add-company">' + icon('plus',16) + ' 기업 등록</button></div>' + accessNote + '<div class="admin-card"><div class="table-wrap"><table><thead><tr><th>기업</th><th>분야</th><th>협력 자료</th><th>로고</th><th>회원 공개</th><th>관리</th></tr></thead><tbody>' + body + '</tbody></table></div></div>';
   }
 
   function renderAdminNodes() {
-    return `<div class="section-heading" style="margin-top:0"><div><h1 class="page-title">업무 카드 관리</h1><p class="page-copy">업무 내용, 예상시간, 보상, 노출 상태를 관리합니다.</p></div><button class="primary-button" data-action="add-node">${icon('plus',16)} 업무 카드 만들기</button></div><div class="admin-card"><div class="table-wrap"><table><thead><tr><th>업무 카드</th><th>기업</th><th>시간</th><th>보상</th><th>오늘 수량</th><th>노출</th><th>연출</th><th></th></tr></thead><tbody>${nodes.map((node) => { const company=companyById(node.companyId); const enabled=state.nodeEnabled[node.id] !== false; return `<tr><td><strong>${esc(node.title)}</strong><br><span style="color:var(--muted);font-size:11px">${esc(node.level)}</span></td><td>${esc(company.name)}</td><td>${esc(node.minutes)}</td><td>${money(node.reward)}</td><td>${node.available}건</td><td><button class="small-button ${enabled ? 'primary' : ''}" data-toggle-node="${node.id}">${enabled ? '공개 중' : '중지'}</button></td><td><span class="pill ok">${node.motion} 연출</span></td><td><button class="small-button" data-action="edit-node">수정</button></td></tr>`; }).join('')}</tbody></table></div></div>`;
+    const rows = adminNodeViews();
+    const brands = adminBrandViews();
+    const body = rows.map((node) => {
+      const company = brands.find((item) => item.id === node.companyId) || adminBrandById(node.companyId);
+      const status = node.catalogStatus;
+      const action = status === 'published' ? 'pause_node' : 'publish_node';
+      const label = status === 'published' ? '회원 공개 중지' : status === 'archived' ? '다시 공개' : '회원 공개';
+      const statusText = status === 'published' ? '공개 중' : status === 'paused' ? '일시 중지' : status === 'archived' ? '보관됨' : '작성 중';
+      return '<tr><td><strong>' + esc(node.title) + '</strong><br><span style="color:var(--muted);font-size:11px">' + esc(node.publicId || node.level || '') + '</span></td><td>' + esc(company.name) + '</td><td>' + esc(node.minutes) + '</td><td>' + money(node.rewardMin) + '~' + money(node.rewardMax) + '</td><td>' + node.available.toLocaleString('ko-KR') + '건</td><td><button class="small-button ' + (status === 'published' ? 'primary' : '') + '" data-catalog-node-action="' + action + '" data-node-id="' + esc(node.id) + '">' + label + '</button><br><span class="pill ' + (status === 'published' ? 'ok' : 'wait') + '" style="margin-top:5px">' + statusText + '</span></td><td><span class="pill ok">' + esc(node.motion) + ' 연출</span></td><td><button class="small-button" data-action="edit-node" data-node-id="' + esc(node.id) + '">수정</button></td></tr>';
+    }).join('');
+    const bodyHtml = body || '<tr><td colspan="8"><div class="empty-state compact"><div class="empty-icon">' + icon('waypoints',22) + '</div><strong>등록된 업무 카드가 없어요.</strong><p>협력사를 승인한 뒤 업무 카드를 등록해 주세요.</p></div></td></tr>';
+    const errorText = state.adminCatalogError ? String(state.adminCatalogError.message || state.adminCatalogError) : '';
+    const notice = state.adminCatalogError
+      ? '<div class="notice" style="margin-bottom:18px"><span style="color:var(--gold)">' + icon('triangle-alert',17) + '</span><div><strong>업무 목록을 불러오지 못했어요.</strong><br>' + esc(errorText) + ' <button class="text-link" data-action="refresh-catalog">다시 불러오기</button></div></div>'
+      : '';
+    return '<div class="section-heading" style="margin-top:0"><div><h1 class="page-title">업무 카드 관리</h1><p class="page-copy">업무 내용, 예상시간, 보상, 공개 상태를 관리합니다.</p></div><button class="primary-button" data-action="add-node">' + icon('plus',16) + ' 업무 카드 만들기</button></div>' + notice + '<div class="admin-card"><div class="table-wrap"><table><thead><tr><th>업무 카드</th><th>기업</th><th>시간</th><th>보상 범위</th><th>하루 수량</th><th>노출</th><th>연출</th><th></th></tr></thead><tbody>' + bodyHtml + '</tbody></table></div></div>';
   }
 
   function renderAdminReviews() {
@@ -1133,7 +1266,7 @@
   }
 
   function handleClick(event) {
-    const target = event.target.closest('button, [data-nav], [data-start-node], [data-company-action], [data-toggle-node], [data-review-action]');
+    const target = event.target.closest('button, [data-nav], [data-start-node], [data-company-action], [data-toggle-node], [data-review-action], [data-brand-action], [data-catalog-node-action]');
     if (!target) return;
     if (target.dataset.authMode) { state.authMode = target.dataset.authMode; render(); return; }
     if (target.dataset.nav) {
@@ -1142,6 +1275,8 @@
       state.modal = null; saveState(); render(); return;
     }
     if (target.dataset.startNode) { startNode(target.dataset.startNode); return; }
+    if (target.dataset.brandAction && target.dataset.brandId) { updateAdminBrand(target.dataset.brandId, target.dataset.brandAction); return; }
+    if (target.dataset.catalogNodeAction && target.dataset.nodeId) { updateAdminNodeStatus(target.dataset.nodeId, target.dataset.catalogNodeAction); return; }
     if (target.dataset.companyAction) { approveCompany(target.dataset.companyAction); return; }
     if (target.dataset.toggleNode) { state.nodeEnabled[target.dataset.toggleNode] = state.nodeEnabled[target.dataset.toggleNode] === false; saveState(); render(); showToast(state.nodeEnabled[target.dataset.toggleNode] ? '✅ 업무 카드가 다시 공개됐어요.' : '⏸ 업무 카드가 잠시 중지됐어요.', state.nodeEnabled[target.dataset.toggleNode] ? 'success' : 'info'); return; }
     if (target.dataset.reviewAction && target.dataset.reviewId) { submitReviewDecision(target.dataset.reviewId, target.dataset.reviewAction); return; }
@@ -1170,6 +1305,7 @@
     if (action === 'review-detail') { showToast('검수 상세 화면을 준비했어요. 최종 확정 전 내용을 확인하세요.', 'info'); return; }
     if (action === 'finance-detail') { showToast('입출금 요청의 증빙과 본인확인 상태를 함께 확인하세요.', 'info'); return; }
     if (action === 'refresh-reviews') { loadAdminReviews({ silent: false }); return; }
+    if (action === 'refresh-catalog') { loadAdminCatalog({ silent: false }); return; }
     if (action === 'refresh') { showToast('새로운 운영 내역을 불러왔어요.', 'success'); return; }
     if (action === 'add-company') { showToast('기업명·협력 자료·로고 파일을 등록하는 화면을 준비했어요.', 'info'); return; }
     if (action === 'add-node') { showToast('업무명·원본·시간·보상·전용 연출을 입력할 수 있어요.', 'info'); return; }
@@ -1206,6 +1342,64 @@
     }
   }
 
+  async function updateAdminBrand(brandId, action) {
+    if (state.adminCatalogBusyId) return;
+    const brand = adminBrandViews().find((item) => item.id === brandId);
+    if (!brand) { showToast('협력사 정보를 찾지 못했어요.', 'info'); return; }
+    if (!['approve', 'publish', 'unpublish'].includes(action)) return;
+    if (action === 'publish' && !window.confirm(brand.name + '을(를) 회원에게 공개할까요?')) return;
+    if (action === 'unpublish' && !window.confirm(brand.name + '을(를) 회원 화면에서 숨길까요?')) return;
+    let logoAssetPath = null;
+    let verificationNote = null;
+    if (action === 'approve') {
+      logoAssetPath = window.prompt('승인할 로고 파일 경로 또는 공개 URL을 입력해 주세요.\n예: brand-logos/alibaba.svg');
+      if (logoAssetPath === null) return;
+      if (!logoAssetPath.trim()) { showToast('로고 파일 경로를 입력해야 승인할 수 있어요.', 'info'); return; }
+      verificationNote = window.prompt('협력 자료 확인 메모를 입력해 주세요. (선택)') || null;
+      if (!window.confirm(brand.name + ' 자료와 로고 사용을 승인할까요? 승인 후 회원 공개를 한 번 더 눌러야 합니다.')) return;
+    }
+    state.adminCatalogBusyId = brandId;
+    state.adminCatalogError = null;
+    render();
+    try {
+      const endpoint = action === 'approve' ? 'approve_brand' : action === 'publish' ? 'publish_brand' : 'unpublish_brand';
+      await adminRequest(endpoint, { brand_id: brandId, logo_asset_path: logoAssetPath || undefined, verification_note: verificationNote || undefined });
+      await loadAdminCatalog({ silent: true });
+      state.adminCatalogBusyId = null;
+      render();
+      showToast(action === 'approve' ? '✅ 협력 자료와 로고 승인이 저장됐어요.' : action === 'publish' ? '📣 회원 화면에 협력사가 공개됐어요.' : '🔒 회원 화면에서 협력사를 숨겼어요.', 'success');
+    } catch (error) {
+      state.adminCatalogBusyId = null;
+      state.adminCatalogError = error;
+      render();
+      showToast(error.message || '협력사 상태를 저장하지 못했어요.', 'info');
+    }
+  }
+
+  async function updateAdminNodeStatus(nodeId, action) {
+    if (state.adminCatalogBusyId) return;
+    if (!['publish_node', 'pause_node', 'archive_node'].includes(action)) return;
+    const node = adminNodeViews().find((item) => item.id === nodeId);
+    if (!node) { showToast('업무 카드를 찾지 못했어요.', 'info'); return; }
+    const labels = { publish_node: '회원 공개', pause_node: '회원 공개 중지', archive_node: '업무 카드 보관' };
+    if (!window.confirm(labels[action] + ' 처리할까요? 회원 화면 노출이 바로 바뀝니다.')) return;
+    state.adminCatalogBusyId = nodeId;
+    state.adminCatalogError = null;
+    render();
+    try {
+      await adminRequest(action, { node_id: nodeId });
+      await loadAdminCatalog({ silent: true });
+      state.adminCatalogBusyId = null;
+      render();
+      showToast(action === 'publish_node' ? '✅ 업무 카드가 회원에게 공개됐어요.' : action === 'pause_node' ? '⏸ 업무 카드를 잠시 중지했어요.' : '📦 업무 카드를 보관했어요.', 'success');
+    } catch (error) {
+      state.adminCatalogBusyId = null;
+      state.adminCatalogError = error;
+      render();
+      showToast(error.message || '업무 카드 상태를 저장하지 못했어요.', 'info');
+    }
+  }
+
   function approveCompany(companyId) {
     const company = state.companies.find((item) => item.id === companyId);
     if (!company) return;
@@ -1235,7 +1429,10 @@
     }
     if (!document.hidden && authState.session) {
       hydrateSession(authState.session).then(() => {
-        if (isAdmin && authState.adminAuthorized) return loadAdminReviews({ silent: true });
+        if (isAdmin && authState.adminAuthorized) {
+          await loadAdminReviews({ silent: true });
+          await loadAdminCatalog({ silent: true });
+        }
       }).then(() => render()).catch(() => {});
     }
   });
