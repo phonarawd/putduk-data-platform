@@ -134,7 +134,7 @@
   }
 
   async function hydratePublishedCatalog() {
-    if (!supabaseClient || !authState.session) return;
+    if (isAdmin || !supabaseClient || !authState.session) return;
     const [brandResult, nodeResult] = await Promise.all([
       supabaseClient
         .from('partner_brands')
