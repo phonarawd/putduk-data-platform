@@ -33,6 +33,7 @@ const allAdminRoles = [
 ] as const;
 
 const contentRoles = ["super_admin", "content"];
+const reviewRoles = ["super_admin", "work_review"];
 
 function corsHeaders(request: Request): HeadersInit {
   const configured = (Deno.env.get("PUTDUK_ALLOWED_ORIGINS") || "*")
@@ -491,6 +492,16 @@ Deno.serve(async (request: Request) => {
     if (action === "catalog" || action === "list_catalog") {
       await requireRole(user.id, contentRoles);
       return jsonResponse(request, { ok: true, ...(await listCatalog()) });
+    }
+
+    if (action === "reviews" || action === "list_reviews") {
+      await requireRole(user.id, reviewRoles);
+      return jsonResponse(request, { ok: true, ...(await listReviews()) });
+    }
+
+    if (action === "review_task") {
+      await requireRole(user.id, reviewRoles);
+      return jsonResponse(request, { ok: true, task_run: await reviewTask(user.id, payload) });
     }
 
     if (action === "create_node") {
