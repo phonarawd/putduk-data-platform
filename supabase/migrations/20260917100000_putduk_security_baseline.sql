@@ -36,5 +36,7 @@ revoke all on all tables in schema private from anon, authenticated;
 revoke all on all sequences in schema private from anon, authenticated;
 revoke all on all functions in schema private from anon, authenticated;
 grant usage on schema private to service_role;
+grant select, insert, update, delete on all tables in schema private to service_role;
+grant usage, select, update on all sequences in schema private to service_role;
 
 commit;
