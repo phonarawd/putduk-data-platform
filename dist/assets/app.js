@@ -3,13 +3,14 @@
 
   const isAdmin = document.documentElement.dataset.mode === 'admin';
   const config = window.PUTDUK_CONFIG || {};
+  const adminFunctionUrl = config.adminFunctionUrl || (config.supabaseUrl ? `${config.supabaseUrl}/functions/v1/admin-control` : '');
   const storageKey = 'putduk-state-v2';
   const supabaseClient = window.supabase && config.supabaseUrl && config.supabasePublishableKey
     ? window.supabase.createClient(config.supabaseUrl, config.supabasePublishableKey, {
       auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
     })
     : null;
-  const authState = { session: null, profile: null, loading: Boolean(supabaseClient), error: null };
+  const authState = { session: null, profile: null, loading: Boolean(supabaseClient), error: null, adminLoading: isAdmin && Boolean(supabaseClient), adminAuthorized: !isAdmin, adminRoles: [] };
 
   const companies = [
     { id: 'dhl', name: 'DHL', label: '국제 배송 데이터', mark: 'DHL', color: '#d49a17', status: '출처 확인', category: '특송·택배' },
@@ -165,7 +166,7 @@
 
       const runResult = await supabaseClient
         .from('task_runs')
-        .select('public_id,node_id,status,reward_amount,created_at,completed_at,expected_completed_at')
+        .select('id,public_id,node_id,status,reward_amount,created_at,completed_at,expected_completed_at,motion_variant,motion_seed')
         .eq('user_id', session.user.id)
         .order('created_at', { ascending: false })
         .limit(50);
@@ -181,6 +182,34 @@
         }));
       }
 
+
+        if (config.enableWorkApi === true) {
+          const active = runResult.data.find((row) => ['reserved', 'in_progress', 'checkpointed'].includes(row.status));
+          if (active) {
+            const activeNode = nodeById(active.node_id);
+            const startedAt = Date.parse(active.started_at || '') || Date.now();
+            const expectedAt = Date.parse(active.expected_completed_at || '') || (startedAt + activeNode.time * 1000);
+            const duration = Math.max(1000, expectedAt - startedAt);
+            state.run = {
+              id: active.public_id,
+              dbId: active.id,
+              nodeId: active.node_id,
+              startedAt,
+              expectedCompletedAt: expectedAt,
+              duration,
+              progress: Math.min(1, Math.max(0, (Date.now() - startedAt) / duration)),
+              overlayOpen: Boolean(state.run?.overlayOpen),
+              logs: state.run?.logs || ['[복원] 서버에 저장된 업무 상태를 다시 연결했어요.'],
+              serverBacked: true,
+              rewardAmount: Number(active.reward_amount || 0),
+              motionVariant: active.motion_variant || 'a',
+              motionSeed: active.motion_seed || '',
+              _submitted: false
+            };
+          } else if (state.run?.serverBacked) {
+            state.run = null;
+          }
+        }
       const noticeResult = await supabaseClient
         .from('notifications')
         .select('id,title,body,notification_type,created_at,read_at')
@@ -203,21 +232,65 @@
     }
   }
 
+  async function hydrateAdminAuthorization() {
+    authState.adminAuthorized = !isAdmin;
+    authState.adminRoles = [];
+    if (!isAdmin) return;
+
+    authState.adminLoading = true;
+    if (!authState.session || !adminFunctionUrl) {
+      authState.adminLoading = false;
+      return;
+    }
+
+    try {
+      const response = await fetch(adminFunctionUrl, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${authState.session.access_token}`,
+          apikey: config.supabasePublishableKey || '',
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ action: 'me' })
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok || result.ok !== true) {
+        authState.error = new Error(result.error || '운영자 권한을 확인하지 못했어요.');
+        return;
+      }
+      authState.adminAuthorized = true;
+      authState.adminRoles = Array.isArray(result.roles) ? result.roles : [];
+    } catch (error) {
+      authState.error = error;
+    } finally {
+      authState.adminLoading = false;
+    }
+  }
+
   async function initializeAuth() {
-    if (!supabaseClient) { authState.loading = false; return; }
+    if (!supabaseClient) {
+      authState.loading = false;
+      authState.adminLoading = false;
+      return;
+    }
     try {
       const { data, error } = await supabaseClient.auth.getSession();
       if (error) throw error;
       await hydrateSession(data.session);
+      if (isAdmin) await hydrateAdminAuthorization();
       supabaseClient.auth.onAuthStateChange((_event, session) => {
-        window.setTimeout(() => hydrateSession(session).then(() => render()), 0);
+        window.setTimeout(async () => {
+          await hydrateSession(session);
+          if (isAdmin) await hydrateAdminAuthorization();
+          render();
+        }, 0);
       });
     } catch (error) {
       authState.loading = false;
+      authState.adminLoading = false;
       authState.error = error;
     }
   }
-
   function esc(value) {
     return String(value ?? '').replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[char]));
   }
@@ -284,10 +357,13 @@
     const memberIdentity = authState.session
       ? `<div class="profile-chip"><span class="avatar">${esc(profileInitial())}</span><span>${esc(profileName())}</span><button class="profile-logout" data-action="logout">로그아웃</button></div>`
       : `<button class="small-button" data-action="open-login">로그인</button>`;
+    const adminIdentity = authState.adminAuthorized && authState.session
+      ? `<div class="profile-chip"><span class="avatar">관</span><span>운영자 계정</span><button class="profile-logout" data-action="logout">로그아웃</button></div>`
+      : `<button class="small-button" data-action="open-login">운영자 로그인</button>`;
     const installButton = !isAdmin ? `<button class="icon-button" data-action="install-app" aria-label="퍼뜩 앱 설치">${icon('download', 17)}</button>` : '';
     return `
       <div class="mobile-topbar"><button class="icon-button" data-menu="open" aria-label="메뉴 열기">${icon('menu', 19)}</button><div class="brand-name">퍼뜩</div><div style="display:flex;gap:6px">${installButton}<button class="icon-button" data-theme-toggle aria-label="테마 전환">${icon(state.theme === 'dark' ? 'sun' : 'moon', 17)}</button></div></div>
-      <div class="topbar"><div class="breadcrumb">퍼뜩 ${isAdmin ? '운영자 관리센터' : '데이터 노드'} <strong>${title}</strong></div><div class="top-actions">${installButton}<button class="icon-button" data-theme-toggle aria-label="테마 전환">${icon(state.theme === 'dark' ? 'sun' : 'moon', 17)}</button><button class="icon-button" data-notification aria-label="알림">${icon('bell', 17)}</button>${isAdmin ? `<div class="profile-chip"><span class="avatar">관</span><span>운영자 계정</span></div>` : memberIdentity}</div></div>
+      <div class="topbar"><div class="breadcrumb">퍼뜩 ${isAdmin ? '운영자 관리센터' : '데이터 노드'} <strong>${title}</strong></div><div class="top-actions">${installButton}<button class="icon-button" data-theme-toggle aria-label="테마 전환">${icon(state.theme === 'dark' ? 'sun' : 'moon', 17)}</button><button class="icon-button" data-notification aria-label="알림">${icon('bell', 17)}</button>${isAdmin ? adminIdentity : memberIdentity}</div></div>
     `;
   }
 
@@ -416,6 +492,17 @@
     return `<div class="section-heading" style="margin-top:0"><div><h1 class="page-title">운영 설정</h1><p class="page-copy">처음 가입한 회원에게 제공하는 조건과 하루 작업량을 설정합니다.</p></div><button class="primary-button" data-action="save-settings">설정 저장</button></div><div class="admin-card"><div class="admin-card-head"><div><h3>신규 회원 업무 지원금</h3><p>기존 지급 기록은 변경하지 않고, 앞으로 가입하는 회원에게만 적용됩니다.</p></div><span class="pill ok">사용 중</span></div><div class="form-grid"><div class="field"><label>기본 지급 금액</label><input id="supportGrantInput" type="number" value="${state.supportGrant}" min="0" step="1000" /></div><div class="field"><label>지급 시점</label><select><option>가입 완료 후</option><option>휴대폰 인증 후</option><option>본인확인 완료 후</option></select></div><div class="field full"><label>회원에게 보여줄 안내</label><textarea rows="3">가입을 환영해요. 업무를 시작하는 데 사용할 수 있는 지원금입니다.</textarea></div></div></div><div class="admin-card"><div class="admin-card-head"><div><h3>하루 작업량</h3><p>업무 카드별로 오늘 노출할 수량과 회원별 제한을 설정합니다.</p></div></div><div class="form-grid"><div class="field"><label>기본 하루 작업 수</label><input type="number" value="3" min="1" /></div><div class="field"><label>추천 완료 시 추가 수</label><input type="number" value="1" min="0" /></div><div class="field"><label>검수 대기 알림 횟수</label><input type="number" value="2" min="0" /></div><div class="field"><label>회원별 알림 빈도</label><select><option>하루 최대 2회</option><option>하루 최대 1회</option><option>사용자 선택</option></select></div></div></div>`;
   }
 
+  function renderAdminGate() {
+    const waiting = authState.loading || authState.adminLoading;
+    const title = waiting ? '운영자 권한을 확인하고 있어요' : authState.session ? '운영자 권한이 없어요' : '운영자 로그인이 필요해요';
+    const copy = waiting
+      ? '잠시만 기다려 주세요. 안전한 운영자 확인을 진행하고 있어요.'
+      : authState.session
+        ? '이 계정에는 운영자 권한이 연결돼 있지 않습니다.'
+        : '운영자 계정으로 로그인하면 회원·업무·입출금 메뉴가 열립니다.';
+    return `<section class="empty-state" style="max-width:640px;margin:80px auto;text-align:center"><div class="empty-icon">${icon(waiting ? 'loader-circle' : 'shield-alert', 28)}</div><h1 class="page-title">${title}</h1><p class="page-copy" style="margin:12px auto 22px">${copy}</p>${!authState.session && !waiting ? '<button class="primary-button" data-action="open-login">운영자 로그인</button>' : ''}${authState.session && !waiting ? '<button class="secondary-button" data-action="logout" style="margin-left:8px">로그아웃</button>' : ''}</section>`;
+  }
+
   function renderAdminPage() {
     if (state.adminPage === 'members') return renderAdminMembers();
     if (state.adminPage === 'companies') return renderAdminCompanies();
@@ -471,8 +558,9 @@
 
   function render() {
     document.documentElement.dataset.theme = state.theme;
-    const page = isAdmin ? renderAdminPage() : renderMemberPage();
-    document.getElementById('app').innerHTML = `<div class="app-shell">${renderSidebar()}<main class="main"><${'div'}>${renderTopbar()}${page}</div></main></div><div class="toast-stack" id="toastStack"></div>${renderRunOverlay()}${renderModal()}`;
+    const page = isAdmin && !authState.adminAuthorized ? renderAdminGate() : isAdmin ? renderAdminPage() : renderMemberPage();
+    const sidebar = isAdmin && !authState.adminAuthorized ? '' : renderSidebar();
+    document.getElementById('app').innerHTML = `<div class="app-shell">${sidebar}<main class="main"><${'div'}>${renderTopbar()}${page}</div></main></div><div class="toast-stack" id="toastStack"></div>${renderRunOverlay()}${renderModal()}`;
     refreshIcons();
     if (!isAdmin && state.memberPage === 'dashboard') drawMemberChart();
     if (isAdmin && state.adminPage === 'overview') drawAdminChart();
@@ -764,6 +852,9 @@
     }
     authState.session = null;
     authState.profile = null;
+    authState.adminAuthorized = !isAdmin;
+    authState.adminRoles = [];
+    authState.adminLoading = false;
     activeStorageKey = storageKey;
     state = loadState(storageKey);
     render();
