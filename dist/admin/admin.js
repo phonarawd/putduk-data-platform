@@ -213,6 +213,25 @@
     return ({ active: '활동 중', pending: '대기', blocked: '차단', suspended: '정지' })[status] || '확인 중';
   }
 
+  function pinEventLabel(event) {
+    return ({
+      lock: '이용 잠금',
+      reveal: '계좌 안내 열람',
+      pin_set: 'PIN 등록',
+      pin_fail: 'PIN 입력 실패',
+      pin_lock: '반복 실패로 잠금',
+      pin_reset: 'PIN 재설정(운영자)',
+      deposit_info_reveal: '입금 정보 열람'
+    })[String(event || '')] || String(event || '-');
+  }
+
+  function pinScopeLabel(scope) {
+    return ({
+      deposit_info_reveal: '입금 정보 공개',
+      withdrawal_step_up: '출금 추가 확인'
+    })[String(scope || '')] || String(scope || '-');
+  }
+
   function kycStatusLabel(status) {
     return ({ pending: '대기', submitted: '검수 대기', checking: '확인 중', approved: '확인 완료', rejected: '반려', expired: '만료' })[status] || '확인 중';
   }
@@ -403,7 +422,7 @@
       return `<tr><td>${esc(item.label || kind)}</td><td>${esc(kind)}</td><td>${esc(line)}<br><span style="color:var(--muted);font-size:11px">버전 ${Number(item.info_version || 1)} · ${item.address_mode === 'operator_fixed' || kind === 'USDT' ? '고정 주소' : '원화'}</span></td><td><span class="pill ${item.enabled === false ? 'wait' : 'ok'}">${item.enabled === false ? '숨김' : '회원 표시'}</span><div class="action-row"><button type="button" class="small-button" data-action="edit-payout-destination" data-destination-id="${esc(item.id)}">수정</button></div></td></tr>`;
     }).join('') || `<tr><td colspan="4"><div class="empty-state compact"><strong>등록된 입금 계좌가 없어요.</strong><p>원문 계좌·USDT를 저장하면, 회원은 PIN 뒤에만 볼 수 있어요.</p></div></td></tr>`;
     const pinAudit = Array.isArray(finance.pin_audit) ? finance.pin_audit : [];
-    const pinRows = pinAudit.map((item) => `<tr><td>${esc(item.event || '-')}</td><td>${esc(item.scope || '-')}</td><td>${item.created_at ? new Date(item.created_at).toLocaleString('ko-KR') : '-'}</td></tr>`).join('')
+    const pinRows = pinAudit.map((item) => `<tr><td>${esc(pinEventLabel(item.event))}</td><td>${esc(pinScopeLabel(item.scope))}</td><td>${item.created_at ? new Date(item.created_at).toLocaleString('ko-KR') : '-'}</td></tr>`).join('')
       || `<tr><td colspan="3"><div class="empty-state compact"><strong>보안 PIN 기록이 아직 없어요.</strong></div></td></tr>`;
     return `<div class="section-heading" style="margin-top:0"><div><h1 class="page-title">입출금 처리</h1><p class="page-copy">출금은 완료 한 번으로 바로 처리해요. 회원 잔액은 서버가 바꿉니다.</p></div>${seedButtons('finance', state.adminFinanceLoading)}</div>${contractNote}${error}
       <div class="admin-stat-grid">
@@ -460,7 +479,7 @@
       const label = status === 'published' ? '회원 공개 중지' : status === 'archived' ? '다시 공개' : '회원 공개';
       const statusText = status === 'published' ? '공개 중' : status === 'paused' ? '일시 중지' : status === 'archived' ? '보관됨' : '작성 중';
       return `<tr>
-        <td><strong>${esc(node.title)}</strong><br><span style="color:var(--muted);font-size:11px">${esc(node.publicId || node.level || '')}</span></td>
+        <td><strong>${esc(node.title)}</strong><br><span style="color:var(--muted);font-size:11px" title="${esc(node.publicId || '')}">${esc(node.level || '')}</span></td>
         <td>${esc(company.name)}</td>
         <td>${money(spec.stake)}</td>
         <td>${money(spec.stipend)}</td>

@@ -717,7 +717,9 @@ html[data-theme="dark"] .toast {
 }
 .result-stage.compact { height:clamp(200px, 30vh, 280px); min-height:200px; border-radius:24px 24px 0 0; }
 .modal.cinematic-modal { display:flex; flex-direction:column; overflow:hidden; padding:0; }
-.modal.cinematic-modal .modal-head, .modal.cinematic-modal .modal-body { flex:0 1 auto; overflow:auto; }
+.modal.cinematic-modal .modal-head { flex:0 1 auto; overflow:auto; }
+.modal.cinematic-modal .modal-body { flex:1 1 auto; overflow:auto; }
+.modal.cinematic-modal .modal-actions { flex:0 0 auto; }
 .player-card { padding:18px 18px 22px; }
 .player-kicker { color:var(--emerald-strong); font-size:12px; font-weight:800; }
 .player-photo {
@@ -894,6 +896,14 @@ html[data-theme="dark"] .toast {
   html[data-mode="admin"] .modal,
   html[data-mode="admin"] .player-sheet,
   html[data-mode="admin"] .result-modal { padding-bottom:max(12px, env(safe-area-inset-bottom)); }
+  html[data-mode="admin"] .modal-actions {
+    position: sticky;
+    bottom: 0;
+    z-index: 2;
+    margin-top: 16px;
+    padding-top: 12px;
+    background: var(--surface-strong);
+  }
   html[data-mode="admin"] .member-tabbar { display:none !important; }
 }
 

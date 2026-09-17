@@ -2343,7 +2343,7 @@
     const inProgress = state.run ? nodeById(state.run.nodeId) : null;
     const waiting = state.reviewWait ? nodeById(state.reviewWait.nodeId) : null;
     const accountButton = authState.session
-      ? `<button class="secondary-button" data-action="logout">로그아웃</button>`
+      ? ''
       : `<button class="secondary-button" data-action="open-signup">회원가입·로그인</button>`;
     const partner = crewPartnerCompany();
     const attendance = crewAttendance(partner);
@@ -2421,7 +2421,7 @@
         const companyName = lineNameForNode(node);
         const kind = rewardUiKind(item);
         const posted = kind === 'posted';
-        return `<article class="record-card"><div class="record-card-top"><strong>${esc(companyName)} · ${esc(node.title)}</strong><span class="pill ${posted ? 'ok' : 'wait'}">${esc(item.status)}</span></div><div class="record-card-meta"><span>${esc(rewardUiLabel(kind))} ${formatLedgerAmount(item.reward)}</span></div><p class="record-card-id">실행번호 ${esc(item.id)} · ${esc(item.date)}</p></article>`;
+        return `<article class="record-card"><div class="record-card-top"><strong>${esc(companyName)} · ${esc(node.title)}</strong><span class="pill ${posted ? 'ok' : 'wait'}">${esc(item.status)}</span></div><div class="record-card-meta"><span>${esc(rewardUiLabel(kind))} ${formatLedgerAmount(item.reward)}</span></div><p class="record-card-id">${esc(item.date)} · 문의 번호 ${esc(item.id)}</p></article>`;
       }).join('')
       : '';
     const rows = state.history.length
@@ -2430,7 +2430,7 @@
         const companyName = lineNameForNode(node);
         const kind = rewardUiKind(item);
         const posted = kind === 'posted';
-        return `<tr><td><strong>${esc(companyName)} · ${esc(node.title)}</strong><div class="cell-sub">실행번호 ${esc(item.id)}</div></td><td><span class="pill ${posted ? 'ok' : 'wait'}">${esc(item.status)}</span></td><td><strong>${formatLedgerAmount(item.reward)}</strong><div class="cell-sub">${esc(rewardUiLabel(kind))}</div></td><td>${esc(item.date)}</td></tr>`;
+        return `<tr><td><strong>${esc(companyName)} · ${esc(node.title)}</strong><div class="cell-sub">문의 번호 ${esc(item.id)}</div></td><td><span class="pill ${posted ? 'ok' : 'wait'}">${esc(item.status)}</span></td><td><strong>${formatLedgerAmount(item.reward)}</strong><div class="cell-sub">${esc(rewardUiLabel(kind))}</div></td><td>${esc(item.date)}</td></tr>`;
       }).join('')
       : '';
     const body = state.history.length
@@ -2463,9 +2463,10 @@
       });
     });
     state.history.filter((item) => rewardUiKind(item) === 'posted').forEach((item) => {
+      const rewardNode = nodeById(item.nodeId);
       rows.push({
         kind: '작업 보상',
-        copy: item.id,
+        copy: rewardNode ? `${lineNameForNode(rewardNode)} · ${rewardNode.title}` : '근무 확인 보상',
         amount: `+${Number(item.reward || 0).toLocaleString('ko-KR')}원`,
         status: '확정',
         ok: true,
@@ -2523,7 +2524,7 @@
         const mine = band.label === current.label || band.raw === current.raw;
       return `<article class="benefit-card${mine ? ' is-current' : ''}"><div class="benefit-card-head"><h3>${esc(band.label)}</h3>${mine ? '<span class="status-badge gold">지금 등급</span>' : ''}</div><p class="benefit-ladder">${esc(band.ladder)}</p><ul class="benefit-list">${band.perks.map((perk) => `<li>${icon('check', 14)}<span>${esc(perk)}</span></li>`).join('')}</ul></article>`;
     }).join('');
-    return `<div class="section-heading" style="margin-top:0"><div><h1 class="page-title">등급·혜택</h1><p class="page-copy">지금 등급은 ${esc(current.label)}이에요. 이율이나 이자는 없어요.</p></div></div>
+    return `<div class="section-heading" style="margin-top:0"><div><h1 class="page-title">등급·혜택</h1><p class="page-copy">${esc(current.label)} 등급이에요. 다음 등급 조건은 곧 안내돼요.</p></div></div>
       <div class="benefit-grid">${cards}</div>
       <div class="panel panel-pad benefit-note">
         <h2>보증금까지 출금하면</h2>
@@ -2532,7 +2533,8 @@
         <p class="help-line">${icon('door-closed', 16)}<span>근무 잔액이 0이면 그 라인은 바로 닫혀요.</span></p>
         <p class="help-line">${icon('waypoints', 16)}<span>우선 집기·주간 자리·전담 라인은 빠지고, 같은 고액 칸은 다시 입금해야 열려요.</span></p>
         <p class="page-copy">다음 칸은 다시 잔액·완료 사다리를 타요. 출금만으로 그 칸·그 등급을 유지하지 않아요.</p>
-      </div>`;
+      </div>
+      <p class="page-copy" style="margin-top:12px;font-size:12px;color:var(--muted)">이 등급·혜택은 근무 기회를 나누는 기준이에요. 이율이나 이자는 없어요.</p>`;
   }
 
   function renderReferralsPage() {
@@ -2646,7 +2648,7 @@
       const logoApproved = company.logo_usage_status === 'approved' || company.logoApproved === true;
       const published = company.published === true;
       const action = !verified || !logoApproved ? 'approve' : published ? 'unpublish' : 'publish';
-      const label = action === 'approve' ? '자료·로고 승인' : action === 'publish' ? '회원 공개' : '회원 비공개';
+      const label = action === 'approve' ? '자료·로고 승인' : action === 'publish' ? '회원 공개' : '회원 공개 중지';
       const buttonClass = action === 'publish' || action === 'approve' ? 'primary' : '';
       const photoSrc = company.photoUrl || brandAssetSrc(company.photo_asset_path, company.slug, 'photo');
       const detail = company.logo_asset_path
@@ -3128,7 +3130,11 @@
       ? '출금 가능 잔액에서 서버 원장을 통해 차감합니다. 화면에서 숫자를 빼지 않습니다.'
       : '출금 가능 잔액에 서버 원장을 통해 입금합니다. 화면에서 숫자를 더하지 않습니다.';
     const wallet = member.wallet || {};
-    return `<div class="modal-backdrop" data-modal="balance-adjust"><div class="modal"><div class="modal-head"><div><h2>${title}</h2><p>${esc(member.public_id || member.display_name || '회원')}</p></div><button class="icon-button" data-action="close-modal" aria-label="닫기">${icon('x',18)}</button></div><div class="modal-body"><form id="balanceAdjustForm"><input type="hidden" name="user_id" value="${esc(member.id || member.user_id || '')}" /><input type="hidden" name="direction" value="${esc(direction)}" /><div class="notice"><span style="color:var(--emerald)">${icon('wallet',17)}</span><div>${copy}<br>현재 출금 가능 잔액 <strong>${money(wallet.available)}</strong></div></div><div class="form-grid" style="margin-top:16px"><div class="field"><label for="adjustAmount">금액</label><input id="adjustAmount" name="amount" type="number" min="1" step="1" required placeholder="1 이상" /></div><div class="field"><label for="adjustCurrency">통화</label><select id="adjustCurrency" name="currency"><option value="KRW">원화</option></select></div><div class="field full"><label for="adjustReason">사유</label><textarea id="adjustReason" name="reason" rows="2" required maxlength="500" placeholder="운영 기록에 남길 사유"></textarea></div></div><div class="modal-actions"><button class="secondary-button" type="button" data-action="close-modal">취소</button><button class="primary-button" type="submit">${title}</button></div></form></div></div></div>`;
+    if (preset.confirmAmount != null) {
+      const amount = Number(preset.confirmAmount) || 0;
+      return `<div class="modal-backdrop" data-modal="balance-adjust"><div class="modal"><div class="modal-head"><div><h2>${title} 최종 확인</h2><p>${esc(member.public_id || member.display_name || '회원')}</p></div><button class="icon-button" data-action="close-modal" aria-label="닫기">${icon('x',18)}</button></div><div class="modal-body"><form id="balanceAdjustForm" data-phase="confirm"><input type="hidden" name="user_id" value="${esc(preset.user_id || '')}" /><input type="hidden" name="direction" value="${esc(direction)}" /><input type="hidden" name="amount" value="${esc(String(amount))}" /><input type="hidden" name="currency" value="${esc(preset.currency || 'KRW')}" /><input type="hidden" name="reason" value="${esc(preset.reason || '')}" /><div class="notice"><span style="color:var(--gold)">${icon('triangle-alert',17)}</span><div><strong>한 번 더 확인해 주세요.</strong><br>금액을 서버 원장에 바로 반영해요. 되돌리려면 반대 방향으로 다시 조정해야 해요.</div></div><div class="penalty-figures" style="margin-top:14px"><div><span>${title} 금액</span><strong>${money(amount)}</strong></div><div><span>사유</span><strong style="font-size:14px">${esc(preset.reason || '-')}</strong></div></div><div class="modal-actions"><button class="secondary-button" type="button" data-action="back-balance-adjust">다시 입력</button><button class="primary-button" type="submit">네, ${title} 진행할게요</button></div></form></div></div></div>`;
+    }
+    return `<div class="modal-backdrop" data-modal="balance-adjust"><div class="modal"><div class="modal-head"><div><h2>${title}</h2><p>${esc(member.public_id || member.display_name || '회원')}</p></div><button class="icon-button" data-action="close-modal" aria-label="닫기">${icon('x',18)}</button></div><div class="modal-body"><form id="balanceAdjustForm" data-phase="entry"><input type="hidden" name="user_id" value="${esc(member.id || member.user_id || '')}" /><input type="hidden" name="direction" value="${esc(direction)}" /><div class="notice"><span style="color:var(--emerald)">${icon('wallet',17)}</span><div>${copy}<br>현재 출금 가능 잔액 <strong>${money(wallet.available)}</strong></div></div><div class="form-grid" style="margin-top:16px"><div class="field"><label for="adjustAmount">금액</label><input id="adjustAmount" name="amount" type="number" min="1" step="1" required placeholder="1 이상" value="${esc(preset.amount != null ? String(preset.amount) : '')}" /></div><div class="field"><label for="adjustCurrency">통화</label><select id="adjustCurrency" name="currency"><option value="KRW">원화</option></select></div><div class="field full"><label for="adjustReason">사유</label><textarea id="adjustReason" name="reason" rows="2" required maxlength="500" placeholder="운영 기록에 남길 사유">${esc(preset.reason || '')}</textarea></div></div><div class="modal-actions"><button class="secondary-button" type="button" data-action="close-modal">취소</button><button class="primary-button" type="submit">다음: 금액 확인</button></div></form></div></div></div>`;
   }
 
   function renderMemberDetailModal() {
@@ -4448,7 +4454,11 @@
     if (action === 'member-credit' || action === 'member-debit') {
       const memberId = target.dataset.memberId || '';
       const cached = state.adminMembers.find((item) => String(item.id) === String(memberId) || String(item.user_id) === String(memberId)) || state.adminMemberDetail || {};
-      openModal('balance-adjust', { ...cached, id: memberId, user_id: memberId, direction: action === 'member-debit' ? 'debit' : 'credit' });
+      openModal('balance-adjust', { ...cached, id: memberId, user_id: memberId, direction: action === 'member-debit' ? 'debit' : 'credit', confirmAmount: null });
+      return;
+    }
+    if (action === 'back-balance-adjust') {
+      openModal('balance-adjust', { ...(state.modalPayload || {}), confirmAmount: null });
       return;
     }
     if (action === 'refresh-reviews') { loadAdminReviews({ silent: false }); return; }
@@ -4541,6 +4551,19 @@
     const amount = Number(values.amount);
     if (!Number.isFinite(amount) || amount <= 0) {
       showToast('금액을 확인해 주세요.', 'warning');
+      return;
+    }
+    const phase = event.target.dataset.phase === 'confirm' ? 'confirm' : 'entry';
+    if (phase === 'entry') {
+      openModal('balance-adjust', {
+        id: values.user_id,
+        user_id: values.user_id,
+        direction,
+        amount,
+        currency: values.currency || 'KRW',
+        reason: values.reason,
+        confirmAmount: amount
+      });
       return;
     }
     try {
