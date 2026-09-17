@@ -4,10 +4,12 @@ export type JsonRecord = Record<string, unknown>;
 
 export class HttpError extends Error {
   status: number;
+  code?: string;
 
-  constructor(status: number, message: string) {
+  constructor(status: number, message: string, code?: string) {
     super(message);
     this.status = status;
+    this.code = code;
   }
 }
 
@@ -70,7 +72,20 @@ export function rpcMessage(error: { message?: string } | null, fallback: string)
     message.includes("예상") ||
     message.includes("골라") ||
     message.includes("보기") ||
-    message.includes("제출")
+    message.includes("제출") ||
+    message.includes("대조") ||
+    message.includes("물량") ||
+    message.includes("번호") ||
+    message.includes("상품") ||
+    message.includes("중간") ||
+    message.includes("저장") ||
+    message.includes("보안") ||
+    message.includes("PIN") ||
+    message.includes("비밀번호") ||
+    message.includes("만료") ||
+    message.includes("토큰") ||
+    message.includes("안내") ||
+    message.includes("횟수")
   ) {
     return message;
   }

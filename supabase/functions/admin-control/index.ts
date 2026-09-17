@@ -164,6 +164,10 @@ function payloadChoice(payload: unknown): string {
 function payloadChoiceLabel(payload: unknown): string {
   if (!payload || typeof payload !== "object") return "";
   const rec = payload as JsonRecord;
+  if (rec.inspect_ok === true) {
+    const total = Number(rec.inspect_total || 5) || 5;
+    return String(rec.label || rec.choice_label || `오늘 배정 물량 ${total}건 정상 검수`).trim();
+  }
   return String(rec.label || rec.choice_label || rec.member_choice_label || "").trim();
 }
 
@@ -488,6 +492,7 @@ async function listReviews() {
       correct_answer: correctAnswer,
       member_choice: memberChoiceRaw || null,
       member_choice_label: memberChoiceLabel || null,
+      inspect_ok: Boolean((submission?.answer_payload as JsonRecord | undefined)?.inspect_ok) || /건 정상 검수/.test(memberChoiceLabel),
       submitted_at: submittedAt || null,
       has_member_choice: Boolean(memberChoiceRaw || memberChoiceLabel),
       photos,

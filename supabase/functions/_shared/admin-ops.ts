@@ -3,6 +3,7 @@
 import type { SupabaseClient, User } from "https://esm.sh/@supabase/supabase-js@2.57.0";
 import { HttpError, rpcMessage, type JsonRecord } from "./http.ts";
 import { isOwnStoragePath, PRIVATE_BUCKET, SIGNED_URL_SECONDS } from "./validate.ts";
+import { listSecurityPinAudit, resetSecurityPin } from "./deposit-info.ts";
 
 const memberRoles = ["super_admin", "member_support"] as const;
 const financeRoles = ["super_admin", "finance"] as const;
@@ -165,12 +166,20 @@ function shapeWithdrawal(row: JsonRecord): JsonRecord {
   };
 }
 
+function parseLedgerAmount(value: unknown): number | null {
+  if (value == null || value === "") return null;
+  const amount = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(amount) ? amount : null;
+}
+
 function walletSummary(rows: JsonRecord[] | null | undefined) {
   const list = Array.isArray(rows) ? rows : [];
   const krw = list.filter((row) => String(row.currency || "KRW").toUpperCase() === "KRW");
   const byBucket = new Map(krw.map((row) => [String(row.bucket || ""), row]));
-  const amountOf = (bucket: string, field: "available_amount" | "held_amount") =>
-    Number(byBucket.get(bucket)?.[field] || 0);
+  const amountOf = (bucket: string, field: "available_amount" | "held_amount") => {
+    if (!byBucket.has(bucket)) return null;
+    return parseLedgerAmount(byBucket.get(bucket)?.[field]);
+  };
   return {
     support: amountOf("support_grant", "available_amount"),
     work: amountOf("work_balance", "available_amount"),
@@ -180,6 +189,85 @@ function walletSummary(rows: JsonRecord[] | null | undefined) {
     available: amountOf("available", "available_amount"),
     available_held: amountOf("available", "held_amount"),
     held: amountOf("held", "held_amount")
+  };
+}
+
+function maskEmail(value: unknown): string {
+  const email = String(value || "").trim();
+  const at = email.indexOf("@");
+  if (at < 1 || at === email.length - 1) return email ? "***" : "";
+  return `${email.slice(0, Math.min(2, at))}***@${email.slice(at + 1)}`;
+}
+
+function maskPhone(value: unknown): string {
+  const digits = String(value || "").replace(/\D/g, "");
+  if (!digits) return "";
+  const local = digits.startsWith("82") ? `0${digits.slice(2)}` : digits;
+  if (local.length === 11) return `${local.slice(0, 3)}-****-${local.slice(-4)}`;
+  if (digits.length >= 8) return `${digits.slice(0, 3)}-****-${digits.slice(-4)}`;
+  return "****";
+}
+
+function maskPersonName(value: unknown): string {
+  const chars = [...String(value || "").trim()];
+  if (!chars.length) return "";
+  if (chars.length === 1) return "*";
+  if (chars.length === 2) return `${chars[0]}*`;
+  return `${chars[0]}${"*".repeat(chars.length - 2)}${chars[chars.length - 1]}`;
+}
+
+function maskBirthDate(value: unknown): string {
+  const digits = String(value || "").replace(/\D/g, "");
+  if (digits.length >= 8) return `${digits.slice(0, 4)}-**-**`;
+  if (digits.length === 6) return `${digits.slice(0, 2)}****`;
+  return String(value || "").trim() ? "****" : "";
+}
+
+function maskIp(value: unknown): string {
+  const ip = String(value || "").trim();
+  if (!ip) return "";
+  if (ip.includes(":")) {
+    const head = ip.split(":").filter(Boolean)[0] || "";
+    return head ? `${head}:****:****` : "****";
+  }
+  const parts = ip.split(".");
+  if (parts.length !== 4) return "****";
+  return `${parts[0]}.***.***.${parts[3]}`;
+}
+
+const allKnownAdminRoles = [
+  "super_admin",
+  "member_support",
+  "kyc_review",
+  "finance",
+  "work_review",
+  "content"
+];
+
+async function loadAdminRoles(admin: AdminClient, userId: string): Promise<string[]> {
+  const checks = await Promise.all(allKnownAdminRoles.map(async (role) => {
+    const { data, error } = await admin.rpc("putduk_admin_has_role", {
+      p_user_id: userId,
+      p_roles: [role]
+    });
+    return error ? null : data === true ? role : null;
+  }));
+  return checks.filter((role): role is string => Boolean(role));
+}
+
+function canRevealMemberPii(roles: string[]): boolean {
+  return roles.includes("super_admin");
+}
+
+function maskMemberListRow(row: JsonRecord): JsonRecord {
+  return {
+    ...row,
+    email: maskEmail(row.email),
+    phone_e164: maskPhone(row.phone_e164),
+    legal_name: maskPersonName(row.legal_name),
+    last_login_ip: maskIp(row.last_login_ip),
+    birth_date: maskBirthDate(row.birth_date),
+    pii_masked: true
   };
 }
 
@@ -245,7 +333,40 @@ export async function listMembers(admin: AdminClient, userId: string, payload: J
     console.error("putduk_admin_search_members failed", error);
     throw new HttpError(400, rpcMessage(error, "회원 정보를 불러오고 있어요."));
   }
-  return Array.isArray(data) ? data : [];
+  const rows = Array.isArray(data) ? (data as JsonRecord[]) : [];
+  const ids = rows.map((row) => String(row.user_id || "")).filter(Boolean);
+  let walletRows: JsonRecord[] = [];
+  if (ids.length) {
+    const walletResult = await admin
+      .from("wallet_accounts")
+      .select("user_id,bucket,currency,available_amount,held_amount")
+      .in("user_id", ids)
+      .eq("currency", "KRW");
+    if (walletResult.error) console.error("member list wallets failed", walletResult.error);
+    walletRows = Array.isArray(walletResult.data) ? (walletResult.data as JsonRecord[]) : [];
+  }
+  const walletsByUser = new Map<string, JsonRecord[]>();
+  for (const row of walletRows) {
+    const userIdKey = String(row.user_id || "");
+    if (!userIdKey) continue;
+    const list = walletsByUser.get(userIdKey) || [];
+    list.push(row);
+    walletsByUser.set(userIdKey, list);
+  }
+  return rows.map((row) => {
+    const wallets = walletsByUser.get(String(row.user_id || "")) || [];
+    const summary = walletSummary(wallets);
+    return maskMemberListRow({
+      ...row,
+      available_krw: summary.available,
+      work_balance_krw: summary.work,
+      work_held_krw: summary.work_held,
+      support_grant_krw: summary.support,
+      available_held_krw: summary.available_held,
+      wallets,
+      wallet_summary: summary
+    });
+  });
 }
 
 function stringList(value: unknown): string[] {
@@ -275,6 +396,10 @@ function payloadChoice(payload: unknown): string {
 function payloadChoiceLabel(payload: unknown): string {
   if (!payload || typeof payload !== "object") return "";
   const rec = payload as JsonRecord;
+  if (rec.inspect_ok === true) {
+    const total = Number(rec.inspect_total || 5) || 5;
+    return String(rec.label || rec.choice_label || `오늘 배정 물량 ${total}건 정상 검수`).trim();
+  }
   return String(rec.label || rec.choice_label || rec.member_choice_label || "").trim();
 }
 
@@ -312,6 +437,8 @@ async function listMemberTaskRuns(admin: AdminClient, memberId: string) {
 
 export async function getMember(admin: AdminClient, userId: string, payload: JsonRecord) {
   await requireRole(admin, userId, memberRoles);
+  const roles = await loadAdminRoles(admin, userId);
+  const revealPii = canRevealMemberPii(roles);
   const memberId = assertUuid(payload.user_id || payload.member_id, "회원");
 
   const [profileResult, privateResult, walletResult, taskResult, depositResult, withdrawalResult, kycResult, referralResult, assignResult, ledgerResult, submissionResult, eventResult] = await Promise.all([
@@ -384,10 +511,21 @@ export async function getMember(admin: AdminClient, userId: string, payload: Jso
 
   const authUser = await admin.auth.admin.getUserById(memberId);
   const auth = authUser.data?.user || null;
+  const privateProfile = (privateResult.data || null) as JsonRecord | null;
+  const maskedPrivate = privateProfile
+    ? {
+      ...privateProfile,
+      legal_name: maskPersonName(privateProfile.legal_name),
+      birth_date: maskBirthDate(privateProfile.birth_date),
+      phone_e164: maskPhone(privateProfile.phone_e164),
+      email_snapshot: maskEmail(privateProfile.email_snapshot),
+      last_login_ip: maskIp(privateProfile.last_login_ip)
+    }
+    : null;
 
   return {
     profile: profileResult.data,
-    private_profile: privateResult.data || null,
+    private_profile: revealPii ? privateProfile : maskedPrivate,
     wallets: walletResult.data || [],
     task_runs: taskRuns,
     deposits: depositResult.data || [],
@@ -399,8 +537,10 @@ export async function getMember(admin: AdminClient, userId: string, payload: Jso
     referrals: referralResult.data || [],
     assignments: assignResult.data || [],
     wallet_summary: walletSummary((walletResult.data || []) as JsonRecord[]),
+    pii_access: revealPii,
+    pii_masked: !revealPii,
     auth: {
-      email: auth?.email || null,
+      email: revealPii ? (auth?.email || null) : maskEmail(auth?.email || ""),
       last_sign_in_at: auth?.last_sign_in_at || null
     }
   };
@@ -1028,11 +1168,24 @@ export async function saveMotionSettings(admin: AdminClient, userId: string, pay
 }
 
 export async function listFinance(admin: AdminClient, userId: string) {
-  const [deposits, withdrawals, kyc, referrals] = await Promise.all([
+  const [deposits, withdrawals, kyc, referrals, destinations, pinAudit] = await Promise.all([
     optionalList(() => listDeposits(admin, userId)),
     optionalList(() => listWithdrawals(admin, userId)),
     optionalList(() => listKyc(admin, userId)),
-    optionalList(() => listReferrals(admin, userId))
+    optionalList(() => listReferrals(admin, userId)),
+    optionalList(() => listPayoutDestinations(admin, userId).catch((error) => {
+      console.error("finance destinations failed", error);
+      return [];
+    })),
+    optionalList(async () => {
+      try {
+        await requireRole(admin, userId, financeRoles);
+        return listSecurityPinAudit(admin, userId);
+      } catch (error) {
+        console.error("finance pin audit failed", error);
+        return [];
+      }
+    })
   ]);
   return {
     deposits: await attachMemberLabels(admin, deposits as JsonRecord[]),
@@ -1043,7 +1196,9 @@ export async function listFinance(admin: AdminClient, userId: string) {
       member_name: row.display_name || row.member_name || null,
       member_public_id: row.public_id || row.member_public_id || null
     })),
-    referrals: await attachMemberLabels(admin, referrals as JsonRecord[], "invitee_id")
+    referrals: await attachMemberLabels(admin, referrals as JsonRecord[], "invitee_id"),
+    destinations,
+    pin_audit: pinAudit
   };
 }
 
@@ -1197,13 +1352,12 @@ export async function listGrants(admin: AdminClient, userId: string, payload: Js
 
 export async function listPayoutDestinations(admin: AdminClient, userId: string) {
   await requireRole(admin, userId, financeRoles);
-  const { data, error } = await admin
-    .schema("private")
-    .from("payout_destinations")
-    .select("id,destination_type,label,masked_value,qr_asset_path,enabled,bank_name,account_holder,guidance_text,usdt_network,created_at,updated_at")
-    .order("created_at", { ascending: false });
-  if (error) throw new HttpError(503, "입금 안내 계좌를 불러오지 못했습니다.");
-  return data || [];
+  const { data, error } = await admin.rpc("putduk_admin_payout_destinations_list", { p_admin_id: userId });
+  if (error) {
+    console.error("payout destinations list failed", error);
+    throw new HttpError(503, "입금 안내 계좌를 불러오지 못했습니다.");
+  }
+  return Array.isArray(data) ? data : [];
 }
 
 export async function upsertPayoutDestination(admin: AdminClient, userId: string, payload: JsonRecord) {
@@ -1212,32 +1366,30 @@ export async function upsertPayoutDestination(admin: AdminClient, userId: string
   if (destinationType !== "bank" && destinationType !== "usdt") {
     throw new HttpError(400, "원화 계좌 또는 USDT를 선택해 주세요.");
   }
-
-  const row = {
-    destination_type: destinationType,
-    label: textValue(payload.label, "표시 이름", 80),
-    masked_value: textValue(payload.masked_value, "마스킹 값", 120),
-    encrypted_value: textValue(payload.encrypted_value, "원문 값", 500, false),
-    qr_asset_path: textValue(payload.qr_asset_path, "QR 이미지", 500, false),
-    enabled: Boolean(payload.enabled),
-    bank_name: textValue(payload.bank_name, "은행명", 80, false),
-    account_holder: textValue(payload.account_holder, "예금주", 80, false),
-    guidance_text: textValue(payload.guidance_text, "안내문구", 1000, false),
-    usdt_network: textValue(payload.usdt_network, "USDT 네트워크", 40, false),
-    created_by: userId,
-    updated_at: new Date().toISOString()
-  };
-
-  let result;
-  if (payload.destination_id) {
-    const id = assertUuid(payload.destination_id, "입금 안내");
-    result = await admin.schema("private").from("payout_destinations").update(row).eq("id", id).select("*").single();
-  } else {
-    result = await admin.schema("private").from("payout_destinations").insert(row).select("*").single();
-  }
-  if (result.error || !result.data) throw new HttpError(503, "입금 안내 계좌를 저장하지 못했습니다.");
-  const safe = { ...result.data, encrypted_value: undefined };
-  await appendAudit(admin, userId, "입금 안내 계좌 저장", "payout_destination", result.data.id, null, null, safe);
+  const saved = await callRpc<JsonRecord>(admin, "putduk_admin_payout_destination_upsert", {
+    p_admin_id: userId,
+    p_destination_id: payload.destination_id ? assertUuid(payload.destination_id, "입금 안내") : null,
+    p_destination_type: destinationType,
+    p_label: textValue(payload.label, "표시 이름", 80, false),
+    p_masked_value: textValue(payload.masked_value, "마스킹 값", 120, false),
+    p_encrypted_value: textValue(payload.encrypted_value || payload.account_number || payload.usdt_address, "원문 값", 500, false),
+    p_qr_asset_path: textValue(payload.qr_asset_path, "QR 이미지", 500, false),
+    p_enabled: payload.enabled === false || payload.enabled === "false" ? false : true,
+    p_bank_name: textValue(payload.bank_name, "은행명", 80, false),
+    p_account_holder: textValue(payload.account_holder, "예금주", 80, false),
+    p_guidance_text: textValue(payload.guidance_text, "안내문구", 1000, false),
+    p_usdt_network: textValue(payload.usdt_network, "USDT 네트워크", 40, false) || (destinationType === "usdt" ? "TRC20" : null),
+    p_account_number: textValue(payload.account_number, "계좌번호", 80, false),
+    p_usdt_address: textValue(payload.usdt_address, "USDT 주소", 200, false),
+    p_memo: textValue(payload.memo, "메모", 500, false),
+    p_change_reason: textValue(payload.change_reason || payload.reason, "변경 사유", 500, false)
+  }, "입금 안내 계좌를 저장하지 못했습니다.");
+  const safe = { ...saved, encrypted_value: undefined, address_mode: destinationType === "usdt" ? "operator_fixed" : saved.address_mode };
+  await appendAudit(admin, userId, "입금 안내 계좌 저장", "payout_destination", String(saved.id || ""), textValue(payload.change_reason || payload.reason, "변경 사유", 500, false), null, {
+    ...safe,
+    account_number: saved.account_number ? "set" : null,
+    usdt_address: saved.usdt_address ? "set" : null
+  });
   return safe;
 }
 
@@ -1391,6 +1543,24 @@ export async function handleOpsAction(
   }
   if (action === "upsert_payout_destination") {
     return { body: { ok: true, destination: await upsertPayoutDestination(admin, user.id, payload) } };
+  }
+  if (action === "reset_security_pin" || action === "security_pin_reset") {
+    await requireRole(admin, user.id, financeRoles);
+    return {
+      body: {
+        ok: true,
+        ...(await resetSecurityPin(
+          admin,
+          user.id,
+          assertUuid(payload.user_id || payload.member_id, "회원"),
+          textValue(payload.reason, "재설정 사유", 500, false)
+        ))
+      }
+    };
+  }
+  if (action === "security_pin_audit" || action === "list_security_pin_audit") {
+    await requireRole(admin, user.id, financeRoles);
+    return { body: { ok: true, logs: await listSecurityPinAudit(admin, user.id) } };
   }
   if (action === "audit_logs" || action === "list_audit_logs") {
     return { body: { ok: true, logs: await listAuditLogs(admin, user.id, payload) } };

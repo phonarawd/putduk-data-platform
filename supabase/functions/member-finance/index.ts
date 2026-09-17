@@ -15,6 +15,14 @@ import {
   PRIVATE_BUCKET,
   SIGNED_URL_SECONDS
 } from "../_shared/validate.ts";
+import {
+  challengeDepositInfo,
+  lockDepositInfo,
+  revealDepositInfo,
+  setSecurityPin
+} from "../_shared/deposit-info.ts";
+import { DEPOSIT_INFO_PIN_REQUIRED } from "../_shared/deposit-pin.ts";
+import { financeActionGuard, isFinanceApiOpen } from "../_shared/finance-api-guard.ts";
 
 const supabaseUrl = Deno.env.get("SUPABASE_URL");
 const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
@@ -62,18 +70,8 @@ function textValue(value: unknown, label: string, max = 240, required = true): s
   return candidate;
 }
 
-async function listDepositDestinations() {
-  const { data, error } = await admin
-    .schema("private")
-    .from("payout_destinations")
-    .select("id,destination_type,label,masked_value,qr_asset_path,bank_name,account_holder,guidance_text,usdt_network")
-    .eq("enabled", true)
-    .order("created_at", { ascending: true });
-  if (error) {
-    console.error("deposit destinations failed", error);
-    throw new HttpError(503, "입금 안내를 불러오지 못했습니다.");
-  }
-  return data || [];
+async function listDepositDestinations(userId: string, ip: string | null) {
+  return challengeDepositInfo(admin, userId, ip);
 }
 
 async function requestUpload(userId: string, payload: JsonRecord) {
@@ -146,18 +144,87 @@ async function lockStake(userId: string, payload: JsonRecord) {
   return data;
 }
 
+function parseInspectAnswers(payload: JsonRecord): string[] {
+  const nested = payload.inspect && typeof payload.inspect === "object"
+    ? (payload.inspect as JsonRecord).answers
+    : null;
+  const raw = payload.inspect_answers || nested || payload.answers;
+  if (!Array.isArray(raw)) return [];
+  return raw.map((item) => String(item || "").trim()).filter(Boolean);
+}
+
+function parseCatalogListing(payload: JsonRecord): JsonRecord | null {
+  const nested = payload.listing && typeof payload.listing === "object"
+    ? payload.listing as JsonRecord
+    : payload.inspect && typeof payload.inspect === "object"
+      ? ((payload.inspect as JsonRecord).listing as JsonRecord | undefined)
+      : undefined;
+  const raw = nested && typeof nested === "object" ? nested : null;
+  if (!raw) return null;
+  const productName = String(raw.product_name || raw.productName || "").replace(/\s+/g, " ").trim();
+  const price = String(raw.price || "").replace(/\D/g, "");
+  const option = String(raw.option || "").replace(/\s+/g, " ").trim();
+  const shipping = String(raw.shipping || "").replace(/\s+/g, " ").trim();
+  if (!productName && !price && !option && !shipping) return null;
+  return {
+    product_name: productName,
+    price,
+    option,
+    shipping
+  };
+}
+
+async function checkpointWork(userId: string, payload: JsonRecord) {
+  const runId = String(payload.task_run_id || payload.run_id || "").trim();
+  if (!isUuid(runId)) throw new HttpError(400, "근무 정보가 필요해요.");
+  const listing = parseCatalogListing(payload);
+  const answers = parseInspectAnswers(payload);
+  const checkpoint = payload.checkpoint && typeof payload.checkpoint === "object"
+    ? payload.checkpoint
+    : listing
+      ? { kind: "catalog_listing", listing }
+      : { kind: "inspect", answers };
+  const { data, error } = await admin.rpc("putduk_member_checkpoint_work", {
+    p_user_id: userId,
+    p_task_run_id: runId,
+    p_payload: checkpoint
+  });
+  if (error || !data) throw new HttpError(400, rpcMessage(error, "중간 저장을 하지 못했어요."));
+  return data;
+}
+
 async function submitWork(userId: string, payload: JsonRecord) {
   const runId = String(payload.task_run_id || payload.run_id || "").trim();
   if (!isUuid(runId)) throw new HttpError(400, "근무 정보가 필요해요.");
-  const choiceId = String(payload.choice_id || payload.choice || payload.picked || "").trim();
-  if (!choiceId) throw new HttpError(400, "맞아요 / 달라요 중 하나를 골라 주세요.");
-  const label = textValue(payload.choice_label || payload.label, "고른 보기", 80, false);
+  const listing = parseCatalogListing(payload);
+  const kind = String(payload.work_kind || payload.kind || (listing ? "catalog_listing" : "")).trim();
+  if (kind === "catalog_listing" || listing) {
+    if (!listing || !listing.product_name || !listing.price || !listing.option || !listing.shipping) {
+      throw new HttpError(400, "상품명·가격·옵션·배송을 모두 입력해 주세요.");
+    }
+    const label = textValue(payload.choice_label || payload.label || "상품 정보 4칸 입력 완료", "고른 보기", 80, false);
+    const { data, error } = await admin.rpc("putduk_member_submit_work", {
+      p_user_id: userId,
+      p_task_run_id: runId,
+      p_choice_id: String(payload.choice_id || "a").trim() || "a",
+      p_choice_label: label,
+      p_inspect: { kind: "catalog_listing", listing }
+    });
+    if (error || !data) throw new HttpError(400, rpcMessage(error, "근무를 제출하지 못했어요."));
+    return data;
+  }
+  const answers = parseInspectAnswers(payload);
+  if (answers.length !== 5) throw new HttpError(400, "오늘 배정 물량 5건을 대조해 주세요.");
+  const choiceId = String(payload.choice_id || payload.choice || payload.picked || answers[4] || "").trim();
+  if (!choiceId) throw new HttpError(400, "실물 라벨 번호를 입력해 주세요.");
+  const label = textValue(payload.choice_label || payload.label || "오늘 배정 물량 5건 정상 검수", "고른 보기", 80, false);
 
   const { data, error } = await admin.rpc("putduk_member_submit_work", {
     p_user_id: userId,
     p_task_run_id: runId,
     p_choice_id: choiceId,
-    p_choice_label: label
+    p_choice_label: label,
+    p_inspect: { answers }
   });
   if (error || !data) throw new HttpError(400, rpcMessage(error, "근무를 제출하지 못했어요."));
   return data;
@@ -175,12 +242,17 @@ async function walletSnapshot(userId: string) {
   }
   const rows = Array.isArray(data) ? data : [];
   const buckets = Object.fromEntries(rows.map((row) => [row.bucket, row]));
-  const work = buckets.work_balance || {};
+  const work = buckets.work_balance || null;
+  const amountOf = (row: JsonRecord | null | undefined, field: string) => {
+    if (!row || row[field] == null || row[field] === "") return null;
+    const amount = Number(row[field]);
+    return Number.isFinite(amount) ? amount : null;
+  };
   return {
-    support_grant: Number(buckets.support_grant?.available_amount || 0),
-    work_balance: Number(work.available_amount || 0),
-    available: Number(buckets.available?.available_amount || 0),
-    held_amount: Number(work.held_amount || 0),
+    support_grant: amountOf(buckets.support_grant as JsonRecord, "available_amount"),
+    work_balance: amountOf(work as JsonRecord, "available_amount"),
+    available: amountOf(buckets.available as JsonRecord, "available_amount"),
+    held_amount: amountOf(work as JsonRecord, "held_amount"),
     buckets: rows
   };
 }
@@ -236,17 +308,57 @@ Deno.serve(async (request: Request) => {
     const user = await authenticate(request);
     const payload = await parseRequest(request);
     const action = String(payload.action || "");
+    const ip = clientIp(request);
+    const revealLike = action === "deposit_info_reveal"
+      || action === "reveal"
+      || payload.reveal === true
+      || payload.reveal === "1";
+    if (request.method === "GET" && revealLike) {
+      throw new HttpError(403, "🔐 보안 PIN 입력 후 입금 안내 확인", DEPOSIT_INFO_PIN_REQUIRED);
+    }
+
+    const finance = financeActionGuard({
+      open: isFinanceApiOpen(Deno.env.get("PUTDUK_ENABLE_FINANCE_API")),
+      action,
+      amount: payload.amount,
+      includePrincipal: payload.include_principal,
+      kind: payload.kind || payload.withdraw_kind,
+      currency: payload.currency
+    });
+    if (!finance.ok) {
+      throw new HttpError(finance.status, finance.message, finance.code);
+    }
 
     if (action === "record_session") {
       await admin.rpc("putduk_member_record_session", {
         p_user_id: user.id,
-        p_ip: clientIp(request)
+        p_ip: ip
       });
       return jsonResponse(request, { ok: true });
     }
 
-    if (action === "deposit_destinations") {
-      return jsonResponse(request, { ok: true, destinations: await listDepositDestinations() });
+    if (action === "set_security_pin" || action === "security_pin_set") {
+      return jsonResponse(request, { ok: true, ...(await setSecurityPin(admin, user.id, payload, ip)) });
+    }
+
+    if (
+      action === "deposit_destinations"
+      || action === "deposit_info_challenge"
+      || action === "deposit_info"
+    ) {
+      const challenge = await listDepositDestinations(user.id, ip);
+      return jsonResponse(request, { ok: true, ...challenge, destinations: challenge.destinations });
+    }
+
+    if (action === "deposit_info_reveal") {
+      if (request.method !== "POST") {
+        throw new HttpError(403, "🔐 보안 PIN 입력 후 입금 안내 확인", DEPOSIT_INFO_PIN_REQUIRED);
+      }
+      return jsonResponse(request, { ok: true, ...(await revealDepositInfo(admin, user.id, payload, ip)) });
+    }
+
+    if (action === "deposit_info_lock") {
+      return jsonResponse(request, { ok: true, ...(await lockDepositInfo(admin, user.id, payload, ip)) });
     }
 
     if (action === "request_upload") {
@@ -263,6 +375,10 @@ Deno.serve(async (request: Request) => {
 
     if (action === "lock_stake" || action === "start_lock") {
       return jsonResponse(request, { ok: true, lock: await lockStake(user.id, payload) });
+    }
+
+    if (action === "checkpoint_work" || action === "save_checkpoint") {
+      return jsonResponse(request, { ok: true, run: await checkpointWork(user.id, payload) });
     }
 
     if (action === "submit_work" || action === "submit_task" || action === "submit_run") {
@@ -283,7 +399,9 @@ Deno.serve(async (request: Request) => {
 
     throw new HttpError(404, "지원하지 않는 요청입니다.");
   } catch (error) {
-    if (error instanceof HttpError) return jsonResponse(request, { ok: false, error: error.message }, error.status);
+    if (error instanceof HttpError) {
+      return jsonResponse(request, { ok: false, error: error.message, code: error.code || undefined }, error.status);
+    }
     console.error("member-finance error", error);
     return jsonResponse(request, { ok: false, error: "요청을 처리하지 못했어요." }, 500);
   }
