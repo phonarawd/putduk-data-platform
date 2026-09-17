@@ -32,6 +32,15 @@ const fallbackEngines: ReturnType<typeof createMotionEngine>[] = [];
 const workLoops = typeof WeakMap === 'function' ? new WeakMap<HTMLCanvasElement, { canvas: HTMLCanvasElement; raf: number; stopped: boolean }>() : null;
 let fallbackLoops: Array<{ canvas: HTMLCanvasElement; raf: number; stopped: boolean }> = [];
 let lastCanvas: HTMLCanvasElement | null = null;
+let visibilityBound = false;
+
+function bindVisibilityStop(): void {
+  if (visibilityBound || typeof document === 'undefined') return;
+  visibilityBound = true;
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) stopWorkPhase(lastCanvas);
+  });
+}
 
 function engineFor(canvas: HTMLCanvasElement) {
   if (engines) {
@@ -166,4 +175,7 @@ const api: PutdukMotionApi = {
   }
 };
 
-if (typeof window !== 'undefined') window.PutdukMotion = api;
+if (typeof window !== 'undefined') {
+  window.PutdukMotion = api;
+  bindVisibilityStop();
+}

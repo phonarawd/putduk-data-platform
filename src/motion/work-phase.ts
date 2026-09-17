@@ -61,11 +61,11 @@ export function normalizeWorkPhase(phase: unknown): WorkCut | null {
 }
 
 export function defaultWorkDuration(cut: WorkCut): number {
-  if (cut === 'approve') return 2800;
-  if (cut === 'pwa_home') return 2600;
-  if (cut === 'demote') return 2400;
-  if (cut === 'submit') return 2400;
-  return 2200;
+  if (cut === 'approve') return 1200;
+  if (cut === 'pwa_home') return 1000;
+  if (cut === 'demote') return 1100;
+  if (cut === 'submit') return 900;
+  return 900;
 }
 
 /** 컷별 물류 타임라인 위치. 잠금=연결, 제출=이동, 승인=동기. */

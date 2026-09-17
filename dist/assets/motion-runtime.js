@@ -1171,11 +1171,11 @@
     return PHASE_ALIASES[key] || null;
   }
   function defaultWorkDuration(cut) {
-    if (cut === "approve") return 2800;
-    if (cut === "pwa_home") return 2600;
-    if (cut === "demote") return 2400;
-    if (cut === "submit") return 2400;
-    return 2200;
+    if (cut === "approve") return 1200;
+    if (cut === "pwa_home") return 1000;
+    if (cut === "demote") return 1100;
+    if (cut === "submit") return 900;
+    return 900;
   }
   function workCutProgress(cut, local) {
     const t = clamp013(local);
@@ -1596,7 +1596,7 @@ void main() {
       const hints = readBrowserQualityHints();
       this.quality = this.refreshQuality();
       const workCut = readWorkCut(input);
-      if ((hints.hidden || !this.visible) && !workCut) return;
+      if (hints.hidden || !this.visible) return;
       const now = performance.now();
       const minDelta = 1e3 / Math.max(1, this.quality.targetFps);
       if (now - this.lastDraw < minDelta && this.quality.level !== "static" && !workCut) return;
@@ -1850,6 +1850,14 @@ void main() {
   var workLoops = typeof WeakMap === "function" ? /* @__PURE__ */ new WeakMap() : null;
   var fallbackLoops = [];
   var lastCanvas = null;
+  var visibilityBound = false;
+  function bindVisibilityStop() {
+    if (visibilityBound || typeof document === "undefined") return;
+    visibilityBound = true;
+    document.addEventListener("visibilitychange", () => {
+      if (document.hidden) stopWorkPhase(lastCanvas);
+    });
+  }
   function engineFor(canvas) {
     if (engines) {
       let current = engines.get(canvas);
@@ -1976,5 +1984,8 @@ void main() {
       }
     }
   };
-  if (typeof window !== "undefined") window.PutdukMotion = api;
+  if (typeof window !== "undefined") {
+    window.PutdukMotion = api;
+    bindVisibilityStop();
+  }
 })();

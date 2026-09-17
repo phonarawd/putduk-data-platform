@@ -3,10 +3,11 @@
 
   const isAdmin = document.documentElement.dataset.mode === 'admin';
   const config = window.PUTDUK_CONFIG || {};
+  const launchBlock = window.__PUTDUK_LAUNCH_BLOCK__ || null;
   const adminFunctionUrl = config.adminFunctionUrl || (config.supabaseUrl ? `${config.supabaseUrl}/functions/v1/admin-control` : '');
   const memberFinanceUrl = config.memberFinanceUrl || (config.supabaseUrl ? `${config.supabaseUrl}/functions/v1/member-finance` : '');
   const storageKey = 'putduk-state-v2';
-  const supabaseClient = window.supabase && config.supabaseUrl && config.supabasePublishableKey
+  const supabaseClient = !launchBlock && window.supabase && config.supabaseUrl && config.supabasePublishableKey
     ? window.supabase.createClient(config.supabaseUrl, config.supabasePublishableKey, {
       auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
     })
@@ -32,6 +33,35 @@
   const FOMO_GIVEN = ['은', '호', '영', '진', '우', '서', '민', '아', '준', '현', '수', '지', '윤', '하', '린', '솔', '빈', '재', '성', '혜', '나', '율', '원', '기', '태', '석', '희', '정', '훈', '경'];
   const FOMO_NAME_POOL = FOMO_SURNAMES.flatMap((sur) => FOMO_GIVEN.map((tail) => `${sur}○${tail}`));
   const FOMO_ACTIONS = ['방금 출근했어요', '자리를 가져갔어요', '라인에 들어왔어요', '근무를 시작했어요'];
+  const INSPECT_TOTAL = 5;
+  const INSPECT_HUBS = [
+    '인천공항 제2화물터미널 3라인',
+    '부산신항 국제물류센터 B구역',
+    '동탄 메가허브 분류터미널',
+    '평택 종합물류 4게이트',
+    '김포 항공특송 취급소'
+  ];
+  const INSPECT_CARGO = [
+    '항공 특송 정밀부품',
+    '긴급 물류 센서 키트',
+    '반도체 패키징 화물',
+    '의료기기 긴급 배송건',
+    '글로벌 특송 라벨 화물'
+  ];
+  const ACTIVE_RUN_STATUSES = ['reserved', 'in_progress', 'checkpointed'];
+  const REVIEW_WAIT_STATUSES = ['submitted', 'under_review', 'review_pending'];
+  const REWORK_RUN_STATUSES = ['rework'];
+  const APPROVED_RUN_STATUSES = ['approved'];
+  if (launchBlock) {
+    const paintBlock = () => {
+      const app = document.getElementById('app');
+      if (!app) return;
+      app.innerHTML = `<section class="empty-state" style="max-width:560px;margin:80px auto;text-align:center"><h1 class="page-title">운영자 주소를 먼저 나눠 주세요</h1><p class="page-copy">${String(launchBlock.copy || '')}</p></section>`;
+    };
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', paintBlock);
+    else paintBlock();
+    return;
+  }
   let fomoTimer = null;
   let fomoFeedCache = { bucket: -1, items: [] };
   let fomoNameCooldown = [];
@@ -43,8 +73,9 @@
     authMode: 'signup',
     modal: null,
     modalPayload: null,
-    wallet: { support: 0, work: 0, task: 0, referral: 0, available: 0, held: 0 },
+    wallet: { support: null, work: null, task: null, referral: null, available: null, held: null },
     run: null,
+    reviewWait: null,
     history: [],
     notifications: [],
     referrals: [],
@@ -60,6 +91,15 @@
     walletLedgerTab: 'all',
     lastCrewPartnerId: null,
     idCardFlipped: false,
+    depositDestinations: [],
+    depositDestinationsError: false,
+    depositPinSet: false,
+    depositPinLocked: false,
+    depositPinCopy: '',
+    depositReveal: null,
+    depositRevealExpiresAt: null,
+    depositRevealToken: null,
+    depositCatalogVersion: null,
     startNodeId: null,
     depositJump: null,
     player: null,
@@ -85,7 +125,7 @@
     adminMemberQuery: '',
     adminMemberFilter: 'all',
     adminMemberDetail: null,
-    adminFinance: { deposits: [], withdrawals: [], kyc: [], referrals: [] },
+    adminFinance: { deposits: [], withdrawals: [], kyc: [], referrals: [], destinations: [] },
     adminFinanceLoading: false,
     adminFinanceError: null,
     adminFinanceContract: null,
@@ -107,14 +147,16 @@
   let fomoClockBound = false;
   const toastRecent = new Map();
   const toastTimers = new Set();
+  let overlayDismissed = false;
 
   function freshState(userState = false) {
     const next = JSON.parse(JSON.stringify(defaultState));
     if (userState) {
-      next.wallet = { support: 0, task: 0, referral: 0, available: 0, held: 0 };
+      next.wallet = { support: null, work: null, task: null, referral: null, available: null, held: null };
       next.history = [];
       next.notifications = [];
       next.run = null;
+      next.reviewWait = null;
     }
     return next;
   }
@@ -131,8 +173,8 @@
 
   function saveState() {
     try {
-      const { _workLockCue, _playedMotionCue, _motionCanvas, toast, modal, modalPayload, adminMemberDetail, depositJump, adminMotion, adminMotionError, crewPulse, ...rest } = state;
-      const safe = { ...rest, run: state.run ? { ...state.run, overlayOpen: false } : null, toast: null, modal: null, modalPayload: null, adminMemberDetail: null };
+      const { _workLockCue, _playedMotionCue, _motionCanvas, toast, modal, modalPayload, adminMemberDetail, depositJump, adminMotion, adminMotionError, crewPulse, depositReveal, depositRevealExpiresAt, depositRevealToken, ...rest } = state;
+      const safe = { ...rest, run: state.run ? { ...state.run, overlayOpen: false } : null, toast: null, modal: null, modalPayload: null, adminMemberDetail: null, depositReveal: null, depositRevealExpiresAt: null, depositRevealToken: null };
       localStorage.setItem(activeStorageKey, JSON.stringify(safe));
     } catch (_) {}
   }
@@ -400,16 +442,133 @@
     };
   }
 
+  function parseLedgerAmount(value) {
+    if (value == null || value === '') return null;
+    const amount = typeof value === 'number' ? value : Number(String(value).replace(/,/g, ''));
+    return Number.isFinite(amount) ? amount : null;
+  }
+
+  function formatLedgerAmount(value) {
+    const amount = parseLedgerAmount(value);
+    if (amount == null) return '확인 필요';
+    return `${Math.round(amount).toLocaleString('ko-KR')}원`;
+  }
+
+  function runStatusLabel(status) {
+    return ({
+      reserved: '출근 대기',
+      in_progress: '근무 중',
+      checkpointed: '중간 저장',
+      submitted: '검수 대기',
+      under_review: '검수 중',
+      review_pending: '검수 대기',
+      approved: '검수 완료',
+      rework: '재확인 요청',
+      rejected: '반려',
+      cancelled: '취소'
+    })[String(status || '')] || '처리 중';
+  }
+
+  function isActiveRunStatus(status) {
+    return ACTIVE_RUN_STATUSES.includes(String(status || ''));
+  }
+
+  function isReviewWaitStatus(status) {
+    return REVIEW_WAIT_STATUSES.includes(String(status || ''));
+  }
+
+  function reviewWaitDismissKey(id, publicId) {
+    return String(id || publicId || '');
+  }
+
+  function isReviewWaitDismissed(id, publicId) {
+    try {
+      const stored = sessionStorage.getItem('putduk-review-wait-dismissed') || '';
+      const keys = [id, publicId].map((value) => String(value || '')).filter(Boolean);
+      return keys.some((key) => stored === key);
+    } catch (_) {
+      return false;
+    }
+  }
+
+  function rememberReviewWaitDismissed(wait) {
+    try {
+      const key = reviewWaitDismissKey(wait?.dbId, wait?.id);
+      if (key) sessionStorage.setItem('putduk-review-wait-dismissed', key);
+    } catch (_) {}
+  }
+
+  function blocksNewStart(status) {
+    const raw = String(status || '');
+    return isActiveRunStatus(raw) || isReviewWaitStatus(raw) || REWORK_RUN_STATUSES.includes(raw);
+  }
+
+  function isPostedReward(rewardStatus, runStatus) {
+    return String(rewardStatus || '').toLowerCase() === 'posted' && APPROVED_RUN_STATUSES.includes(String(runStatus || ''));
+  }
+
+  function rewardUiKind(item) {
+    const status = String(item?.runStatus || item?.statusRaw || '');
+    const rewardStatus = String(item?.rewardStatus || '');
+    if (isReviewWaitStatus(status)) return 'review_wait';
+    if (REWORK_RUN_STATUSES.includes(status)) return 'rework';
+    if (status === 'rejected') return 'rejected';
+    if (isPostedReward(rewardStatus, status)) return 'posted';
+    if (APPROVED_RUN_STATUSES.includes(status)) return 'approved_unposted';
+    return 'expected';
+  }
+
+  function rewardUiLabel(kind) {
+    return ({
+      expected: '예상 보상',
+      review_wait: '예상 보상 · 검수 대기',
+      rework: '예상 보상 · 재확인',
+      rejected: '보상 없음',
+      approved_unposted: '확정 대기',
+      posted: '확정 보상'
+    })[kind] || '예상 보상';
+  }
+
+  function sanitizeMemberNotice(text) {
+    let copy = String(text || '');
+    copy = copy.replace(/(\d{1,3}(?:,\d{3})*)\.00원/g, '$1원');
+    copy = copy.replace(/운영자 안내[·\s]*테스트/g, '');
+    copy = copy.replace(/운영자 안내/g, '');
+    copy = copy.replace(/(^|[^\w가-힣])테스트(?=[^\w가-힣]|$)/g, '$1');
+    copy = copy.replace(/수당\s*[\d,]+원이 출금 가능에 들어왔어요\.?/g, '검수가 끝났어요. 출금 가능 금액은 지갑에서 확인해요.');
+    copy = copy.replace(/출금 가능으로 반영/g, '검수 완료로 기록');
+    copy = copy.replace(/출금 가능에 (들어왔어요|반영됐어요)/g, '검수 완료로 기록됐어요');
+    copy = copy.replace(/지급 완료/g, '검수 완료');
+    copy = copy.replace(/운영자가 확인합니다\.?/g, '');
+    copy = copy.replace(/\s*·\s*:/g, '');
+    copy = copy.replace(/\s*·\s*$/g, '');
+    copy = copy.replace(/\s{2,}/g, ' ').trim();
+    if (/^[\d,]+원$/.test(copy)) return '처리 기록이 있어요. 금액은 지갑에서 확인해요.';
+    return copy;
+  }
+
+  function normalizeTypedLabel(value) {
+    const raw = String(value || '').trim().toUpperCase().replace(/\s+/g, '');
+    if (!raw) return '';
+    const digits = raw.replace(/\D/g, '');
+    if (digits.length >= 4) return `PDK-${digits.slice(-4)}`;
+    return raw;
+  }
+
   function applyWalletRows(rows) {
     const list = Array.isArray(rows) ? rows : [];
     const buckets = Object.fromEntries(list.map((row) => [row.bucket, row]));
-    const work = buckets.work_balance || {};
-    state.wallet.support = Number(buckets.support_grant?.available_amount || 0);
-    state.wallet.work = Number(work.available_amount || 0);
-    state.wallet.held = Number(work.held_amount || 0);
-    state.wallet.available = Number(buckets.available?.available_amount || 0);
-    state.wallet.task = Number(buckets.task_reward?.available_amount || 0);
-    state.wallet.referral = Number(buckets.referral_reward?.available_amount || 0);
+    const amountOf = (row, field) => {
+      if (!row || row[field] == null || row[field] === '') return null;
+      return parseLedgerAmount(row[field]);
+    };
+    const work = buckets.work_balance || null;
+    state.wallet.support = amountOf(buckets.support_grant, 'available_amount');
+    state.wallet.work = amountOf(work, 'available_amount');
+    state.wallet.held = amountOf(work, 'held_amount');
+    state.wallet.available = amountOf(buckets.available, 'available_amount');
+    state.wallet.task = amountOf(buckets.task_reward, 'available_amount');
+    state.wallet.referral = amountOf(buckets.referral_reward, 'available_amount');
   }
 
   async function refreshMemberWallet() {
@@ -432,26 +591,27 @@
         applyWalletRows(wallet.buckets);
         return;
       }
-      state.wallet.support = Number(wallet.support_grant || 0);
-      state.wallet.work = Number(wallet.work_balance || 0);
-      state.wallet.held = Number(wallet.held_amount || 0);
-      state.wallet.available = Number(wallet.available || 0);
+      state.wallet.support = parseLedgerAmount(wallet.support_grant);
+      state.wallet.work = parseLedgerAmount(wallet.work_balance);
+      state.wallet.held = parseLedgerAmount(wallet.held_amount);
+      state.wallet.available = parseLedgerAmount(wallet.available);
     } catch (_) {}
   }
 
   function walletThree() {
     return {
-      support: Number(state.wallet.support || 0),
-      work: Number(state.wallet.work || 0) + Number(state.wallet.held || 0),
-      workHeld: Number(state.wallet.held || 0),
-      withdrawable: Number(state.wallet.available || 0)
+      support: parseLedgerAmount(state.wallet.support),
+      work: parseLedgerAmount(state.wallet.work),
+      workHeld: parseLedgerAmount(state.wallet.held),
+      withdrawable: parseLedgerAmount(state.wallet.available)
     };
   }
 
   function renderWalletSlots() {
     const w = walletThree();
-    const workHint = w.workHeld > 0 ? `잠금 ${money(w.workHeld)}` : '근무에 쓰는 돈';
-    return `<div class="wallet-slots"><div class="wallet-slot">${uiLead('gift', '지원금')}<strong>${money(w.support)}</strong><small>출금 안 됨</small></div><div class="wallet-slot">${uiLead('briefcase', '업무잔액')}<strong>${money(w.work)}</strong><small>${workHint}</small></div><div class="wallet-slot">${uiLead('banknote', '출금가능')}<strong>${money(w.withdrawable)}</strong><small>기본은 수당만</small></div></div>`;
+    const heldText = w.workHeld == null ? '확인 필요' : formatLedgerAmount(w.workHeld);
+    const workHint = w.workHeld != null && w.workHeld > 0 ? `잠금 ${heldText}` : '근무에 쓰는 돈';
+    return `<div class="wallet-slots"><div class="wallet-slot">${uiLead('gift', '지원금')}<strong>${formatLedgerAmount(w.support)}</strong><small>출금 안 됨</small></div><div class="wallet-slot">${uiLead('briefcase', '업무잔액')}<strong>${formatLedgerAmount(w.work)}</strong><small>${workHint}</small></div><div class="wallet-slot">${uiLead('banknote', '출금가능')}<strong>${formatLedgerAmount(w.withdrawable)}</strong><small>기본은 수당만</small></div></div>`;
   }
 
   function displayPublicId() {
@@ -488,11 +648,133 @@
     state.onboardingStep = null;
   }
 
+  function inspectSeedFromRunId(runId) {
+    const hex = String(runId || '')
+      .replace(/-/g, '')
+      .toLowerCase()
+      .replace(/[^0-9a-f]/g, '')
+      .slice(0, 8)
+      .padEnd(8, '0');
+    return parseInt(hex, 16) >>> 0;
+  }
+
+  function inspectItemForRun(runId, index) {
+    const seed = inspectSeedFromRunId(runId);
+    const invoiceNum = 1000 + ((seed + index * 137) % 9000);
+    const mismatch = index === (seed % 5) || index === ((seed + 2) % 5);
+    const targetNum = mismatch ? 1000 + ((invoiceNum - 1000 + 17) % 9000) : invoiceNum;
+    return {
+      index: index + 1,
+      invoiceCode: `PDK-${String(invoiceNum).padStart(4, '0')}`,
+      targetCode: `PDK-${String(targetNum).padStart(4, '0')}`,
+      match: !mismatch,
+      expectedChoice: mismatch ? 'no' : 'yes',
+      destination: INSPECT_HUBS[index % INSPECT_HUBS.length],
+      category: INSPECT_CARGO[index % INSPECT_CARGO.length]
+    };
+  }
+
+  function inspectSeedKey(run, node) {
+    return String(run?.dbId || node?.id || '00000000-0000-4000-8000-000000000000');
+  }
+
+  function initBundleForNode(node, company, run) {
+    const runId = inspectSeedKey(run, node);
+    return {
+      total: INSPECT_TOTAL,
+      current: 0,
+      runId,
+      items: Array.from({ length: INSPECT_TOTAL }, (_, index) => inspectItemForRun(runId, index)),
+      answers: []
+    };
+  }
+
+  function syncInspectBundle(bundle, node, run) {
+    const fresh = initBundleForNode(node, null, run);
+    if (!bundle || bundle.total !== fresh.total) return fresh;
+    const same = Array.isArray(bundle.items)
+      && bundle.items.length === fresh.items.length
+      && bundle.items.every((item, index) => item.invoiceCode === fresh.items[index].invoiceCode && item.targetCode === fresh.items[index].targetCode);
+    if (!same) return fresh;
+    return {
+      ...fresh,
+      current: Math.min(INSPECT_TOTAL, Number(bundle.current || 0)),
+      answers: Array.isArray(bundle.answers) ? bundle.answers.slice(0, INSPECT_TOTAL) : []
+    };
+  }
+
+  function isInspectBundleComplete(bundle) {
+    if (!bundle || bundle.current < INSPECT_TOTAL || !Array.isArray(bundle.answers) || bundle.answers.length < INSPECT_TOTAL) return false;
+    return bundle.items.every((item, index) => {
+      const got = String(bundle.answers[index] || '').toLowerCase();
+      const choice = (got === 'a' || got === 'yes' || got === '1') ? 'yes' : (got === 'b' || got === 'no' || got === '2') ? 'no' : '';
+      return choice === item.expectedChoice;
+    });
+  }
+
+  function inspectCodeTail(code) {
+    return String(code || '').replace(/^PDK-/i, '');
+  }
+
+  const CATALOG_PRODUCTS = ['무선 이어폰 실리콘 케이스', '캠핑 접이식 테이블', '유아 스트라이프 내의', '스테인리스 텀블러 500ml'];
+  const CATALOG_PRICES = ['12900', '35900', '18900', '24900'];
+  const CATALOG_OPTIONS = ['블랙 / 1개', '우드 / 2인용', '90호 / 아이보리', '실버 / 손잡이형'];
+  const CATALOG_SHIPPING = ['무료배송 · 오늘출발', '3,000원 · 2-3일', '무료배송 · 해외직구 10일', '조건부무료 · 3만원 이상'];
+
+  function isCatalogWork(node) {
+    return String(node?.motion || node?.motion_profile || '').includes('catalog');
+  }
+
+  function catalogListingForRun(runId) {
+    const seed = inspectSeedFromRunId(runId);
+    return {
+      productName: CATALOG_PRODUCTS[seed % CATALOG_PRODUCTS.length],
+      price: CATALOG_PRICES[(seed >>> 3) % CATALOG_PRICES.length],
+      option: CATALOG_OPTIONS[(seed >>> 5) % CATALOG_OPTIONS.length],
+      shipping: CATALOG_SHIPPING[(seed >>> 7) % CATALOG_SHIPPING.length]
+    };
+  }
+
+  function readCatalogListing(raw) {
+    const row = raw && typeof raw === 'object' ? raw : {};
+    return {
+      productName: String(row.productName || row.product_name || '').replace(/\s+/g, ' ').trim(),
+      price: String(row.price || '').replace(/\D/g, ''),
+      option: String(row.option || '').replace(/\s+/g, ' ').trim(),
+      shipping: String(row.shipping || '').replace(/\s+/g, ' ').trim()
+    };
+  }
+
+  function gradeCatalogListing(runId, listing) {
+    const expected = catalogListingForRun(runId);
+    const got = readCatalogListing(listing);
+    return got.productName === expected.productName
+      && got.price === expected.price
+      && got.option === expected.option
+      && got.shipping === expected.shipping;
+  }
+
+  function catalogFormValues() {
+    return readCatalogListing({
+      productName: document.getElementById('catalogProductName')?.value,
+      price: document.getElementById('catalogPrice')?.value,
+      option: document.getElementById('catalogOption')?.value,
+      shipping: document.getElementById('catalogShipping')?.value
+    });
+  }
+
+  function tapHaptic(kind) {
+    try {
+      const vibrate = navigator.vibrate?.bind(navigator);
+      if (!vibrate) return;
+      if (kind === 'ok') vibrate(12);
+      else if (kind === 'bad') vibrate([40, 40, 40]);
+      else vibrate(8);
+    } catch (_error) {}
+  }
+
   function playerQuestion(node) {
-    const stored = String(node?.question || node?.question_prompt_ko || '').trim();
-    if (stored) return stored;
-    const company = companyById(node?.companyId);
-    return `${company.name || '협력사'} 라인 사진의 표시가 근무 라벨과 같나요?`;
+    return '전표의 송장 번호와 실물 라벨 번호가 같으면 통과시켜요.';
   }
 
   function isUnsupportedAction(error) {
@@ -527,15 +809,17 @@
       created_at: row.created_at,
       last_login_at: row.last_login_at || row.last_sign_in_at,
       last_login_ip: row.last_login_ip != null ? String(row.last_login_ip) : '',
-      referral_count: Number(row.referral_count || 0),
+      referral_count: parseLedgerAmount(row.referral_count) ?? Number(row.referral_count || 0),
       wallet: {
-        support: Number(row.support_grant_krw || 0),
-        work: Number(row.work_balance_krw || 0),
-        task: Number(row.task_reward_krw || 0),
-        referral: 0,
-        available: Number(row.available_krw || 0),
-        held: Number(row.work_held_krw || row.available_held_krw || 0)
-      }
+        support: parseLedgerAmount(row.wallet_summary?.support ?? row.support_grant_krw),
+        work: parseLedgerAmount(row.wallet_summary?.work ?? row.work_balance_krw),
+        task: parseLedgerAmount(row.wallet_summary?.task ?? row.task_reward_krw),
+        referral: parseLedgerAmount(row.wallet_summary?.referral),
+        available: parseLedgerAmount(row.wallet_summary?.available ?? row.available_krw),
+        held: parseLedgerAmount(row.wallet_summary?.work_held ?? row.work_held_krw ?? row.available_held_krw)
+      },
+      wallets: Array.isArray(row.wallets) ? row.wallets : null,
+      pii_masked: row.pii_masked === true
     };
   }
 
@@ -571,12 +855,12 @@
       last_login_at: firstText(next.last_login_at, prev.last_login_at),
       last_login_ip: firstText(next.last_login_ip, prev.last_login_ip),
       wallet: {
-        support: Number(next.wallet?.support ?? prev.wallet?.support ?? 0),
-        work: Number(next.wallet?.work ?? prev.wallet?.work ?? next.wallet?.task ?? prev.wallet?.task ?? 0),
-        task: Number(next.wallet?.work ?? next.wallet?.task ?? prev.wallet?.work ?? prev.wallet?.task ?? 0),
-        referral: Number(next.wallet?.referral ?? prev.wallet?.referral ?? 0),
-        available: Number(next.wallet?.available ?? prev.wallet?.available ?? 0),
-        held: Number(next.wallet?.held ?? prev.wallet?.held ?? 0)
+        support: parseLedgerAmount(next.wallet?.support ?? prev.wallet?.support),
+        work: parseLedgerAmount(next.wallet?.work ?? prev.wallet?.work ?? next.wallet?.task ?? prev.wallet?.task),
+        task: parseLedgerAmount(next.wallet?.task ?? prev.wallet?.task),
+        referral: parseLedgerAmount(next.wallet?.referral ?? prev.wallet?.referral),
+        available: parseLedgerAmount(next.wallet?.available ?? prev.wallet?.available),
+        held: parseLedgerAmount(next.wallet?.held ?? prev.wallet?.held)
       }
     };
   }
@@ -608,13 +892,15 @@
         last_login_ip: priv.last_login_ip != null ? String(priv.last_login_ip) : '',
         referral_count: Array.isArray(payload.referrals) ? payload.referrals.length : 0,
         wallet: {
-          support: Number(summary.support ?? buckets.support_grant?.available_amount ?? 0),
-          work: Number(summary.work ?? buckets.work_balance?.available_amount ?? 0),
-          task: Number(summary.task ?? buckets.task_reward?.available_amount ?? 0),
-          referral: Number(summary.referral ?? buckets.referral_reward?.available_amount ?? 0),
-          available: Number(summary.available ?? available.available_amount ?? 0),
-          held: Number((summary.available_held ?? buckets.available?.held_amount ?? 0) + (summary.work_held ?? buckets.work_balance?.held_amount ?? 0) + (summary.held ?? held.held_amount ?? 0))
-        }
+          support: parseLedgerAmount(summary.support ?? buckets.support_grant?.available_amount),
+          work: parseLedgerAmount(summary.work ?? buckets.work_balance?.available_amount),
+          task: parseLedgerAmount(summary.task ?? buckets.task_reward?.available_amount),
+          referral: parseLedgerAmount(summary.referral ?? buckets.referral_reward?.available_amount),
+          available: parseLedgerAmount(summary.available ?? available.available_amount),
+          held: parseLedgerAmount(summary.work_held ?? buckets.work_balance?.held_amount ?? summary.held ?? held.held_amount)
+        },
+        pii_access: payload.pii_access === true,
+        pii_masked: payload.pii_masked === true
       };
     }
     return normalizeMemberRow(payload);
@@ -804,7 +1090,7 @@
       return;
     }
     switchToUserState(session.user.id);
-    state.wallet = { support: 0, work: 0, task: 0, referral: 0, available: 0, held: 0 };
+    state.wallet = { support: null, work: null, task: null, referral: null, available: null, held: null };
     state.history = [];
     state.notifications = [];
     state.referrals = [];
@@ -834,30 +1120,35 @@
 
       const runResult = await supabaseClient
         .from('task_runs')
-        .select('id,public_id,node_id,status,reward_amount,started_at,created_at,completed_at,expected_completed_at,motion_variant,motion_seed')
+        .select('id,public_id,node_id,status,reward_amount,reward_status,started_at,created_at,completed_at,expected_completed_at,motion_variant,motion_seed,updated_at')
         .eq('user_id', session.user.id)
         .order('created_at', { ascending: false })
         .limit(50);
       if (!runResult.error && Array.isArray(runResult.data)) {
-        const statusLabel = { approved: '검수 완료', review_pending: '검수 대기', submitted: '제출 완료', in_progress: '진행 중', rework: '재확인 요청', rejected: '반려', cancelled: '취소' };
         state.history = runResult.data.map((row) => ({
           id: row.public_id,
+          dbId: row.id,
           nodeId: row.node_id,
-          status: statusLabel[row.status] || '처리 중',
-          reward: Number(row.reward_amount || 0),
-          date: new Date(row.created_at).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
+          status: runStatusLabel(row.status),
+          statusRaw: row.status,
+          runStatus: row.status,
+          rewardStatus: row.reward_status || '',
+          reward: parseLedgerAmount(row.reward_amount),
+          date: new Date(row.completed_at || row.updated_at || row.created_at).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
           createdAt: row.created_at,
+          submittedAt: row.completed_at || row.updated_at || row.created_at,
           duration: row.completed_at && row.created_at ? `${Math.max(1, Math.round((new Date(row.completed_at) - new Date(row.created_at)) / 1000))}초` : '진행 중'
         }));
         const newlyApproved = runResult.data.find((row) => row.status === 'approved' && ['검수 대기', '제출 완료'].includes(previousHistoryMap.get(row.public_id)) && state.lastReviewToastId !== row.public_id);
         if (newlyApproved) {
           const approvedNode = nodeById(newlyApproved.node_id);
           state.lastReviewToastId = newlyApproved.public_id;
-          const trialDone = approvedNode?.isTrial === true || approvedNode?.tierBand === '체험';
+          const posted = isPostedReward(newlyApproved.reward_status, newlyApproved.status);
+          const availableNow = parseLedgerAmount(state.wallet.available);
           state.toast = {
-            text: trialDone
-              ? '🎉 검수가 끝났어요. 지원금은 쓰였고, 수당은 출금 가능에 들어왔어요.'
-              : '🎉 검수가 끝났어요. 원금은 업무잔액, 수당은 출금가능에 같이 반영됐어요.',
+            text: posted && availableNow != null && availableNow > 0
+              ? '🎉 검수가 끝났어요. 확정 수당이 출금가능 칸에 보여요.'
+              : '🎉 검수가 끝났어요. 확정 보상은 원장에 오른 뒤에 출금가능에 보여요.',
             kind: 'success'
           };
           openResultScene(approvedNode, {
@@ -868,7 +1159,8 @@
         }
         if (state.history[0]?.nodeId) rememberCrewPartner(nodeById(state.history[0].nodeId).companyId);
         if (config.enableWorkApi === true) {
-          const active = runResult.data.find((row) => ['reserved', 'in_progress', 'checkpointed'].includes(row.status));
+          const active = runResult.data.find((row) => isActiveRunStatus(row.status));
+          const waiting = runResult.data.find((row) => isReviewWaitStatus(row.status) || REWORK_RUN_STATUSES.includes(row.status));
           if (active) {
             const activeNode = nodeById(active.node_id);
             rememberCrewPartner(activeNode.companyId);
@@ -879,32 +1171,75 @@
               id: active.public_id,
               dbId: active.id,
               nodeId: active.node_id,
+              status: active.status,
               startedAt,
               expectedCompletedAt: expectedAt,
               duration,
               progress: Math.min(1, Math.max(0, (Date.now() - startedAt) / duration)),
-              overlayOpen: true,
+              overlayOpen: overlayDismissed ? false : true,
               logs: state.run?.logs || ['[복원] 서버에 저장된 업무 상태를 다시 연결했어요.'],
               serverBacked: true,
-              rewardAmount: Number(active.reward_amount || 0),
+              rewardAmount: parseLedgerAmount(active.reward_amount),
               motionVariant: active.motion_variant || 'a',
               motionSeed: active.motion_seed || '',
               choice: state.player?.choice || state.run?.choice || null,
               _submitted: false
             };
+            state.reviewWait = null;
             if (!state.player) {
               const photo = activeNode.questionImage
                 ? brandAssetSrc(activeNode.questionImage, companyById(activeNode.companyId).slug, 'photo')
                 : null;
               state.player = {
                 nodeId: active.node_id,
-                choice: state.run.choice || null,
+                choice: null,
                 question: playerQuestion(activeNode),
-                photo
+                photo,
+                bundle: initBundleForNode(activeNode, companyById(activeNode.companyId), state.run),
+                listing: {}
               };
+            } else {
+              state.player.bundle = syncInspectBundle(state.player.bundle, activeNode, state.run);
+              if (!isInspectBundleComplete(state.player.bundle)) state.player.choice = null;
             }
-          } else if (state.run?.serverBacked) {
+            const draftResult = await supabaseClient
+              .from('task_checkpoints')
+              .select('checkpoint_payload')
+              .eq('task_run_id', active.id)
+              .eq('checkpoint_key', 'work-draft')
+              .maybeSingle();
+            const draft = draftResult.data?.checkpoint_payload;
+            if (draft && typeof draft === 'object') {
+              if (draft.listing) state.player.listing = readCatalogListing(draft.listing);
+              if (Array.isArray(draft.answers) && state.player.bundle) {
+                state.player.bundle.answers = draft.answers.slice(0, INSPECT_TOTAL);
+                state.player.bundle.current = Math.min(INSPECT_TOTAL, Number(draft.current || draft.answers.length || 0));
+              }
+            }
+          } else if (waiting) {
+            const waitNode = nodeById(waiting.node_id);
+            rememberCrewPartner(waitNode.companyId);
+            state.player = null;
             state.run = null;
+            state.startNodeId = null;
+            const sameWait = [state.reviewWait?.dbId, state.reviewWait?.id]
+              .filter(Boolean)
+              .some((id) => String(id) === String(waiting.id) || String(id) === String(waiting.public_id));
+            state.reviewWait = {
+              id: waiting.public_id,
+              dbId: waiting.id,
+              nodeId: waiting.node_id,
+              status: waiting.status,
+              rewardAmount: parseLedgerAmount(waiting.reward_amount),
+              rewardStatus: waiting.reward_status || '',
+              submittedAt: waiting.completed_at || waiting.updated_at || waiting.created_at,
+              overlayOpen: sameWait
+                ? Boolean(state.reviewWait?.overlayOpen)
+                : !isReviewWaitDismissed(waiting.id, waiting.public_id)
+            };
+          } else {
+            state.reviewWait = null;
+            if (state.run?.serverBacked) state.run = null;
           }
         }
       }
@@ -918,11 +1253,11 @@
       if (!noticeResult.error && Array.isArray(noticeResult.data)) {
         state.notifications = noticeResult.data.map((row) => ({
           id: row.id,
-          text: row.body || row.title,
+          text: sanitizeMemberNotice(row.body || row.title),
           time: new Date(row.created_at).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
           type: row.notification_type || 'info',
           read: Boolean(row.read_at)
-        }));
+        })).filter((item) => item.text);
       }
 
       const [referralResult, depositResult, withdrawalResult] = await Promise.all([
@@ -1043,9 +1378,193 @@
     });
     const result = await response.json().catch(() => ({}));
     if (!response.ok || result.ok !== true) {
-      throw new Error(result.error || '요청을 처리하지 못했어요.');
+      const err = new Error(result.error || '요청을 처리하지 못했어요.');
+      err.code = result.code;
+      err.status = response.status;
+      throw err;
     }
     return result;
+  }
+
+  let depositRevealTimer = null;
+
+  function clearDepositRevealTimer() {
+    if (depositRevealTimer) {
+      clearInterval(depositRevealTimer);
+      depositRevealTimer = null;
+    }
+  }
+
+  function depositRevealRemaining() {
+    const until = state.depositRevealExpiresAt ? new Date(state.depositRevealExpiresAt).getTime() : 0;
+    return Math.max(0, Math.ceil((until - Date.now()) / 1000));
+  }
+
+  function isDepositRevealed() {
+    return Boolean(state.depositReveal && depositRevealRemaining() > 0);
+  }
+
+  async function lockDepositReveal({ silent = false } = {}) {
+    const token = state.depositRevealToken;
+    clearDepositRevealTimer();
+    state.depositReveal = null;
+    state.depositRevealExpiresAt = null;
+    state.depositRevealToken = null;
+    try {
+      if (authState.session && token) {
+        await memberFinanceRequest('deposit_info_lock', { token, scope: 'deposit_info_reveal' });
+      }
+    } catch (_) {}
+    if (!silent && state.modal === 'deposit') render();
+  }
+
+  function startDepositRevealTimer() {
+    clearDepositRevealTimer();
+    depositRevealTimer = setInterval(() => {
+      if (!isDepositRevealed()) {
+        lockDepositReveal({ silent: false });
+        showToast('🔒 입금 안내를 다시 잠갔어요. 필요할 때 PIN을 다시 입력해 주세요.', 'info');
+      } else if (state.modal === 'deposit') {
+        const remain = document.getElementById('depositRevealRemain');
+        if (remain) remain.textContent = `${depositRevealRemaining()}초 뒤 자동 잠금`;
+      }
+    }, 1000);
+  }
+
+  async function loadDepositDestinations() {
+    if (!authState.session) {
+      state.depositDestinations = [];
+      state.depositDestinationsError = false;
+      state.depositPinSet = false;
+      state.depositPinCopy = '👋 로그인 후 보안 PIN으로 입금 안내를 확인할 수 있어요.';
+      return;
+    }
+    try {
+      const result = await memberFinanceRequest('deposit_info_challenge');
+      state.depositDestinations = Array.isArray(result.destinations) ? result.destinations : [];
+      state.depositDestinationsError = false;
+      state.depositPinSet = result.pin_set === true;
+      state.depositPinLocked = result.locked === true;
+      state.depositPinCopy = result.copy || '🔐 보안 PIN 입력 후 입금 안내 확인';
+      state.depositCatalogVersion = result.catalog_version || null;
+      state.depositMethods = Array.isArray(result.methods) ? result.methods : [];
+      state.depositAssets = Array.isArray(result.assets) ? result.assets : [];
+    } catch (_) {
+      state.depositDestinations = [];
+      state.depositDestinationsError = true;
+      state.depositPinCopy = '입금 계좌 안내를 확인하지 못했어요. 잠시 후 다시 열어 주세요.';
+    }
+  }
+
+  function renderDepositDestinations() {
+    if (isDepositRevealed()) {
+      const remain = depositRevealRemaining();
+      const list = Array.isArray(state.depositReveal) ? state.depositReveal : [];
+      const cards = list.map((item) => {
+        const isUsdt = String(item.destination_type || '') === 'usdt';
+        const title = item.label || item.bank_name || (isUsdt ? 'USDT' : '입금 계좌');
+        const secret = isUsdt
+          ? `${item.usdt_network || 'TRC20'} · ${item.usdt_address || ''}`
+          : [item.bank_name, item.account_holder, item.account_number].filter(Boolean).join(' · ');
+        const qr = item.qr_signed_url
+          ? `<img class="deposit-qr" alt="입금 QR" src="${esc(item.qr_signed_url)}" />`
+          : (isUsdt && item.usdt_address ? `<div class="deposit-qr-host" data-usdt-qr="${esc(item.usdt_address)}"></div>` : '');
+        const memo = item.memo || item.guidance_text
+          ? `<p>${esc(item.memo || item.guidance_text)}</p>`
+          : '';
+        return `<article class="deposit-dest revealed"><strong>${esc(title)}</strong><p>${esc(secret || '확인 필요')}</p>${memo}${qr}</article>`;
+      }).join('');
+      return `<div class="notice" style="margin-bottom:12px"><span style="color:var(--gold)">${icon('timer',17)}</span><div><strong id="depositRevealRemain">${remain}초 뒤 자동 잠금</strong><br>계좌와 주소는 지금만 보여요. 화면에서 잔액을 올리지 않아요.</div></div><div class="deposit-dest-list">${cards || '<div class="notice">운영자가 아직 입금 계좌·USDT를 등록하지 않았어요.</div>'}</div><div class="modal-actions" style="margin-bottom:12px"><button class="secondary-button" type="button" data-action="lock-deposit-info">지금 잠그기</button></div>`;
+    }
+    const list = Array.isArray(state.depositDestinations) ? state.depositDestinations : [];
+    const methods = (state.depositMethods || []).join(' · ') || '원화 계좌 · USDT';
+    const assets = (state.depositAssets || []).join(' · ') || 'KRW · USDT';
+    const masked = list.map((item) => {
+      const title = item.label || item.bank_name || (String(item.destination_type || '') === 'usdt' ? 'USDT' : '입금 계좌');
+      const line = [item.bank_name, item.masked_value, item.usdt_network].filter(Boolean).join(' · ');
+      return `<article class="deposit-dest"><strong>${esc(title)}</strong><p>${esc(line || '마스킹된 안내')}</p></article>`;
+    }).join('');
+    const pinForm = state.depositPinLocked
+      ? `<div class="notice"><span style="color:var(--gold)">${icon('lock',17)}</span><div>${esc(state.depositPinCopy || '🔒 보안 PIN이 잠시 잠겨 있어요.')}</div></div>`
+      : state.depositPinSet
+        ? `<form id="depositPinForm" class="pin-gate"><label class="field" for="depositPin"><span>보안 PIN 6자리</span><input id="depositPin" name="pin" type="password" inputmode="numeric" maxlength="6" pattern="[0-9]{6}" required placeholder="••••••" autocomplete="one-time-code" /></label><div class="modal-actions"><button class="secondary-button" type="button" data-action="close-modal">닫기</button><button class="primary-button" type="submit">안내 확인</button></div></form>`
+        : `<form id="depositPinSetForm" class="pin-gate"><p class="page-copy">입금 계좌를 보려면 보안 PIN 6자리를 먼저 만들어요. 출금 비밀번호와는 따로 잠겨 있어요.</p><label class="field" for="depositPinNew"><span>새 보안 PIN</span><input id="depositPinNew" name="pin" type="password" inputmode="numeric" maxlength="6" pattern="[0-9]{6}" required placeholder="숫자 6자리" /></label><label class="field" for="depositPinConfirm"><span>한 번 더</span><input id="depositPinConfirm" name="pin_confirm" type="password" inputmode="numeric" maxlength="6" pattern="[0-9]{6}" required placeholder="다시 입력" /></label><div class="modal-actions"><button class="secondary-button" type="button" data-action="close-modal">닫기</button><button class="primary-button" type="submit">PIN 만들기</button></div></form>`;
+    if (state.depositDestinationsError) {
+      return `<div class="notice" style="margin-bottom:14px"><span style="color:var(--gold)">${icon('landmark',17)}</span><div>${esc(state.depositPinCopy || '입금 계좌 안내를 확인하지 못했어요.')}</div></div>${pinForm}`;
+    }
+    return `<div class="notice" style="margin-bottom:12px"><span style="color:var(--emerald)">${icon('shield-check',17)}</span><div>입금 방법 ${esc(methods)} · 지원 자산 ${esc(assets)}<br>${esc(state.depositPinCopy || '🔐 보안 PIN 입력 후 입금 안내 확인')}</div></div><div class="deposit-dest-list">${masked || '<p class="page-copy">운영자가 아직 입금 계좌·USDT를 등록하지 않았어요. 안내가 오면 이 자리에 보여요.</p>'}</div>${pinForm}`;
+  }
+
+  async function openDepositModal() {
+    state.depositJump = null;
+    openModal('deposit');
+    await loadDepositDestinations();
+    if (state.modal === 'deposit') render();
+    if (isDepositRevealed()) startDepositRevealTimer();
+    paintDepositQr();
+  }
+
+  async function submitDepositPinSet(event) {
+    event.preventDefault();
+    const values = formValues(event.target);
+    if (String(values.pin || '') !== String(values.pin_confirm || '')) {
+      showToast('🙂 같은 PIN을 두 칸에 똑같이 적어 주세요.', 'info');
+      return;
+    }
+    try {
+      await memberFinanceRequest('set_security_pin', { pin: values.pin, scope: 'deposit_info_reveal' });
+      state.depositPinSet = true;
+      showToast('🔐 보안 PIN을 저장했어요. 이제 입금 안내를 확인할 수 있어요.', 'success');
+      await loadDepositDestinations();
+      render();
+    } catch (error) {
+      showToast(error?.message || '보안 PIN을 저장하지 못했어요.', 'warning');
+    }
+  }
+
+  async function submitDepositPin(event) {
+    event.preventDefault();
+    const values = formValues(event.target);
+    try {
+      const result = await memberFinanceRequest('deposit_info_reveal', { pin: values.pin, scope: 'deposit_info_reveal' });
+      state.depositReveal = Array.isArray(result.destinations) ? result.destinations : [];
+      state.depositRevealToken = result.token || null;
+      state.depositRevealExpiresAt = result.expires_at || new Date(Date.now() + Number(result.expires_in || 90) * 1000).toISOString();
+      startDepositRevealTimer();
+      render();
+      paintDepositQr();
+      showToast('✅ 입금 계좌와 USDT 주소를 확인했어요. 잠시 후 자동으로 잠겨요.', 'success');
+    } catch (error) {
+      showToast(error?.message || '보안 PIN을 확인해 주세요.', 'warning');
+      if (error?.code === 'DEPOSIT_INFO_LOCKED' || error?.code === 'DEPOSIT_INFO_PIN_UNSET') {
+        await loadDepositDestinations();
+        render();
+      }
+    }
+  }
+
+  async function paintDepositQr() {
+    const hosts = document.querySelectorAll('[data-usdt-qr]');
+    if (!hosts.length) return;
+    try {
+      if (!window.qrcode) {
+        await new Promise((resolve, reject) => {
+          const script = document.createElement('script');
+          script.src = 'https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js';
+          script.onload = resolve;
+          script.onerror = reject;
+          document.head.appendChild(script);
+        });
+      }
+      hosts.forEach((el) => {
+        const address = el.getAttribute('data-usdt-qr') || '';
+        if (!address || !window.qrcode) return;
+        const qr = window.qrcode(0, 'M');
+        qr.addData(address);
+        qr.make();
+        el.innerHTML = qr.createSvgTag({ scalable: true });
+      });
+    } catch (_) {}
   }
 
   async function adminRequest(action, payload = {}) {
@@ -1210,12 +1729,14 @@
         deposits: Array.isArray(result.deposits) ? result.deposits : [],
         withdrawals: Array.isArray(result.withdrawals) ? result.withdrawals : [],
         kyc: Array.isArray(result.kyc) ? result.kyc : [],
-        referrals: Array.isArray(result.referrals) ? result.referrals : []
+        referrals: Array.isArray(result.referrals) ? result.referrals : [],
+        destinations: Array.isArray(result.destinations) ? result.destinations : [],
+        pin_audit: Array.isArray(result.pin_audit) ? result.pin_audit : []
       };
       state.adminFinanceError = null;
       state.adminFinanceContract = true;
     } catch (error) {
-      state.adminFinance = { deposits: [], withdrawals: [], kyc: [], referrals: [] };
+      state.adminFinance = { deposits: [], withdrawals: [], kyc: [], referrals: [], destinations: [] };
       state.adminFinanceContract = !isUnsupportedAction(error);
       state.adminFinanceError = friendlyAdminError(error);
     } finally {
@@ -1245,7 +1766,7 @@
   async function refreshAdminPageData({ silent = true } = {}) {
     if (!isAdmin || !authState.adminAuthorized) return;
     const jobs = [loadAdminReviews({ silent: true }), loadAdminCatalog({ silent: true })];
-    if (state.adminPage === 'overview' || state.adminPage === 'members') jobs.push(loadAdminMembers({ silent: true }));
+    if (state.adminPage === 'overview' || state.adminPage === 'members' || state.adminPage === 'finance') jobs.push(loadAdminMembers({ silent: true }));
     if (state.adminPage === 'overview' || state.adminPage === 'finance') jobs.push(loadAdminFinance({ silent: true }));
     if (state.adminPage === 'settings') jobs.push(loadAdminCampaigns({ silent: true }));
     if (window.PUTDUK_ADMIN && typeof window.PUTDUK_ADMIN.refreshPage === 'function') {
@@ -1306,6 +1827,7 @@
           }
           await hydrateSession(authState.session);
           if (isAdmin && authState.adminAuthorized) await refreshAdminPageData({ silent: true });
+          if (document.hidden) return;
           render();
         }, 30000);
       }
@@ -1337,7 +1859,7 @@
   }
 
   function money(value) {
-    return `${Number(value || 0).toLocaleString('ko-KR')}원`;
+    return formatLedgerAmount(value);
   }
 
   function icon(name, size = 17) {
@@ -1646,8 +2168,15 @@
   }
 
 
+  function pendingFinanceCount() {
+    const pending = (row) => ['submitted', 'checking', 'pending', 'queued'].includes(String(row?.status || ''));
+    const deposits = Array.isArray(state.adminFinance.deposits) ? state.adminFinance.deposits : [];
+    const withdrawals = Array.isArray(state.adminFinance.withdrawals) ? state.adminFinance.withdrawals : [];
+    return deposits.filter(pending).length + withdrawals.filter(pending).length;
+  }
+
   function navItems() {
-    const financeCount = (state.adminFinance.deposits?.length || 0) + (state.adminFinance.withdrawals?.length || 0);
+    const financeCount = pendingFinanceCount();
     return isAdmin ? [
       { id: 'overview', label: '전체 현황', icon: 'layout-dashboard' },
       { id: 'members', label: '회원 관리', icon: 'users', count: state.adminMembersContract ? state.adminMemberTotal : undefined },
@@ -1770,6 +2299,7 @@
         </div>
         <div class="id-face id-back"${flipped ? '' : ' hidden'}>
           <div class="id-face-body id-face-body-back">
+            <p class="id-back-kicker">사원증 뒷면</p>
             <p class="id-back-meta"><span class="id-number" title="${esc(publicId)}">사원번호 ${esc(publicId)}</span><span class="id-back-sep" aria-hidden="true">|</span><span>${esc(band.label)} 등급</span></p>
             <p class="id-back-copy">${esc(lineCopy)}</p>
             <p class="id-legal">퍼뜩 멤버십 운영이며, 근로계약·4대보험·협력사 인사 채용은 아니에요.</p>
@@ -1779,8 +2309,39 @@
     </button></div>`;
   }
 
+  function renderNextLadderHero() {
+    const work = Number(state.wallet.work ?? state.wallet.task ?? 0);
+    const nextStake = nextStakeSlot(work || 30000);
+    if (!nextStake || nextStake >= 30000000) return '';
+    const diff = Math.max(0, nextStake - work);
+    const pct = Math.min(100, Math.round((work / nextStake) * 100));
+    const nextPay = payForStake(nextStake);
+    return `
+      <div class="next-ladder-card" style="margin: 0 0 18px;">
+        <div class="next-ladder-head">
+          <span class="next-ladder-label">${icon('trending-up', 15)} 다음 ${money(nextStake)} 상위 라인 해금 게이지</span>
+          <strong class="next-ladder-pct">${pct}% 달성</strong>
+        </div>
+        <div class="next-ladder-bar">
+          <div class="next-ladder-fill" style="width:${pct}%"></div>
+        </div>
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-top:12px;">
+          <div style="font-size:13px;color:var(--fg);">
+            ${diff > 0 ? `<strong>${money(diff)}</strong>만 채우면 건당 수당 <strong>${money(nextPay)}</strong> 라인이 즉시 열려요.` : `다음 라인이 해금되었어요! 바로 출근해 보세요.`}
+          </div>
+          ${diff > 0 ? `
+            <button class="gold-button" style="min-height:38px;padding:8px 14px;font-size:13px;" data-action="deposit-shortcut" data-amount="${diff}">
+              ${icon('credit-card', 14)} ${money(diff)} 채우고 바로 열기
+            </button>
+          ` : ''}
+        </div>
+      </div>
+    `;
+  }
+
   function renderMemberDashboard() {
     const inProgress = state.run ? nodeById(state.run.nodeId) : null;
+    const waiting = state.reviewWait ? nodeById(state.reviewWait.nodeId) : null;
     const accountButton = authState.session
       ? `<button class="secondary-button" data-action="logout">로그아웃</button>`
       : `<button class="secondary-button" data-action="open-signup">회원가입·로그인</button>`;
@@ -1794,7 +2355,7 @@
         <div class="hero-card">
           <div class="eyebrow"><span class="pulse-dot"></span> ${heroLine}</div>
           <h1 class="hero-title">작업실에 출근하고<br><span style="color:var(--emerald-strong)">한 칸만 확인해요.</span></h1>
-          <p class="hero-copy">오늘 배정된 라인을 사진 한 장으로 확인하고 제출하면 돼요. 일이 끝나면 원금과 수당이 잔액에 같이 반영돼요.</p>
+          <p class="hero-copy">오늘 배정된 물량 5건의 실물 라벨 번호를 입력해 대조하고 제출하면 돼요. 일이 끝나면 원금과 수당이 잔액에 같이 반영돼요.</p>
           <div class="hero-actions"><button class="primary-button" data-nav="nodes">${icon('waypoints', 18)} 라인 찾기</button>${accountButton}</div>
           <div class="hero-metrics"><div><div class="metric-label">오늘 라인</div><div class="metric-value">${memberCatalogNodes().length}<small>칸</small></div></div><div><div class="metric-label">검수 완료</div><div class="metric-value">${state.history.filter((item) => item.status === '검수 완료').length}<small>건</small></div></div><div><div class="metric-label">근무 상태</div><div class="metric-value" style="font-size:18px;color:var(--emerald-strong)">${esc(attendance.label)}</div></div></div>
         </div>
@@ -1804,41 +2365,35 @@
         </div>
       </section>
       ${inProgress ? `<div class="notice" style="margin-bottom:18px"><span style="color:var(--emerald)">${icon('activity',17)}</span><div style="flex:1"><strong>${esc(inProgress.title)}</strong> 근무를 이어가고 있어요.<br><span style="color:var(--muted)">화면을 닫아도 서버 기준으로 이어져요.</span></div><button class="small-button primary" data-action="open-run">근무 화면 열기</button></div>` : ''}
+      ${waiting ? `<div class="notice" style="margin-bottom:18px"><span style="color:var(--gold)">${icon('clipboard-check',17)}</span><div style="flex:1"><strong>${esc(waiting.title)}</strong> 제출이 끝나 검수를 기다리고 있어요.<br><span style="color:var(--muted)">새 출근은 검수가 끝난 뒤에 할 수 있어요.</span></div><button class="small-button primary" data-action="open-review-wait">검수 대기 보기</button></div>` : ''}
       <section class="dashboard-grid">
         <div class="panel"><div class="panel-head"><div><div class="panel-title">최근 수당 흐름</div><div class="panel-subtitle">검수 완료된 수당만 표시해요</div></div><span class="status-badge">${icon('trending-up', 13)} 서버 기록</span></div><div class="chart-wrap"><canvas id="earningsChart" aria-label="최근 7일 수당 흐름"></canvas></div></div>
         <div class="wallet-card"><div class="eyebrow" style="color:#a8f3d2">${icon('layout-grid', 14)} 내 지갑 세 칸</div>${renderWalletSlots()}<div class="wallet-cta"><button class="secondary-button" data-nav="wallet">지갑 보기</button><button class="gold-button" data-action="deposit-info">${icon('credit-card', 16)} 입금하기</button></div></div>
       </section>
       ${renderPartnerGallery()}
+      ${renderNextLadderHero()}
       <div class="section-heading"><div><h2>오늘 추천 근무</h2><p>잠금 금액과 끝나면 받을 수당을 먼저 봐요.</p></div><button class="text-link" data-nav="nodes">라인 더 보기 ${icon('arrow-right', 14)}</button></div>
       <section class="node-grid">${memberCatalogNodes().slice(0, 3).map(renderNodeCard).join('') || `<div class="empty-state compact" style="grid-column:1/-1"><div class="empty-icon">${icon('waypoints', 22)}</div><strong>오늘 공개된 라인이 아직 없어요.</strong><p>로그인 후 운영자가 연 협력사 근무만 보여요.</p></div>`}</section>
-      <section class="dashboard-grid" style="margin-top:18px"><div class="panel"><div class="panel-head"><div><div class="panel-title">최근 근무</div><div class="panel-subtitle">제출·검수 상태가 여기에 쌓여요.</div></div><button class="text-link" data-nav="history">전체보기</button></div>${renderTimeline()}</div><div class="panel panel-pad"><div class="panel-title">처음 출근하는 분께</div><div class="notice" style="margin-top:14px"><span style="color:var(--gold)">${icon('lightbulb',17)}</span><div>한 화면에서 사진과 질문만 확인하고 제출하면 돼요. ${settleNote('span')}</div></div><button class="secondary-button" data-nav="support" style="width:100%;margin-top:13px">도움말 보기</button></div></section>
+      <section class="dashboard-grid" style="margin-top:18px"><div class="panel"><div class="panel-head"><div><div class="panel-title">최근 근무</div><div class="panel-subtitle">제출·검수 상태가 여기에 쌓여요.</div></div><button class="text-link" data-nav="history">전체보기</button></div>${renderTimeline()}</div><div class="panel panel-pad"><div class="panel-title">처음 출근하는 분께</div><div class="notice" style="margin-top:14px"><span style="color:var(--gold)">${icon('lightbulb',17)}</span><div>한 화면에서 전표와 실물 번호 5건을 대조하고 제출하면 돼요. ${settleNote('span')}</div></div><button class="secondary-button" data-nav="support" style="width:100%;margin-top:13px">도움말 보기</button></div></section>
     `;
   }
 
   function renderNodeCard(node) {
     const company = companyById(node.companyId);
     const enabled = state.nodeEnabled[node.id] !== false;
-    const ready = enabled && canStartNode(node);
+    const busy = Boolean(state.reviewWait) || Boolean(state.run);
+    const ready = enabled && canStartNode(node) && !busy;
     const markSrc = company.logoUrl || brandAssetSrc(company.logo_asset_path, company.slug, 'logo');
     const mark = markSrc
       ? `<div class="company-mark has-image"><img src="${esc(markSrc)}" alt="${esc(company.name)} 로고" /></div>`
       : `<div class="company-mark">${esc(company.mark)}</div>`;
-    const badge = !enabled ? '잠시 쉼' : ready ? '자리 있음' : (node.isTrial ? '지원금으로 출근' : '입금 후 출근');
-    const cta = !enabled ? '대기 중' : ready ? '출근하기' : '입금 안내';
+    const badge = !enabled ? '잠시 쉼' : state.reviewWait ? '검수 대기' : ready ? '자리 있음' : (node.isTrial ? '지원금으로 출근' : '입금 후 출근');
+    const cta = !enabled ? '대기 중' : state.reviewWait ? '검수 대기 중' : ready ? '출근하기' : '입금 안내';
     const slotsLeft = fomoSlotsLeft(node);
-    return `<article class="node-card" data-level="${esc(node.level || '')}" style="--node-color:${node.color};opacity:${enabled ? 1 : .55}"><div class="node-accent"></div><div class="node-top">${mark}<span class="status-badge ${node.level === '전문 검수' ? 'gold' : ''}">${badge}</span></div><div class="node-company">${esc(company.name)} · ${esc(company.category)}</div><div class="node-title">${esc(node.title)}</div>${cardMoneyLines(node).html}<div class="node-bottom"><div class="node-meta"><span>${icon('clock-3', 12)} ${esc(node.minutes)}</span><span data-fomo-slot="${esc(node.id)}">${slotsLeft.toLocaleString('ko-KR')}자리 남음</span></div><button class="small-button ${ready ? 'primary' : ''}" data-start-node="${node.id}" ${enabled ? '' : 'disabled'}>${cta}</button></div></article>`;
+    return `<article class="node-card" data-level="${esc(node.level || '')}" style="--node-color:${node.color};opacity:${enabled ? 1 : .55}"><div class="node-accent"></div><div class="node-top">${mark}<span class="status-badge ${node.level === '전문 검수' ? 'gold' : ''}">${badge}</span></div><div class="node-company">${esc(company.name)} · ${esc(company.category)}</div><div class="node-title">${esc(node.title)}</div>${cardMoneyLines(node).html}<div class="node-bottom"><div class="node-meta"><span>${icon('clock-3', 12)} ${esc(node.minutes)}</span><span data-fomo-slot="${esc(node.id)}">${slotsLeft.toLocaleString('ko-KR')}자리 남음</span></div><button class="small-button ${ready ? 'primary' : ''}" data-start-node="${node.id}" ${enabled && !state.reviewWait ? '' : 'disabled'}>${cta}</button></div></article>`;
   }
 
   function renderTimeline() {
-    const statusLabel = {
-      approved: '검수 완료',
-      review_pending: '검수 대기',
-      submitted: '제출 완료',
-      in_progress: '진행 중',
-      rework: '재확인 요청',
-      rejected: '반려',
-      cancelled: '취소'
-    };
     const recent = state.history.slice(0, 4);
     if (!recent.length) {
       return `<div class="empty-state compact"><div class="empty-icon">${icon('clipboard-list', 22)}</div><strong>아직 기록된 업무가 없어요.</strong><p>업무를 제출하면 진행·검수·보상 상태가 이곳에 순서대로 표시됩니다.</p></div>`;
@@ -1846,8 +2401,9 @@
     return `<div class="timeline">${recent.map((item) => {
       const node = nodeById(item.nodeId);
       const company = companyById(node.companyId);
-      const done = item.status === '검수 완료';
-      return `<div class="timeline-item"><div class="timeline-dot ${done ? '' : 'pending'}"></div><div class="timeline-content"><strong>${esc(statusLabel[item.status] || item.status)}</strong><p>${esc(company.name)} · ${esc(node.title)} · ${esc(item.duration)}</p></div><div class="timeline-time">${esc(item.date)}</div></div>`;
+      const kind = rewardUiKind(item);
+      const done = kind === 'posted';
+      return `<div class="timeline-item"><div class="timeline-dot ${done ? '' : 'pending'}"></div><div class="timeline-content"><strong>${esc(item.status)}</strong><p>${esc(company.name)} · ${esc(node.title)} · ${esc(rewardUiLabel(kind))}</p></div><div class="timeline-time">${esc(item.date)}</div></div>`;
     }).join('')}</div>`;
   }
 
@@ -1857,26 +2413,31 @@
   }
 
   function renderHistoryPage() {
-    const completed = state.history.filter((item) => item.status === '검수 완료').length;
+    const completed = state.history.filter((item) => item.runStatus === 'approved' || item.status === '검수 완료').length;
     const empty = `<div class="empty-state compact record-empty"><strong>아직 제출한 근무가 없어요.</strong><p>근무를 시작하면 검수와 수당이 여기에 쌓여요.</p></div>`;
     const cards = state.history.length
       ? state.history.map((item) => {
         const node = nodeById(item.nodeId);
         const companyName = lineNameForNode(node);
-        return `<article class="record-card"><div class="record-card-top"><strong>${esc(companyName)} · ${esc(node.title)}</strong><span class="pill ${item.status === '검수 완료' ? 'ok' : 'wait'}">${esc(item.status)}</span></div><div class="record-card-meta"><span>수당 ${money(item.reward)}</span></div><p class="record-card-id">실행번호 ${esc(item.id)} · ${esc(item.date)}</p></article>`;
+        const kind = rewardUiKind(item);
+        const posted = kind === 'posted';
+        return `<article class="record-card"><div class="record-card-top"><strong>${esc(companyName)} · ${esc(node.title)}</strong><span class="pill ${posted ? 'ok' : 'wait'}">${esc(item.status)}</span></div><div class="record-card-meta"><span>${esc(rewardUiLabel(kind))} ${formatLedgerAmount(item.reward)}</span></div><p class="record-card-id">실행번호 ${esc(item.id)} · ${esc(item.date)}</p></article>`;
       }).join('')
       : '';
     const rows = state.history.length
       ? state.history.map((item) => {
         const node = nodeById(item.nodeId);
         const companyName = lineNameForNode(node);
-        return `<tr><td><strong>${esc(companyName)} · ${esc(node.title)}</strong><div class="cell-sub">실행번호 ${esc(item.id)}</div></td><td><span class="pill ${item.status === '검수 완료' ? 'ok' : 'wait'}">${esc(item.status)}</span></td><td><strong>${money(item.reward)}</strong></td><td>${esc(item.date)}</td></tr>`;
+        const kind = rewardUiKind(item);
+        const posted = kind === 'posted';
+        return `<tr><td><strong>${esc(companyName)} · ${esc(node.title)}</strong><div class="cell-sub">실행번호 ${esc(item.id)}</div></td><td><span class="pill ${posted ? 'ok' : 'wait'}">${esc(item.status)}</span></td><td><strong>${formatLedgerAmount(item.reward)}</strong><div class="cell-sub">${esc(rewardUiLabel(kind))}</div></td><td>${esc(item.date)}</td></tr>`;
       }).join('')
       : '';
     const body = state.history.length
-      ? `<div class="record-list">${cards}</div><div class="record-table-wrap"><table class="record-table"><thead><tr><th>근무</th><th>상태</th><th>수당</th><th>일시</th></tr></thead><tbody>${rows}</tbody></table></div>`
+      ? `<div class="record-list">${cards}</div><div class="record-table-wrap"><table class="record-table"><thead><tr><th>근무</th><th>상태</th><th>보상</th><th>일시</th></tr></thead><tbody>${rows}</tbody></table></div>`
       : empty;
-    return `<div class="section-heading" style="margin-top:0"><div><h1 class="page-title">내 근무 내역</h1><p class="page-copy">제출한 근무와 검수·수당 상태를 한눈에 봐요.</p></div><button class="secondary-button" data-action="export-history">${icon('download',16)} 내역 내려받기</button></div><div class="stat-grid" style="max-width:680px;margin-bottom:18px"><div class="mini-stat"><div class="metric-label">누적 완료</div><div class="num">${completed}건</div><div class="change">검수 완료만 집계</div></div><div class="mini-stat"><div class="metric-label">수당</div><div class="num">${money(state.wallet.task)}</div><div class="change">출금가능 칸에 보여요</div></div></div><div class="panel"><div class="panel-pad record-panel">${body}</div></div>`;
+    const available = formatLedgerAmount(state.wallet.available);
+    return `<div class="section-heading" style="margin-top:0"><div><h1 class="page-title">내 근무 내역</h1><p class="page-copy">예상 보상과 확정 보상, 출금 가능 금액을 나눠 봐요.</p></div><button class="secondary-button" data-action="export-history">${icon('download',16)} 내역 내려받기</button></div><div class="stat-grid" style="max-width:680px;margin-bottom:18px"><div class="mini-stat"><div class="metric-label">누적 완료</div><div class="num">${completed}건</div><div class="change">검수 완료만 집계</div></div><div class="mini-stat"><div class="metric-label">출금 가능</div><div class="num">${available}</div><div class="change">원장에 오른 수당만</div></div></div><div class="panel"><div class="panel-pad record-panel">${body}</div></div>`;
   }
 
   function walletRows() {
@@ -1901,7 +2462,7 @@
         at: row.created_at
       });
     });
-    state.history.filter((item) => item.status === '검수 완료').forEach((item) => {
+    state.history.filter((item) => rewardUiKind(item) === 'posted').forEach((item) => {
       rows.push({
         kind: '작업 보상',
         copy: item.id,
@@ -1993,7 +2554,7 @@
       { id: 'out', label: '출금' }
     ];
     const bodies = {
-      work: `<h3>오늘 라인 근무</h3><p class="help-line">${icon('briefcase', 16)}<span>작업실에서 한 칸만 골라 출근해요. 사진과 질문 한 줄을 보고, 버튼 둘 중 하나를 고른 뒤 제출하면 돼요.</span></p><p class="help-line">${icon('monitor', 16)}<span>컴퓨터 화면에서도 근무할 수 있어요. 홈 화면 아이콘은 있으면 편하고, 없어도 출근할 수 있어요.</span></p><p>화면을 닫아도 서버 시각으로 이어져요. 하루 30~60분이면 충분해요.</p>`,
+      work: `<h3>오늘 라인 근무</h3><p class="help-line">${icon('briefcase', 16)}<span>작업실에서 한 칸만 골라 출근해요. 오늘 배정 물량 5건의 실물 라벨 번호를 입력해 전표와 대조하면 돼요.</span></p><p class="help-line">${icon('monitor', 16)}<span>컴퓨터 화면에서도 근무할 수 있어요. 홈 화면 아이콘은 있으면 편하고, 없어도 출근할 수 있어요.</span></p><p>5건을 마치면 제출해요. 하루 30~60분이면 충분해요.</p>`,
       badge: `<h3>사원으로서 확인</h3><p class="help-line">${icon('id-card', 16)}<span>카드 한 장에 이름·사진·사원번호·협력사 배지가 있어요. PDK- 번호가 사원번호예요.</span></p><p class="help-line">${icon('building-2', 16)}<span>지금 출근하는 라인의 협력사가 카드에 보여요. 다른 협력사 칸으로 일하면 배지도 그 라인으로 바뀌어요.</span></p><p class="membership-links"><button type="button" class="text-link" data-nav="benefits">${icon('award', 16)} 등급·혜택 보기</button></p><p class="help-legal">퍼뜩 멤버십 운영이며, 근로계약·4대보험·협력사 인사 채용은 아니에요.</p>`,
       pay: `<h3>원금과 수당</h3><p class="help-line">${icon('layout-grid', 16)}<span>지갑은 지원금·업무잔액·출금가능 세 칸이에요. 섞지 않아요.</span></p><p class="help-line">${icon('lock', 16)}<span>근무 보증은 잠금 금액이에요. 승인되면 원금은 업무잔액, 수당은 출금가능 칸에 보여요.</span></p>${settleNote('p')}<p>화면에서 숫자를 바꾸지 않아요. 서버가 정해요.</p>`,
       out: `<h3>출금은 이렇게</h3><p class="help-line">${icon('banknote', 16)}<span>큰 버튼은 수당만 출금이에요. 원금은 업무잔액에 남아 보여요.</span></p><p class="help-line">${icon('landmark', 16)}<span>보증금까지 신청하면 대기 일수 없이 바로 지급하고, 등급과 라인은 내려가요.</span></p><p>체험 첫 출금 3천 원은 운영 경로로만 처리돼요.</p><p class="membership-links"><button type="button" class="text-link" data-nav="benefits">${icon('award', 16)} 강등·혜택 안내</button></p>`
@@ -2062,12 +2623,14 @@
         <td>${item.last_login_at ? new Date(item.last_login_at).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '-'}</td>
         <td>${esc(item.last_login_ip || '-')}</td>
         <td><strong>${money(item.wallet?.available)}</strong></td>
+        <td><strong>${money(item.wallet?.work)}</strong></td>
+        <td><strong>${money(item.wallet?.held)}</strong></td>
         <td><span class="pill ${ok ? 'ok' : 'wait'}">${esc(memberStatusLabel(status))}</span></td>
         <td><div class="action-row"><button class="small-button" data-action="member-detail" data-member-id="${memberId}">자세히</button><button class="small-button primary" data-action="member-credit" data-member-id="${memberId}">잔액 입금</button><button class="small-button" data-action="member-debit" data-member-id="${memberId}">잔액 차감</button></div></td>
       </tr>`;
     }).join('');
-    const body = rows || `<tr><td colspan="10"><div class="empty-state compact"><div class="empty-icon">${icon('users',22)}</div><strong>${state.adminMembersLoading ? '회원 정보를 불러오고 있어요.' : '표시할 회원이 없어요.'}</strong><p>검색은 회원번호·이름·이메일·휴대폰을 기준으로 합니다.</p></div></td></tr>`;
-    return `<div class="section-heading" style="margin-top:0"><div><h1 class="page-title">회원 관리</h1><p class="page-copy">가입 정보와 작업 활동을 확인하고 필요한 조치를 할 수 있어요.</p></div><button class="secondary-button" data-action="refresh-members" ${state.adminMembersLoading ? 'disabled' : ''}>${icon('refresh-cw',16)} ${state.adminMembersLoading ? '불러오는 중…' : '새로고침'}</button></div>${error}<div class="admin-card"><form id="memberSearchForm" class="search-bar"><input id="memberSearchInput" value="${esc(state.adminMemberQuery || '')}" placeholder="회원번호, 이름, 이메일, 휴대폰" /><button class="small-button primary" type="submit">찾기</button></form><div class="filter-row"><button class="filter-button ${filter === 'all' ? 'active' : ''}" data-member-filter="all">전체${state.adminMembersContract ? ` ${state.adminMemberTotal}` : ''}</button><button class="filter-button ${filter === 'active' ? 'active' : ''}" data-member-filter="active">활동 중</button><button class="filter-button ${filter === 'pending' ? 'active' : ''}" data-member-filter="pending">확인 중</button><button class="filter-button ${filter === 'blocked' ? 'active' : ''}" data-member-filter="blocked">차단</button></div><div class="table-wrap"><table><thead><tr><th>회원번호</th><th>이름</th><th>이메일</th><th>휴대폰</th><th>등급</th><th>최근 접속</th><th>IP</th><th>잔액</th><th>상태</th><th></th></tr></thead><tbody>${body}</tbody></table></div></div>`;
+    const body = rows || `<tr><td colspan="12"><div class="empty-state compact"><div class="empty-icon">${icon('users',22)}</div><strong>${state.adminMembersLoading ? '회원 정보를 불러오고 있어요.' : '표시할 회원이 없어요.'}</strong><p>검색은 회원번호·이름·이메일·휴대폰을 기준으로 합니다.</p></div></td></tr>`;
+    return `<div class="section-heading" style="margin-top:0"><div><h1 class="page-title">회원 관리</h1><p class="page-copy">출금 가능·업무 진행·잠금 금액을 나눠 확인해요. 목록의 개인정보는 가려져 있어요.</p></div><button class="secondary-button" data-action="refresh-members" ${state.adminMembersLoading ? 'disabled' : ''}>${icon('refresh-cw',16)} ${state.adminMembersLoading ? '불러오는 중…' : '새로고침'}</button></div>${error}<div class="admin-card"><form id="memberSearchForm" class="search-bar"><input id="memberSearchInput" value="${esc(state.adminMemberQuery || '')}" placeholder="회원번호, 이름, 이메일, 휴대폰" /><button class="small-button primary" type="submit">찾기</button></form><div class="filter-row"><button class="filter-button ${filter === 'all' ? 'active' : ''}" data-member-filter="all">전체${state.adminMembersContract ? ` ${state.adminMemberTotal}` : ''}</button><button class="filter-button ${filter === 'active' ? 'active' : ''}" data-member-filter="active">활동 중</button><button class="filter-button ${filter === 'pending' ? 'active' : ''}" data-member-filter="pending">확인 중</button><button class="filter-button ${filter === 'blocked' ? 'active' : ''}" data-member-filter="blocked">차단</button></div><div class="table-wrap"><table><thead><tr><th>회원번호</th><th>이름</th><th>이메일</th><th>휴대폰</th><th>등급</th><th>최근 접속</th><th>접속 주소</th><th>출금 가능</th><th>업무 진행</th><th>잠금</th><th>상태</th><th></th></tr></thead><tbody>${body}</tbody></table></div></div>`;
   }
 
   function renderAdminCompanies() {
@@ -2218,30 +2781,161 @@
     return renderAdminOverview();
   }
 
-  function renderRunOverlay() {
-    if (!state.player || !state.run?.overlayOpen) return '';
-    const node = nodeById(state.player.nodeId || state.run.nodeId);
-    const company = companyById(node.companyId);
-    const photo = state.player.photo || node.questionImage
-      ? brandAssetSrc(state.player.photo || node.questionImage, company.slug, 'photo')
-      : (company.photoUrl || brandAssetSrc(company.photo_asset_path, company.slug, 'photo'));
-    const choice = state.player.choice;
+  function renderCatalogOverlay(node, company, photo) {
+    const runId = inspectSeedKey(state.run, node);
+    const expected = catalogListingForRun(runId);
+    const draft = readCatalogListing(state.player.listing);
+    const ready = gradeCatalogListing(runId, draft);
     return `<div class="modal-backdrop player-backdrop"><div class="player-sheet">
       <div class="player-stage"><canvas id="motionCanvas" aria-hidden="true"></canvas></div>
       <div class="player-card">
         <div class="player-toolbar">
-          <div class="player-kicker">${esc(company.name)} · 한 장 확인</div>
+          <div class="player-kicker">${icon('package', 15)} ${esc(company.name)} · 상품 정리</div>
           <button type="button" class="icon-button" data-action="close-run" aria-label="닫기">${icon('x', 18)}</button>
         </div>
-        <div class="player-photo">${photo ? `<img src="${esc(photo)}" alt="${esc(company.name)} 근무 사진" />` : `<div class="player-photo-fallback">${esc(company.mark || '라인')}</div>`}</div>
-        <p class="player-q">${esc(state.player.question || playerQuestion(node))}</p>
-        <div class="player-choices">
-          <button type="button" class="secondary-button ${choice === 'yes' ? 'is-picked' : ''}" data-choice="yes">${esc(node.choiceA || '맞아요')}</button>
-          <button type="button" class="secondary-button ${choice === 'no' ? 'is-picked' : ''}" data-choice="no">${esc(node.choiceB || '달라요')}</button>
+        <div class="wms-mission-copy">${icon('clipboard-check', 13)} 카드에 적힌 상품명·가격·옵션·배송을 그대로 적어 주세요. 한 화면에서 끝나요.</div>
+        <div class="wms-inspect-box">
+          <div class="wms-invoice-card">
+            <div class="wms-card-tag">${icon('file-text', 13)} 오늘 배정 상품 카드</div>
+            <div class="wms-card-grid">
+              <div class="wms-card-col"><span class="wms-field-label">상품명</span><span class="wms-field-val">${esc(expected.productName)}</span></div>
+              <div class="wms-card-col"><span class="wms-field-label">가격</span><span class="wms-field-val">${esc(expected.price)}원</span></div>
+              <div class="wms-card-col"><span class="wms-field-label">옵션</span><span class="wms-field-val">${esc(expected.option)}</span></div>
+              <div class="wms-card-col"><span class="wms-field-label">배송 조건</span><span class="wms-field-val">${esc(expected.shipping)}</span></div>
+            </div>
+          </div>
+          <div class="wms-target-card">
+            <div class="wms-card-tag">${icon('package', 13)} 상품 사진</div>
+            <div class="player-photo">${photo ? `<img src="${esc(photo)}" alt="${esc(company.name)} 근무 사진" />` : `<div class="player-photo-fallback">${esc(company.mark || '라인')}</div>`}</div>
+          </div>
         </div>
-        <div class="player-actions">
-          <button type="button" class="primary-button" data-action="submit-player" ${choice ? '' : 'disabled'}>제출하기</button>
+        <form class="catalog-entry" data-catalog-entry="1">
+          <label class="field" for="catalogProductName"><span>상품명</span><input id="catalogProductName" name="product_name" maxlength="80" value="${esc(draft.productName)}" placeholder="카드에 적힌 상품명" /></label>
+          <label class="field" for="catalogPrice"><span>가격</span><input id="catalogPrice" name="price" inputmode="numeric" maxlength="12" value="${esc(draft.price)}" placeholder="숫자만" /></label>
+          <label class="field" for="catalogOption"><span>옵션</span><input id="catalogOption" name="option" maxlength="80" value="${esc(draft.option)}" placeholder="색상·수량" /></label>
+          <label class="field" for="catalogShipping"><span>배송 조건</span><input id="catalogShipping" name="shipping" maxlength="80" value="${esc(draft.shipping)}" placeholder="배송비·기간" /></label>
+          <div class="player-actions">
+            <button type="button" class="secondary-button" data-action="checkpoint-work">중간 저장</button>
+            <button type="submit" class="primary-button">제출하기</button>
+          </div>
+        </form>
+      </div>
+    </div></div>`;
+  }
+
+  function renderRunOverlay() {
+    if (!state.player || !state.run?.overlayOpen) return '';
+    const node = nodeById(state.player.nodeId || state.run.nodeId);
+    const company = companyById(node.companyId);
+    if (isCatalogWork(node)) {
+      const photo = state.player.photo || node.questionImage
+        ? brandAssetSrc(state.player.photo || node.questionImage, company.slug, 'photo')
+        : (company.photoUrl || brandAssetSrc(company.photo_asset_path, company.slug, 'photo'));
+      return renderCatalogOverlay(node, company, photo);
+    }
+    const photo = state.player.photo || node.questionImage
+      ? brandAssetSrc(state.player.photo || node.questionImage, company.slug, 'photo')
+      : (company.photoUrl || brandAssetSrc(company.photo_asset_path, company.slug, 'photo'));
+    const choice = state.player.choice;
+    const bundle = syncInspectBundle(state.player.bundle, node, state.run);
+    state.player.bundle = bundle;
+    const currentItem = bundle.items[Math.min(bundle.current, bundle.total - 1)] || bundle.items[0];
+    const isCompleted = isInspectBundleComplete(bundle);
+    const currentDisplayCount = isCompleted ? bundle.total : (bundle.current + 1);
+    const progressPct = isCompleted ? 100 : Math.round((bundle.current / bundle.total) * 100);
+    const invoiceTail = inspectCodeTail(currentItem.invoiceCode);
+    const targetTail = inspectCodeTail(currentItem.targetCode);
+
+    return `<div class="modal-backdrop player-backdrop"><div class="player-sheet">
+      <div class="player-stage"><canvas id="motionCanvas" aria-hidden="true"></canvas></div>
+      <div class="player-card">
+        <div class="player-toolbar">
+          <div class="player-kicker">${icon('scan-barcode', 15)} ${esc(company.name)} · 현장 검수 단말</div>
+          <button type="button" class="icon-button" data-action="close-run" aria-label="닫기">${icon('x', 18)}</button>
         </div>
+
+        <div class="wms-bundle-progress">
+          <div class="wms-bundle-header">
+            <span class="wms-bundle-badge">${icon('clipboard-check', 13)} 오늘 배정 물량</span>
+            <span class="wms-bundle-count"><strong>${currentDisplayCount}</strong> / ${bundle.total}건</span>
+          </div>
+          <div class="wms-bundle-bar">
+            <div class="wms-bundle-fill" style="width:${progressPct}%"></div>
+          </div>
+          <div class="wms-mission-copy">
+            ${icon('shield-check', 13)} 전표 번호를 보고, 실물 라벨 번호를 직접 입력해 주세요.
+          </div>
+        </div>
+
+        <div class="wms-inspect-box">
+          <div class="wms-invoice-card">
+            <div class="wms-card-tag">${icon('file-text', 13)} 기준 발송 전표</div>
+            <div class="wms-card-grid">
+              <div class="wms-card-col">
+                <span class="wms-field-label">도착지</span>
+                <span class="wms-field-val">${esc(currentItem.destination)}</span>
+              </div>
+              <div class="wms-card-col">
+                <span class="wms-field-label">화물 품목</span>
+                <span class="wms-field-val">${esc(currentItem.category)}</span>
+              </div>
+            </div>
+            <div class="wms-code-highlight">
+              <span class="wms-code-label">전표 송장 번호</span>
+              <span class="wms-code-num" aria-label="전표 송장 번호 ${esc(currentItem.invoiceCode)}"><span class="wms-code-prefix">PDK-</span><span class="wms-code-tail">${esc(invoiceTail)}</span></span>
+            </div>
+          </div>
+
+          <div class="wms-target-card">
+            <div class="wms-card-tag">${icon('package', 13)} 현장 입고 화물 사진</div>
+            <div class="player-photo">${photo ? `<img src="${esc(photo)}" alt="${esc(company.name)} 근무 사진" />` : `<div class="player-photo-fallback">${esc(company.mark || '라인')}</div>`}</div>
+            <div class="wms-target-match-bar">
+              <span class="wms-match-label">실물 부착 라벨</span>
+              <span class="wms-match-code" aria-label="실물 부착 라벨 ${esc(currentItem.targetCode)}"><span class="wms-code-prefix">PDK-</span><span class="wms-code-tail">${esc(targetTail)}</span></span>
+            </div>
+          </div>
+        </div>
+
+        ${isCompleted
+          ? `<div class="player-actions"><button type="button" class="secondary-button" data-action="checkpoint-work">중간 저장</button><button type="button" class="primary-button is-ready-pulse" data-action="submit-player">오늘 배정 물량 검수 완료 · 제출하기</button></div>`
+          : `<form class="inspect-entry" data-inspect-entry="1">
+          <label class="field" for="inspectLabelInput"><span>실물에 적힌 라벨 번호</span>
+            <input id="inspectLabelInput" name="label" inputmode="numeric" autocomplete="off" maxlength="12" placeholder="예: ${esc(targetTail)}" />
+          </label>
+          <div class="player-actions"><button type="button" class="secondary-button" data-action="checkpoint-work">중간 저장</button><button type="submit" class="primary-button">이 번호로 확인</button></div>
+        </form>`}
+      </div>
+    </div></div>`;
+  }
+
+  function renderReviewWaitOverlay() {
+    if (!state.reviewWait?.overlayOpen) return '';
+    const wait = state.reviewWait;
+    const node = nodeById(wait.nodeId);
+    const company = companyById(node.companyId);
+    const submitted = wait.submittedAt ? new Date(wait.submittedAt).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '확인 필요';
+    const operatorResult = wait.status === 'rework'
+      ? '운영자가 다시 확인해 달라고 했어요.'
+      : wait.status === 'rejected'
+        ? '운영자가 반려했어요. 원금만 돌아와요.'
+        : '운영자 확인 전이에요. 아직 수당이 출금가능으로 옮겨지지 않았어요.';
+    const reworkCopy = wait.status === 'rework' ? '제출한 번호를 다시 보고, 안내가 오면 이어서 확인해요.' : '재확인 요청은 아직 없어요.';
+    return `<div class="modal-backdrop player-backdrop" data-modal="review-wait"><div class="player-sheet review-wait-sheet">
+      <div class="player-card">
+        <div class="player-toolbar">
+          <div class="player-kicker">${icon('clipboard-check', 15)} 검수 대기 업무</div>
+          <button type="button" class="icon-button" data-action="close-review-wait" aria-label="닫기">${icon('x', 18)}</button>
+        </div>
+        <div class="detail-list">
+          <div><span>업무 이름</span><strong>${esc(company.name)} · ${esc(node.title)}</strong></div>
+          <div><span>제출 시간</span><strong>${esc(submitted)}</strong></div>
+          <div><span>검수 상태</span><strong>${esc(runStatusLabel(wait.status))}</strong></div>
+          <div><span>예상 보상</span><strong>${formatLedgerAmount(wait.rewardAmount)}</strong></div>
+          <div><span>운영자 확인 결과</span><strong>${esc(operatorResult)}</strong></div>
+          <div><span>재확인 요청 내용</span><strong>${esc(reworkCopy)}</strong></div>
+        </div>
+        <div class="notice" style="margin-top:16px"><span style="color:var(--gold)">${icon('hourglass',17)}</span><div>새 업무는 이 검수가 끝난 뒤에 시작할 수 있어요. 화면을 닫아도 서버 상태로 남아 있어요.</div></div>
+        <div class="modal-actions"><button class="secondary-button" type="button" data-action="close-review-wait">작업실로</button><button class="primary-button" type="button" disabled aria-disabled="true">새 업무 시작</button></div>
       </div>
     </div></div>`;
   }
@@ -2254,7 +2948,7 @@
     const outcome = lines.trial
       ? `<ul class="outcome-list"><li>✅ 승인되면 지원금은 다 쓰이고 돌려주지 않아요. 수당만 나와요.</li><li>↩️ 반려돼도 지원금은 돌아가지 않아요.</li></ul>`
       : `<ul class="outcome-list"><li>✅ 승인되면 원금과 수당이 잔액에 같이 반영돼요.</li><li>↩️ 반려되면 원금만 돌아와요.</li></ul>`;
-    return `<div class="modal-backdrop" data-modal="start-confirm"><div class="modal cinematic-modal"><div class="cinematic-stage"><canvas id="startMotionCanvas" aria-hidden="true"></canvas></div><div class="modal-head"><div><h2>출근 확인할까요?</h2><p>${esc(company.name)} · ${esc(node.title)}</p></div><button class="icon-button" data-action="close-start" aria-label="닫기">${icon('x',18)}</button></div><div class="modal-body">${lines.html}${outcome}<p class="page-copy" style="margin-top:12px">한 화면에서 사진과 질문만 보고 제출해요.</p><div class="modal-actions"><button class="secondary-button" type="button" data-action="close-start">다음에</button><button class="primary-button" type="button" data-action="confirm-start">출근하기</button></div></div></div></div>`;
+    return `<div class="modal-backdrop" data-modal="start-confirm"><div class="modal cinematic-modal"><div class="cinematic-stage"><canvas id="startMotionCanvas" aria-hidden="true"></canvas></div><div class="modal-head"><div><h2>출근 확인할까요?</h2><p>${esc(company.name)} · ${esc(node.title)}</p></div><button class="icon-button" data-action="close-start" aria-label="닫기">${icon('x',18)}</button></div><div class="modal-body">${lines.html}${outcome}<p class="page-copy" style="margin-top:12px">${isCatalogWork(node) ? '한 화면에서 상품명·가격·옵션·배송을 적어 제출해요.' : '한 화면에서 실물 라벨 번호 5건을 입력해 대조해요.'}</p><div class="modal-actions"><button class="secondary-button" type="button" data-action="close-start">다음에</button><button class="primary-button" type="button" data-action="confirm-start">출근하기</button></div></div></div></div>`;
   }
 
   function renderResultOverlay() {
@@ -2267,7 +2961,56 @@
       : next
         ? `다음 근무는 ${money(next)} 라인이에요. 넣으면 수당 ${money(payForStake(next))}이에요.`
         : '오늘 라인 근무를 잘 마쳤어요.';
-    return `<div class="modal-backdrop" data-modal="result-scene"><div class="modal result-modal"><div class="result-stage"><canvas id="resultMotionCanvas" aria-hidden="true"></canvas></div><div class="modal-body"><h2>다음 한 칸만 안내할게요</h2><p class="page-copy">${copy}</p><div class="modal-actions"><button class="primary-button" data-action="close-result">작업실로</button></div></div></div></div>`;
+    const currentBalance = Number(state.wallet.work ?? state.wallet.task ?? 0);
+    const diff = next ? Math.max(0, next - currentBalance) : 0;
+    const nextPct = next ? Math.min(100, Math.round((currentBalance / next) * 100)) : 100;
+
+    return `<div class="modal-backdrop" data-modal="result-scene"><div class="modal result-modal"><div class="result-stage"><canvas id="resultMotionCanvas" aria-hidden="true"></canvas></div><div class="modal-body">
+      <h2>다음 한 칸만 안내할게요</h2>
+      <div class="work-receipt-card">
+        <div class="work-receipt-head">
+          <span class="work-receipt-title">${icon('clipboard-check', 16)} 오늘 근무 완료 전표</span>
+          <span class="pill ok">검수 대기</span>
+        </div>
+        <div class="work-receipt-body">
+          <div class="work-receipt-row">
+            <span class="work-receipt-label">검수 완료 물량</span>
+            <span class="work-receipt-val">오늘 배정 물량 5건 정상 검수</span>
+          </div>
+          <div class="work-receipt-row">
+            <span class="work-receipt-label">근무 보증금 (원금)</span>
+            <span class="work-receipt-val">${money(scene.principal)} <small style="color:var(--muted)">(안전 보관)</small></span>
+          </div>
+          <div class="work-receipt-row highlight">
+            <span class="work-receipt-label">검수 후 예정 수당</span>
+            <span class="work-receipt-val" style="color:var(--emerald-strong)">+${money(scene.stipend)}</span>
+          </div>
+        </div>
+        <div class="work-receipt-note">
+          ✅ 일이 끝나면 원금과 수당이 잔액에 같이 반영돼요
+        </div>
+      </div>
+
+      ${next ? `
+      <div class="next-ladder-card">
+        <div class="next-ladder-head">
+          <span class="next-ladder-label">${icon('trending-up', 14)} 다음 ${money(next)} 라인 해금 게이지</span>
+          <strong class="next-ladder-pct">${nextPct}% 달성</strong>
+        </div>
+        <div class="next-ladder-bar">
+          <div class="next-ladder-fill" style="width:${nextPct}%"></div>
+        </div>
+        <p class="page-copy" style="margin-top:10px">${copy}</p>
+        ${diff > 0 && !ultra ? `
+        <button class="gold-button" style="width:100%;margin-top:12px" data-action="deposit-shortcut" data-amount="${diff}">
+          ${icon('credit-card', 16)} 부족한 ${money(diff)} 채우고 ${money(next)} 라인 바로 열기
+        </button>
+        ` : ''}
+      </div>
+      ` : `<p class="page-copy">${copy}</p>`}
+
+      <div class="modal-actions"><button class="primary-button" data-action="close-result">작업실로</button></div>
+    </div></div></div>`;
   }
 
   function renderOnboarding() {
@@ -2311,7 +3054,12 @@
   }
 
   function renderInfoModal(kind) {
-    if (kind === 'deposit') return `<div class="modal-backdrop" data-modal="info"><div class="modal"><div class="modal-head"><div><h2 class="modal-title-row">${icon('credit-card', 20)} 입금하기</h2><p>원하는 금액을 직접 적어요. 최소 칸만 받는 창이 아니에요.</p></div><button class="icon-button" data-action="close-modal" aria-label="닫기">${icon('x',18)}</button></div><div class="modal-body"><form id="depositForm"><div class="notice"><span style="color:var(--emerald)">${icon('wallet',17)}</span><div>보낸 뒤 운영자가 확인해요. 화면에서 잔액을 올리지 않아요.</div></div><div class="form-grid" style="margin-top:16px"><div class="field"><label for="depositAmount">입금 금액</label><input id="depositAmount" name="amount" type="number" min="1" step="1" required placeholder="보낼 금액을 직접 입력" /></div><div class="field"><label for="depositCurrency">통화</label><select id="depositCurrency" name="currency"><option value="KRW">원화</option><option value="USDT">USDT</option></select></div><div class="field"><label for="depositBank">은행명 / 네트워크</label><input id="depositBank" name="bank" placeholder="예: 국민은행 또는 TRC20" /></div><div class="field"><label for="depositHolder">예금주 / 보낸 주소</label><input id="depositHolder" name="holder" placeholder="예금주 또는 지갑 주소" /></div></div><div class="modal-actions"><button class="secondary-button" type="button" data-action="close-modal">취소</button><button class="primary-button" type="submit">입금 확인 요청</button></div></form></div></div></div>`;
+    if (kind === 'deposit') {
+      const amountForm = isDepositRevealed()
+        ? `<form id="depositForm"><div class="notice"><span style="color:var(--emerald)">${icon('wallet',17)}</span><div>보낸 뒤 운영자가 확인해요. 화면에서 잔액을 올리지 않아요.</div></div><div class="form-grid" style="margin-top:16px"><div class="field"><label for="depositAmount">입금 금액</label><input id="depositAmount" name="amount" type="number" min="1" step="1" required placeholder="보낼 금액을 직접 입력" value="${state.depositPresetAmount || ''}" /></div><div class="field"><label for="depositCurrency">통화</label><select id="depositCurrency" name="currency"><option value="KRW">원화</option><option value="USDT">USDT</option></select></div></div><input type="hidden" name="destination_id" value="${esc(state.depositReveal?.[0]?.id || '')}" /><div class="modal-actions"><button class="secondary-button" type="button" data-action="close-modal">취소</button><button class="primary-button" type="submit">입금 확인 요청</button></div></form>`
+        : '';
+      return `<div class="modal-backdrop" data-modal="info"><div class="modal"><div class="modal-head"><div><h2 class="modal-title-row">${icon('credit-card', 20)} 입금하기</h2><p>보안 PIN으로 계좌·USDT를 확인한 뒤, 원하는 금액을 직접 적어요.</p></div><button class="icon-button" data-action="close-modal" aria-label="닫기">${icon('x',18)}</button></div><div class="modal-body">${renderDepositDestinations()}${amountForm}</div></div></div>`;
+    }
     const principal = state.withdrawIntent === 'principal';
     const notice = principal
       ? '보증금까지 신청하면 대기 없이 바로 지급해요. 등급은 내려가고, 근무 잔액 0이면 그 라인은 바로 닫혀요.'
@@ -2486,47 +3234,174 @@
     root.setAttribute('data-stable', '1');
   }
 
-  function render() {
-    document.documentElement.dataset.theme = state.theme;
-    const app = document.getElementById('app');
-    if (!app) return;
-    const existingType = app.querySelector('[data-modal]')?.getAttribute('data-modal');
-    if (state.modal === 'member-detail' && existingType === 'member-detail') {
-      const oldShell = app.querySelector('.app-shell');
-      if (oldShell) {
-        const box = document.createElement('div');
-        box.innerHTML = renderAppShell();
-        if (box.firstElementChild) oldShell.replaceWith(box.firstElementChild);
-      }
-      patchMemberDetailModal(state.modalPayload || state.adminMemberDetail);
-      refreshIcons();
-      if (isAdmin && window.PUTDUK_ADMIN && typeof window.PUTDUK_ADMIN.afterRender === 'function') window.PUTDUK_ADMIN.afterRender();
-      if (!isAdmin && state.memberPage === 'dashboard') drawMemberChart();
-      if (isAdmin && state.adminPage === 'overview') drawAdminChart();
-      if (state.toast) {
-        const pendingToast = state.toast;
-        state.toast = null;
-        showToast(pendingToast.text, pendingToast.kind, true);
-      }
+  function overlayApi() {
+    return window.PutdukOverlaySurface || null;
+  }
+
+  function overlaySurfaceKey() {
+    const api = overlayApi();
+    if (api && typeof api.overlaySurfaceKey === 'function') return api.overlaySurfaceKey(state);
+    if (state.player && state.run?.overlayOpen) return `run:${state.run.dbId || state.run.id || state.player.nodeId || 'active'}`;
+    if (state.reviewWait?.overlayOpen) return `review:${state.reviewWait.dbId || state.reviewWait.id || 'wait'}`;
+    if (state.startNodeId) return `start:${state.startNodeId}`;
+    if (state.resultScene) return `result:${state.resultScene.nodeId || ''}:${state.resultScene.cut || 'next'}`;
+    if (state.onboardingStep) return `onboard:${state.onboardingStep}`;
+    if (state.modal) return `modal:${state.modal}`;
+    return '';
+  }
+
+  function overlayBodyToken() {
+    const api = overlayApi();
+    if (api && typeof api.overlayBodyToken === 'function') {
+      return api.overlayBodyToken(state, { nodeById, isCatalogWork, isInspectBundleComplete });
+    }
+    const key = overlaySurfaceKey();
+    if (key.startsWith('run:')) {
+      const node = nodeById(state.player?.nodeId || state.run?.nodeId);
+      if (isCatalogWork(node)) return 'catalog';
+      const bundle = state.player?.bundle;
+      return `inspect:${Number(bundle?.current || 0)}:${Number(bundle?.total || 0)}:${isInspectBundleComplete(bundle) ? 1 : 0}`;
+    }
+    if (key === 'modal:auth') return String(state.authMode || 'signup');
+    if (key === 'modal:deposit') {
+      const list = Array.isArray(state.depositDestinations) ? state.depositDestinations : [];
+      const revealed = isDepositRevealed() ? (Array.isArray(state.depositReveal) ? state.depositReveal.length : 1) : 0;
+      return `${list.length}:${state.depositPinSet ? 1 : 0}:${revealed}:${state.depositDestinationsError ? 1 : 0}:${state.depositPresetAmount || ''}`;
+    }
+    if (key.startsWith('review:')) return String(state.reviewWait?.status || '');
+    if (key === 'modal:member-detail') return String(state.modalPayload?.id || state.adminMemberDetail?.id || '');
+    return key;
+  }
+
+  function overlayMarkup() {
+    const html = `${renderOnboarding()}${renderStartConfirm()}${renderReviewWaitOverlay()}${renderRunOverlay()}${renderResultOverlay()}${renderModal()}`;
+    const key = overlaySurfaceKey();
+    if (!html || !key) return html;
+    const body = overlayBodyToken();
+    const api = overlayApi();
+    if (api && typeof api.stampOverlayMarkup === 'function') return api.stampOverlayMarkup(html, key, body, esc);
+    return html.replace(/<div class="modal-backdrop([^"]*)"/, `<div class="modal-backdrop$1" data-surface="${esc(key)}" data-overlay-body="${esc(body)}"`);
+  }
+
+  function patchAppShell(app) {
+    const box = document.createElement('div');
+    box.innerHTML = renderAppShell();
+    const nextShell = box.querySelector('.app-shell');
+    const nextBar = box.querySelector('.member-tabbar');
+    const oldShell = app.querySelector('.app-shell');
+    const oldBar = app.querySelector('.member-tabbar');
+    if (oldShell && nextShell) oldShell.replaceWith(nextShell);
+    if (oldBar && nextBar) oldBar.replaceWith(nextBar);
+    else if (!oldBar && nextBar) {
+      const toast = app.querySelector('#toastStack');
+      if (toast) app.insertBefore(nextBar, toast);
+      else app.appendChild(nextBar);
+    } else if (oldBar && !nextBar) oldBar.remove();
+  }
+
+  function patchLiveOverlay(root) {
+    const html = overlayMarkup();
+    if (!html) {
+      root.remove();
       return;
     }
-    app.innerHTML = `${renderAppShell()}<div class="toast-stack" id="toastStack" aria-live="polite" aria-relevant="additions" role="status"></div>${renderOnboarding()}${renderStartConfirm()}${renderRunOverlay()}${renderResultOverlay()}${renderModal()}`;
+    const box = document.createElement('div');
+    box.innerHTML = html;
+    const next = box.firstElementChild;
+    if (!next) return;
+    const stageSel = '.player-stage, .cinematic-stage, .result-stage';
+    const oldStage = root.querySelector(stageSel);
+    const newStage = next.querySelector(stageSel);
+    if (oldStage && newStage) newStage.replaceWith(oldStage);
+    root.replaceChildren(...Array.from(next.childNodes));
+    ['data-surface', 'data-overlay-body', 'data-modal'].forEach((name) => {
+      const value = next.getAttribute(name);
+      if (value) root.setAttribute(name, value);
+      else if (name !== 'data-modal') root.removeAttribute(name);
+    });
+    root.setAttribute('data-stable', '1');
+  }
+
+  function releaseAllMotionCanvases() {
+    ['motionCanvas', 'startMotionCanvas', 'resultMotionCanvas', 'onboardMotionCanvas', 'demoteMotionCanvas', 'depositJumpMotionCanvas']
+      .forEach(releaseNamedCanvas);
+  }
+
+  function finishPaint({ replayMotion = false, rebindOverlayUi = false } = {}) {
     refreshIcons();
     if (isAdmin && window.PUTDUK_ADMIN && typeof window.PUTDUK_ADMIN.afterRender === 'function') window.PUTDUK_ADMIN.afterRender();
-    if (!isAdmin && state.memberPage === 'dashboard') drawMemberChart();
-    if (isAdmin && state.adminPage === 'overview') drawAdminChart();
-    if (state.run && state.run.overlayOpen) requestAnimationFrame(() => { drawMotionCanvas(); if (!runFrame) runFrame = requestAnimationFrame(tickRun); });
-    bindAuxMotion();
+    const overlayOpen = Boolean(overlaySurfaceKey());
+    if (!overlayOpen) {
+      if (!isAdmin && state.memberPage === 'dashboard') drawMemberChart();
+      if (isAdmin && state.adminPage === 'overview') drawAdminChart();
+    }
+    if (replayMotion) {
+      if (state.run && state.run.overlayOpen && !state.player) {
+        requestAnimationFrame(() => { drawMotionCanvas(); if (!runFrame) runFrame = requestAnimationFrame(tickRun); });
+      }
+      bindAuxMotion();
+      if (state.player && state.run?.overlayOpen) drawMotionCanvas();
+    }
     bindFomoClock();
     patchFomoDom();
-    bindDepositJumpUi();
-    bindKycFilePickers();
+    if (replayMotion || rebindOverlayUi) {
+      bindDepositJumpUi();
+      bindKycFilePickers();
+    }
     restoreDepositForm();
+    paintDepositQr();
     if (state.toast) {
       const pendingToast = state.toast;
       state.toast = null;
       showToast(pendingToast.text, pendingToast.kind, true);
     }
+  }
+
+  function render() {
+    document.documentElement.dataset.theme = state.theme;
+    const app = document.getElementById('app');
+    if (!app) return;
+    const existingType = app.querySelector('[data-modal]')?.getAttribute('data-modal');
+    const nextKey = overlaySurfaceKey();
+    const existing = app.querySelector('[data-surface]');
+    const existingKey = existing?.getAttribute('data-surface') || '';
+    const nextBody = overlayBodyToken();
+    const api = overlayApi();
+    const plan = api && typeof api.overlayPaintPlan === 'function'
+      ? api.overlayPaintPlan({
+          nextKey,
+          existingKey,
+          hasExisting: Boolean(existing),
+          hasShell: Boolean(app.querySelector('.app-shell')),
+          sameBody: (existing?.getAttribute('data-overlay-body') || '') === nextBody,
+          memberDetailReuse: state.modal === 'member-detail' && existingType === 'member-detail'
+        })
+      : null;
+    const action = plan?.action || '';
+    if (action === 'patch-member-detail' || (!plan && state.modal === 'member-detail' && existingType === 'member-detail')) {
+      patchAppShell(app);
+      patchMemberDetailModal(state.modalPayload || state.adminMemberDetail);
+      finishPaint({ replayMotion: false, rebindOverlayUi: false });
+      return;
+    }
+    if (existing && (action === 'keep-overlay' || action === 'patch-overlay' || (!plan && nextKey && existingKey === nextKey))) {
+      existing.setAttribute('data-stable', '1');
+      if (action === 'patch-overlay' || (!plan && (existing.getAttribute('data-overlay-body') || '') !== nextBody)) patchLiveOverlay(existing);
+      finishPaint({ replayMotion: false, rebindOverlayUi: action === 'patch-overlay' || (!plan && (existing.getAttribute('data-overlay-body') || '') !== nextBody) });
+      return;
+    }
+    if (action === 'patch-shell' || (!plan && !nextKey && !existing && app.querySelector('.app-shell'))) {
+      patchAppShell(app);
+      finishPaint({ replayMotion: false, rebindOverlayUi: false });
+      return;
+    }
+    if (plan?.releaseCanvases || (existingKey && existingKey !== nextKey)) releaseAllMotionCanvases();
+    const toastStack = document.getElementById('toastStack');
+    const keptToasts = toastStack ? Array.from(toastStack.children) : [];
+    app.innerHTML = `${renderAppShell()}<div class="toast-stack" id="toastStack" aria-live="polite" aria-relevant="additions" role="status"></div>${overlayMarkup()}`;
+    const nextStack = document.getElementById('toastStack');
+    if (nextStack && keptToasts.length) keptToasts.forEach((node) => nextStack.appendChild(node));
+    finishPaint({ replayMotion: true, rebindOverlayUi: true });
   }
 
   function weekEarnings() {
@@ -2538,7 +3413,7 @@
       day.setDate(day.getDate() - i);
       labels.push(i === 0 ? '오늘' : `${day.getMonth() + 1}/${day.getDate()}`);
       const sum = state.history.reduce((total, item) => {
-        if (item.status !== '검수 완료' || !item.createdAt) return total;
+        if (rewardUiKind(item) !== 'posted' || !item.createdAt) return total;
         const created = new Date(item.createdAt);
         return created.toDateString() === day.toDateString() ? total + Number(item.reward || 0) : total;
       }, 0);
@@ -2610,6 +3485,12 @@
   }
 
   async function startNode(nodeId) {
+    if (state.reviewWait) {
+      state.reviewWait.overlayOpen = true;
+      render();
+      showToast('⏳ 제출한 근무가 검수 중이에요. 새 출근은 검수가 끝난 뒤에 할 수 있어요.', 'info');
+      return;
+    }
     if (state.player && state.run) { state.run.overlayOpen = true; render(); return; }
     if (!authState.session) {
       openModal('auth');
@@ -2619,7 +3500,7 @@
     const node = nodeById(nodeId);
     if (node && !canStartNode(node)) {
       state.withdrawIntent = 'allowance';
-      openModal('deposit');
+      openDepositModal();
       showToast(node.isTrial ? '🎁 체험은 지원금이 있는 카드로 출근해요.' : '💳 이 라인은 근무 잔액이 잠금보다 커야 출근할 수 있어요.', 'info');
       return;
     }
@@ -2668,7 +3549,7 @@
         choice: null,
         _submitted: false
       };
-      state.player = { nodeId: state.run.nodeId, choice: null, question: playerQuestion(node), photo };
+      state.player = { nodeId: state.run.nodeId, choice: null, question: playerQuestion(node), photo, bundle: initBundleForNode(node, company, state.run), listing: {} };
       try {
         await memberFinanceRequest('lock_stake', { task_run_id: data.id });
       } catch (error) {
@@ -2677,10 +3558,10 @@
         }
       }
       await refreshMemberWallet();
-      state._workLockCue = true;
+      overlayDismissed = false;
       saveState();
       render();
-      showToast('🟢 출근했어요. 사진과 질문만 확인하고 제출해 주세요.', 'success');
+      showToast(isCatalogWork(node) ? '🟢 출근했어요. 상품명·가격·옵션·배송을 적어 주세요.' : '🟢 출근했어요. 전표와 실물 번호를 대조해 주세요.', 'success');
       runFrame = requestAnimationFrame(tickRun);
       return;
     }
@@ -2688,17 +3569,17 @@
     releaseNamedCanvas('startMotionCanvas');
     state.startNodeId = null;
     rememberCrewPartner(node.companyId);
-    state.player = { nodeId, choice: null, question: playerQuestion(node), photo };
     state.run = {
       nodeId,
       startedAt: Date.now(),
       duration: 8000,
       progress: 0.4,
       overlayOpen: true,
-      logs: ['[안내] 한 장만 확인하고 제출해요.'],
+      logs: ['[안내] 오늘 배정 물량 5건을 대조해요.'],
       serverBacked: false
     };
-    state._workLockCue = true;
+    state.player = { nodeId, choice: null, question: playerQuestion(node), photo, bundle: initBundleForNode(node, company, state.run), listing: {} };
+    overlayDismissed = false;
     saveState();
     render();
     showToast('👀 근무 화면을 열었어요. 실제 제출·정산은 아직 잠겨 있을 수 있어요.', 'info');
@@ -2718,38 +3599,37 @@
   }
 
   async function submitPlayer() {
-    if (!state.player?.choice) {
-      showToast('🙂 맞아요 / 달라요 중 하나를 골라 주세요.', 'info');
-      return;
-    }
-    const node = nodeById(state.player.nodeId);
-    const partner = motionPartner(node);
-    const canvas = document.getElementById('motionCanvas');
-    const afterSubmitCut = async () => {
-      if (state.run?.serverBacked && workEnabled() && authState.session) {
-        await finishRun(node);
-        openResultScene(node, { cut: 'approve', principal: nodeStake(node), stipend: nodePay(node) });
-        render();
+    const node = nodeById(state.player?.nodeId);
+    if (isCatalogWork(node)) {
+      const listing = catalogFormValues();
+      state.player.listing = listing;
+      if (!gradeCatalogListing(inspectSeedKey(state.run, node), listing)) {
+        showToast('🙂 상품명·가격·옵션·배송을 카드와 같게 적어 주세요.', 'info');
         return;
       }
-      state.player = null;
-      state.run = null;
-      releaseMotionCanvas();
+    } else if (!isInspectBundleComplete(state.player?.bundle)) {
+      showToast('🙂 오늘 배정 물량 5건을 모두 대조해 주세요.', 'info');
+      return;
+    }
+    if (state.run?.serverBacked && workEnabled() && authState.session) {
+      await finishRun(node);
+      if (!state.reviewWait) return;
       openResultScene(node, { cut: 'approve', principal: nodeStake(node), stipend: nodePay(node) });
-      saveState();
       render();
-      lockToast('work');
-    };
-    const played = playMemberWorkPhase(canvas, partner, 'submit', { onDone: () => { afterSubmitCut(); } });
-    if (!played) await afterSubmitCut();
+      return;
+    }
+    state.player = null;
+    state.run = null;
+    releaseMotionCanvas();
+    openResultScene(node, { cut: 'approve', principal: nodeStake(node), stipend: nodePay(node) });
+    saveState();
+    render();
+    lockToast('work');
   }
   function tickRun() {
     if (!state.run) { runFrame = null; return; }
     if (state.player) {
-      const t = (Date.now() / 5000) % 1;
-      state.run.progress = 0.28 + t * 0.42;
-      if (!document.hidden) drawMotionCanvas();
-      runFrame = requestAnimationFrame(tickRun);
+      runFrame = null;
       return;
     }
     const now = Date.now();
@@ -2789,25 +3669,44 @@
 
     if (run.serverBacked && authState.session && config.enableWorkApi === true) {
       if (run._submitting) return;
-      const choice = String(state.player?.choice || run.choice || '').trim();
-      if (!choice) {
+      const catalog = isCatalogWork(node);
+      const listing = catalog ? (document.getElementById('catalogProductName') ? catalogFormValues() : readCatalogListing(state.player?.listing)) : null;
+      if (catalog) {
+        if (!gradeCatalogListing(inspectSeedKey(run, node), listing)) {
+          run.overlayOpen = true;
+          saveState();
+          render();
+          showToast('🙂 상품명·가격·옵션·배송을 카드와 같게 적어 주세요.', 'info');
+          return;
+        }
+        state.player.listing = listing;
+      } else if (!isInspectBundleComplete(state.player?.bundle)) {
         run.overlayOpen = true;
         saveState();
         render();
-        showToast('🙂 맞아요 / 달라요 중 하나를 골라 주세요.', 'info');
+        showToast('🙂 오늘 배정 물량 5건을 모두 대조해 주세요.', 'info');
         return;
       }
+      const bundle = state.player.bundle;
+      const choice = catalog ? 'a' : String(bundle.answers[bundle.total - 1] || state.player.choice || run.choice || '').trim();
       run._submitting = true;
       run.choice = choice;
       let data = null;
       try {
-        const result = await memberFinanceRequest('submit_work', {
-          task_run_id: run.dbId,
-          choice_id: choice,
-          choice_label: choice === 'yes' || choice === 'a' || choice === '1'
-            ? (node.choiceA || '맞아요')
-            : (node.choiceB || '달라요')
-        });
+        const result = await memberFinanceRequest('submit_work', catalog
+          ? {
+            task_run_id: run.dbId,
+            work_kind: 'catalog_listing',
+            choice_id: 'a',
+            choice_label: '상품 정보 4칸 입력 완료',
+            listing
+          }
+          : {
+            task_run_id: run.dbId,
+            choice_id: choice,
+            choice_label: '오늘 배정 물량 5건 정상 검수',
+            inspect_answers: bundle.answers.slice(0, INSPECT_TOTAL)
+          });
         data = result.run || result.task_run || null;
       } catch (error) {
         run._submitting = false;
@@ -2815,12 +3714,14 @@
         saveState();
         render();
         const message = String(error?.message || '');
-        showToast(message.includes('예상 처리 시간이') ? '⏱ 조금만 기다리면 제출돼요. 자동으로 다시 넣을게요.' : (message.includes('골라') ? message : taskApiErrorMessage(error)), 'info');
         if (message.includes('예상 처리 시간이')) {
-          const waitMs = Math.max(1200, (Number(run.expectedCompletedAt) || Date.now()) - Date.now() + 400);
+          showToast('📋 검수 전표를 넣고 있어요. 바로 다시 넣을게요.', 'info');
+          const waitMs = Math.max(800, (Number(run.expectedCompletedAt) || Date.now()) - Date.now() + 400);
           window.setTimeout(() => {
             if (state.run === run && !run._submitting) finishRun(node);
           }, waitMs);
+        } else {
+          showToast(message.includes('대조') || message.includes('번호') || message.includes('골라') || message.includes('물량') || message.includes('상품') ? message : taskApiErrorMessage(error), 'info');
         }
         return;
       }
@@ -2834,17 +3735,31 @@
         return;
       }
 
-      const reward = Number(data.reward_amount || run.rewardAmount || 0);
       const durationSeconds = Math.max(1, Math.round((Number(data.completed_at ? Date.parse(data.completed_at) : Date.now()) - run.startedAt) / 1000));
       state.history.unshift({
         id: data.public_id || run.id,
+        dbId: run.dbId,
         nodeId: node.id,
         status: '검수 대기',
-        reward,
+        statusRaw: data.status || 'submitted',
+        runStatus: data.status || 'submitted',
+        rewardStatus: data.reward_status || 'pending',
+        reward: parseLedgerAmount(data.reward_amount || run.rewardAmount),
         date: '방금 전',
+        submittedAt: data.completed_at || new Date().toISOString(),
         duration: `${durationSeconds}초`
       });
-      state.notifications.unshift({ text: `${node.title} 제출 완료 · 운영 검수 대기`, time: '방금 전', type: 'work' });
+      state.notifications.unshift({ text: `${node.title} 제출 완료 · 검수 대기`, time: '방금 전', type: 'work' });
+      state.reviewWait = {
+        id: data.public_id || run.id,
+        dbId: run.dbId,
+        nodeId: node.id,
+        status: data.status || 'submitted',
+        rewardAmount: parseLedgerAmount(data.reward_amount || run.rewardAmount),
+        rewardStatus: data.reward_status || 'pending',
+        submittedAt: data.completed_at || new Date().toISOString(),
+        overlayOpen: true
+      };
       state.run = null;
       state.player = null;
       saveState();
@@ -2879,7 +3794,7 @@
 
   function playCueOnCanvas(canvas, token, run) {
     if (!canvas || typeof run !== 'function') return;
-    if (state._playedMotionCue === token && state._motionCanvas === canvas) return;
+    if (state._playedMotionCue === token) return;
     state._playedMotionCue = token;
     state._motionCanvas = canvas;
     requestAnimationFrame(() => {
@@ -2899,25 +3814,8 @@
       const partner = motionPartner(node);
       const extras = { principal: nodeStake(node) };
       playCueOnCanvas(canvas, token, () => {
-        const replay = () => {
-          if (!canvas.isConnected || !state.startNodeId) return;
-          motion.playWorkPhase(canvas, partner, 'lock', { ...extras, onDone: replay });
-        };
-        replay();
+        motion.playWorkPhase(canvas, partner, 'lock', extras);
       });
-      return;
-    }
-
-    if (state._workLockCue && state.player) {
-      const canvas = document.getElementById('motionCanvas');
-      if (canvas) {
-        state._workLockCue = false;
-        const node = nodeById(state.player.nodeId);
-        requestAnimationFrame(() => {
-          if (!canvas.isConnected) return;
-          motion.playWorkPhase(canvas, motionPartner(node), 'lock', { principal: nodeStake(node) });
-        });
-      }
       return;
     }
 
@@ -2925,11 +3823,7 @@
       const canvas = document.getElementById('onboardMotionCanvas');
       const token = 'pwa_home';
       playCueOnCanvas(canvas, token, () => {
-        const replay = () => {
-          if (!canvas.isConnected || state.onboardingStep !== 'pwa') return;
-          motion.playWorkPhase(canvas, companies[0] || { name: '퍼뜩', slug: 'putduk' }, 'pwa_home', { onDone: replay });
-        };
-        replay();
+        motion.playWorkPhase(canvas, companies[0] || { name: '퍼뜩', slug: 'putduk' }, 'pwa_home');
       });
       return;
     }
@@ -2938,11 +3832,7 @@
       const canvas = document.getElementById('demoteMotionCanvas');
       const token = 'demote';
       playCueOnCanvas(canvas, token, () => {
-        const replay = () => {
-          if (!canvas.isConnected || state.modal !== 'withdraw-principal') return;
-          motion.playWorkPhase(canvas, companies[0] || { name: '퍼뜩', slug: 'putduk' }, 'demote', { onDone: replay });
-        };
-        replay();
+        motion.playWorkPhase(canvas, companies[0] || { name: '퍼뜩', slug: 'putduk' }, 'demote');
       });
       return;
     }
@@ -2953,11 +3843,7 @@
       const amount = Number(state.depositJump?.amount || 0);
       const partner = companies[0] || { name: '퍼뜩', slug: 'putduk' };
       playCueOnCanvas(canvas, token, () => {
-        const replay = () => {
-          if (!canvas.isConnected || state.modal !== 'deposit-jump') return;
-          motion.playWorkPhase(canvas, partner, 'lock', { principal: amount, onDone: replay });
-        };
-        replay();
+        motion.playWorkPhase(canvas, partner, 'lock', { principal: amount });
       });
       return;
     }
@@ -2971,11 +3857,7 @@
           principal: state.resultScene.principal,
           stipend: state.resultScene.stipend
         };
-        const replay = () => {
-          if (!canvas.isConnected || state.resultScene?.cut !== 'approve') return;
-          motion.playWorkPhase(canvas, motionPartner(node), 'approve', { ...extras, onDone: replay });
-        };
-        replay();
+        motion.playWorkPhase(canvas, motionPartner(node), 'approve', extras);
       });
     }
   }
@@ -3189,7 +4071,9 @@
   function closeModal() {
     releaseNamedCanvas('demoteMotionCanvas');
     releaseNamedCanvas('depositJumpMotionCanvas');
+    if (state.modal === 'deposit' || state.modal === 'info') lockDepositReveal({ silent: true });
     if (state.modal !== 'deposit-jump') state.depositJump = null;
+    state.depositPresetAmount = null;
     state.modal = null;
     state.modalPayload = null;
     render();
@@ -3234,6 +4118,7 @@
   }
 
   async function signOut() {
+    await lockDepositReveal({ silent: true });
     if (supabaseClient) {
       const { error } = await supabaseClient.auth.signOut();
       if (error) { showToast('로그아웃을 완료하지 못했어요. 잠시 후 다시 시도해 주세요.', 'info'); return; }
@@ -3252,6 +4137,29 @@
     showToast('안전하게 로그아웃했어요.', 'success');
   }
 
+  async function checkpointWork() {
+    if (!state.run?.dbId || !authState.session || config.enableWorkApi !== true) {
+      saveState();
+      showToast('💾 화면에는 남겼어요. 서버 저장은 로그인 후에 이어져요.', 'info');
+      return;
+    }
+    const node = nodeById(state.player?.nodeId || state.run.nodeId);
+    const listing = isCatalogWork(node) ? catalogFormValues() : null;
+    if (listing) state.player.listing = listing;
+    const payload = listing
+      ? { kind: 'catalog_listing', listing, progress: 0.5 }
+      : { kind: 'inspect', current: state.player?.bundle?.current || 0, answers: state.player?.bundle?.answers || [], progress: Math.min(0.9, (Number(state.player?.bundle?.current || 0) / INSPECT_TOTAL) || 0) };
+    try {
+      await memberFinanceRequest('checkpoint_work', { task_run_id: state.run.dbId, checkpoint: payload });
+      if (state.run) state.run.status = 'checkpointed';
+      saveState();
+      showToast('💾 중간 저장했어요. 새로고침해도 이어서 적어요.', 'success');
+    } catch (error) {
+      saveState();
+      showToast(String(error?.message || '').includes('저장') ? error.message : '중간 저장을 하지 못했어요. 잠시 후 다시 눌러 주세요.', 'info');
+    }
+  }
+
   async function sendPasswordReset() {
     const email = document.getElementById('loginEmail')?.value.trim();
     if (!email || !email.includes('@')) { showToast('비밀번호를 받을 이메일을 먼저 입력해 주세요.', 'info'); return; }
@@ -3263,6 +4171,70 @@
       return;
     }
     showToast('📨 입력한 이메일로 재설정 안내를 보냈어요.', 'success');
+  }
+
+  function confirmInspectChoice(chosen) {
+    if (!state.player) return;
+    const bundle = syncInspectBundle(state.player.bundle, nodeById(state.player.nodeId), state.run);
+    state.player.bundle = bundle;
+    if (isInspectBundleComplete(bundle)) {
+      saveState();
+      render();
+      return;
+    }
+    const item = bundle.items[bundle.current];
+    if (!item) return;
+    if (chosen !== item.expectedChoice) {
+      tapHaptic('bad');
+      showToast('🔍 전표 번호와 실물 라벨이 같은지 다시 봐 주세요.', 'info');
+      return;
+    }
+    if (!bundle.answers) bundle.answers = [];
+    bundle.answers[bundle.current] = chosen;
+    tapHaptic('ok');
+    if (bundle.current < bundle.total - 1) {
+      bundle.current += 1;
+      state.player.choice = null;
+      if (state.run) {
+        state.run.choice = null;
+        state.run.progress = bundle.current / bundle.total;
+      }
+      showToast(`✅ [${bundle.current}/${bundle.total}건] 대조 완료! 다음 화물을 확인해 주세요.`, 'success');
+    } else {
+      bundle.current = bundle.total;
+      state.player.choice = chosen;
+      if (state.run) {
+        state.run.choice = chosen;
+        state.run.progress = 1;
+      }
+      showToast(`🎉 오늘 배정 물량 ${bundle.total}건 대조를 마쳤어요! [제출하기]를 눌러주세요.`, 'success');
+    }
+    saveState();
+    render();
+  }
+
+  function confirmInspectLabel() {
+    if (!state.player) return;
+    const bundle = syncInspectBundle(state.player.bundle, nodeById(state.player.nodeId), state.run);
+    state.player.bundle = bundle;
+    if (isInspectBundleComplete(bundle)) {
+      saveState();
+      render();
+      return;
+    }
+    const item = bundle.items[bundle.current];
+    if (!item) return;
+    const typed = normalizeTypedLabel(document.getElementById('inspectLabelInput')?.value || '');
+    if (!typed) {
+      showToast('🙂 실물에 적힌 라벨 번호를 입력해 주세요.', 'info');
+      return;
+    }
+    if (typed !== normalizeTypedLabel(item.targetCode)) {
+      tapHaptic('bad');
+      showToast('🔍 실물 라벨 번호를 다시 확인해 주세요.', 'info');
+      return;
+    }
+    confirmInspectChoice(item.expectedChoice);
   }
 
   async function submitSignup(event) {
@@ -3293,14 +4265,29 @@
     const { data, error } = await supabaseClient.auth.signUp({ email, password, options: { data: metadata } });
     if (error) {
       const raw = String(error.message || '');
+      if (/already registered|already been registered|User already registered|already exists/i.test(raw)) {
+        showToast('📬 이 이메일로는 바로 가입되지 않았어요. 로그인하거나 비밀번호 재설정을 이용해 주세요.', 'info');
+        return;
+      }
       showToast(/rate limit|429/i.test(raw) ? '인증 안내 메일이 잠시 제한됐어요. 조금 뒤 다시 가입해 주세요.' : '가입을 완료하지 못했어요. 이메일 주소나 비밀번호를 확인해 주세요.', 'info');
+      return;
+    }
+    const identities = Array.isArray(data?.user?.identities) ? data.user.identities : null;
+    if (data?.user && identities && identities.length === 0) {
+      showToast('📬 이 이메일로는 바로 가입되지 않았어요. 로그인하거나 비밀번호 재설정을 이용해 주세요.', 'info');
       return;
     }
     if (data.session) await hydrateSession(data.session);
     if (data.session && !isAdmin) queueOnboarding();
     state.modal = null;
     render();
-    showToast(data.session ? '🎉 가입이 완료됐어요. 사원증을 확인해 보세요.' : '📨 가입은 완료됐어요. 이메일 인증 후 로그인해 주세요.', 'success');
+    if (data.session) {
+      showToast('🎉 가입이 완료됐어요. 사원증을 확인해 보세요.', 'success');
+    } else if (data?.user && !data.user.email_confirmed_at) {
+      showToast('📨 인증 메일을 보냈어요. 메일함에서 확인해야 가입이 끝나요.', 'success');
+    } else {
+      showToast('📨 가입 요청을 보냈어요. 이메일 인증이 끝나면 로그인해 주세요.', 'success');
+    }
   }
 
   async function submitLogin(event) {
@@ -3358,10 +4345,7 @@
       return;
     }
     if (target.dataset.choice && state.player) {
-      state.player.choice = target.dataset.choice;
-      if (state.run) state.run.choice = target.dataset.choice;
-      saveState();
-      render();
+      confirmInspectChoice(target.dataset.choice);
       return;
     }
     if (target.dataset.notification !== undefined) { openModal('notifications'); return; }
@@ -3381,6 +4365,7 @@
     if (action === 'open-signup') { state.authMode = 'signup'; openModal('auth'); return; }
     if (action === 'open-login') { state.authMode = 'login'; openModal('auth'); return; }
     if (action === 'logout') { signOut(); return; }
+    if (action === 'lock-deposit-info') { lockDepositReveal({ silent: false }); showToast('🔒 입금 안내를 다시 잠갔어요.', 'info'); return; }
     if (action === 'install-app') { installApp(); return; }
     if (action === 'close-modal') {
       if (['balance-adjust', 'member-tier', 'member-block', 'member-reset'].includes(state.modal) && state.adminMemberDetail) {
@@ -3398,7 +4383,7 @@
       }
       if (!isAdmin && state.modal === 'deposit-jump') {
         releaseNamedCanvas('depositJumpMotionCanvas');
-        openModal('deposit');
+        openDepositModal();
         return;
       }
       closeModal();
@@ -3406,13 +4391,13 @@
     }
     if (action === 'back-deposit') {
       releaseNamedCanvas('depositJumpMotionCanvas');
-      openModal('deposit');
+      openDepositModal();
       return;
     }
     if (action === 'open-terms') { openModal('terms'); return; }
     if (action === 'open-privacy') { openModal('privacy'); return; }
     if (action === 'forgot-password') { sendPasswordReset(); return; }
-    if (action === 'deposit-info') { state.depositJump = null; openModal('deposit'); return; }
+    if (action === 'deposit-info') { openDepositModal(); return; }
     if (action === 'withdraw-info') { state.withdrawIntent = 'allowance'; openModal('withdraw'); return; }
     if (action === 'withdraw-allowance') { state.withdrawIntent = 'allowance'; openModal('withdraw'); return; }
     if (action === 'withdraw-principal') { state._playedMotionCue = null; openModal('withdraw-principal'); return; }
@@ -3421,18 +4406,42 @@
     if (action === 'close-start') { releaseNamedCanvas('startMotionCanvas'); state.startNodeId = null; state._playedMotionCue = null; render(); return; }
     if (action === 'confirm-start') { confirmStartWork(); return; }
     if (action === 'submit-player') { submitPlayer(); return; }
+    if (action === 'checkpoint-work') { checkpointWork(); return; }
+    if (action === 'deposit-shortcut') {
+      const needed = Number(target.dataset.amount || 0);
+      state.depositPresetAmount = needed > 0 ? needed : null;
+      state.depositJump = null;
+      if (state.resultScene) {
+        releaseNamedCanvas('resultMotionCanvas');
+        state.resultScene = null;
+      }
+      openDepositModal();
+      return;
+    }
     if (action === 'close-result') { releaseNamedCanvas('resultMotionCanvas'); state.resultScene = null; render(); return; }
     if (action === 'skip-pwa') { releaseNamedCanvas('onboardMotionCanvas'); state.onboardingPwaDone = true; queueOnboarding(); saveState(); render(); return; }
     if (action === 'onboard-install') { installApp(); return; }
     if (action === 'ack-grant') { state.onboardingGrantSeen = true; state.onboardingStep = null; saveState(); render(); showToast('🎁 지원금은 딱 한 번이에요. 근무에 써 주세요.', 'success'); return; }
     if (action === 'open-kyc') { openModal('kyc'); return; }
-    if (action === 'open-run') { if (state.run) { state.run.overlayOpen = true; render(); } return; }
+    if (action === 'open-run') { if (state.run) { overlayDismissed = false; state.run.overlayOpen = true; render(); } return; }
+    if (action === 'open-review-wait') {
+      if (state.reviewWait) { state.reviewWait.overlayOpen = true; render(); }
+      return;
+    }
     if (action === 'close-run') {
-      if (state.run) { state.run.overlayOpen = false; saveState(); render(); showToast('👋 화면을 닫아도 근무는 서버 기준으로 이어져요.', 'info'); }
+      if (state.run) { overlayDismissed = true; state.run.overlayOpen = false; saveState(); render(); showToast('👋 화면을 닫아도 근무는 서버 기준으로 이어져요.', 'info'); }
+      return;
+    }
+    if (action === 'close-review-wait') {
+      if (state.reviewWait) { rememberReviewWaitDismissed(state.reviewWait); state.reviewWait.overlayOpen = false; saveState(); render(); showToast('👋 검수 대기는 서버에 남아 있어요. 새 출근은 아직 할 수 없어요.', 'info'); }
       return;
     }
     if (action === 'copy-referral') { navigator.clipboard?.writeText(referralCode()); showToast(`추천 코드 ${referralCode()}을 복사했어요.`, 'success'); return; }
-    if (action === 'email-check') { const email = document.getElementById('signupEmail')?.value.trim() || ''; showToast(email && email.includes('@') ? '이메일 형식이 올바릅니다. 최종 중복 확인은 가입 단계에서 진행돼요.' : '이메일 주소를 올바르게 입력해 주세요.', email && email.includes('@') ? 'success' : 'info'); return; }
+    if (action === 'email-check') {
+      const email = document.getElementById('signupEmail')?.value.trim() || '';
+      showToast(email && email.includes('@') ? '형식은 괜찮아요. 이미 있는 이메일은 가입 버튼을 눌렀을 때 안내돼요.' : '이메일 주소를 올바르게 입력해 주세요.', 'info');
+      return;
+    }
     if (action === 'export-history') { showToast('작업내역 내려받기는 서버 내보내기 계약이 열린 뒤에 제공돼요.', 'info'); return; }
     if (action === 'faq') { showToast('업무가 진행 중인 경우 서버 기록을 기준으로 이어집니다.', 'info'); return; }
     if (action === 'member-detail') { openMemberDetail(target.dataset.memberId); return; }
@@ -3828,6 +4837,7 @@
         amount: Number(values.amount),
         currency: values.currency || 'KRW',
         proof_path: '',
+        destination_id: values.destination_id || state.depositReveal?.[0]?.id || null,
         note: [values.bank, values.holder].filter(Boolean).join(' · ') || null
       });
       state.depositJump = null;
@@ -4057,6 +5067,16 @@
   document.addEventListener('click', handleClick);
   document.addEventListener('submit', (event) => {
     if (event.target.id === 'signupForm') { submitSignup(event); return; }
+    if (event.target.dataset?.catalogEntry === '1' || event.target.classList?.contains('catalog-entry')) {
+      event.preventDefault();
+      submitPlayer();
+      return;
+    }
+    if (event.target.dataset?.inspectEntry === '1' || event.target.classList?.contains('inspect-entry')) {
+      event.preventDefault();
+      confirmInspectLabel();
+      return;
+    }
     if (event.target.id === 'loginForm') { submitLogin(event); return; }
     if (event.target.id === 'memberSearchForm') {
       event.preventDefault();
@@ -4071,6 +5091,8 @@
     if (event.target.id === 'balanceAdjustForm') { submitBalanceAdjustForm(event); return; }
     if (event.target.id === 'memberTierForm') { submitMemberTierForm(event); return; }
     if (event.target.id === 'memberBlockForm') { submitMemberBlockForm(event); return; }
+    if (event.target.id === 'depositPinSetForm') { submitDepositPinSet(event); return; }
+    if (event.target.id === 'depositPinForm') { submitDepositPin(event); return; }
     if (event.target.id === 'depositForm') { submitDepositForm(event); return; }
     if (event.target.id === 'depositJumpForm') { submitDepositJumpForm(event); return; }
     if (event.target.id === 'withdrawForm') { submitWithdrawForm(event); return; }
@@ -4089,11 +5111,17 @@
     });
   });
   document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+      if (window.PutdukMotion && typeof window.PutdukMotion.stopWorkPhase === 'function') {
+        window.PutdukMotion.stopWorkPhase();
+      }
+      return;
+    }
     if (state.run) {
       updateRunDom(motionSceneCopy(nodeById(state.run.nodeId), state.run.progress));
       drawMotionCanvas();
     }
-    if (!document.hidden && authState.session) {
+    if (authState.session) {
       if (state.modal) {
         if (isAdmin && authState.adminAuthorized) refreshAdminPageData({ silent: true }).catch(() => {});
         return;
@@ -4136,5 +5164,8 @@
 
   initializePwa();
   initializeAuth().then(() => render());
-  render();
+  const overlay = overlayApi();
+  if (overlay && typeof overlay.shouldPaintBootImmediately === 'function'
+    ? overlay.shouldPaintBootImmediately(Boolean(supabaseClient))
+    : !supabaseClient) render();
 })();

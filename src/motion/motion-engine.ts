@@ -94,7 +94,7 @@ export class MotionEngine {
     const hints = readBrowserQualityHints();
     this.quality = this.refreshQuality();
     const workCut = readWorkCut(input);
-    if ((hints.hidden || !this.visible) && !workCut) return;
+    if (hints.hidden || !this.visible) return;
 
     const now = performance.now();
     const minDelta = 1000 / Math.max(1, this.quality.targetFps);
