@@ -1,0 +1,24 @@
+{
+  "ci": {
+    "collect": {
+      "url": ["http://127.0.0.1:4173/"],
+      "numberOfRuns": 1,
+      "settings": {
+        "preset": "desktop",
+        "locale": "ko"
+      }
+    },
+    "assert": {
+      "assertions": {
+        "categories:performance": ["warn", { "minScore": 0.7 }],
+        "categories:accessibility": ["warn", { "minScore": 0.85 }],
+        "categories:best-practices": ["warn", { "minScore": 0.8 }],
+        "categories:pwa": ["warn", { "minScore": 0.5 }]
+      }
+    },
+    "upload": {
+      "target": "filesystem",
+      "outputDir": ".lighthouseci"
+    }
+  }
+}

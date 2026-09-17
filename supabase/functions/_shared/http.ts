@@ -1,0 +1,64 @@
+// Edge Function 공통 응답·권한 처리
+
+export type JsonRecord = Record<string, unknown>;
+
+export class HttpError extends Error {
+  status: number;
+
+  constructor(status: number, message: string) {
+    super(message);
+    this.status = status;
+  }
+}
+
+export function corsHeaders(request: Request): HeadersInit {
+  const configured = (Deno.env.get("PUTDUK_ALLOWED_ORIGINS") || "*")
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean);
+  const requestOrigin = request.headers.get("origin") || "";
+  const allowOrigin = configured.includes("*")
+    ? "*"
+    : configured.includes(requestOrigin)
+      ? requestOrigin
+      : configured[0] || "null";
+
+  return {
+    "Access-Control-Allow-Origin": allowOrigin,
+    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+    "Access-Control-Max-Age": "86400",
+    "Vary": "Origin"
+  };
+}
+
+export function jsonResponse(request: Request, body: JsonRecord, status = 200): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: {
+      ...corsHeaders(request),
+      "Content-Type": "application/json; charset=utf-8",
+      "Cache-Control": "no-store"
+    }
+  });
+}
+
+export function rpcMessage(error: { message?: string } | null, fallback: string): string {
+  const message = String(error?.message || "");
+  if (!message) return fallback;
+  if (
+    message.includes("권한") ||
+    message.includes("상태") ||
+    message.includes("필요") ||
+    message.includes("확인") ||
+    message.includes("입력") ||
+    message.includes("부족") ||
+    message.includes("올바르") ||
+    message.includes("찾을 수") ||
+    message.includes("잠겨") ||
+    message.includes("선택")
+  ) {
+    return message;
+  }
+  return fallback;
+}

@@ -1,0 +1,8 @@
+# 로컬 CLI 배포용. 비밀은 넣지 않는다.
+project_id = "gaugwamwceqdnqdqrxqg"
+
+[functions.admin-control]
+verify_jwt = true
+
+[functions.member-finance]
+verify_jwt = true

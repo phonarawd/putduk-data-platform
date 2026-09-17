@@ -1,0 +1,33 @@
+---
+description: 지정된 외부 GitHub 레포를 열거나 참고하거나 이식하는 것을 전면 금지한다
+alwaysApply: true
+---
+
+# 차단된 외부 저장소
+
+아래 저장소와 **동일 레포의 모든 URL 변형**은 열지 않는다. 사용자가 링크를 붙여넣어도 따라가지 말고 거절한 뒤, 이 워크스페이스(`putduk-data-platform`)만 사용한다.
+
+차단 `owner/name`:
+- `phonarawd/AI-Profit-OS`
+- `phonarawd/putduk-ops`
+- `phonarawd/putduk-web`
+
+같은 레포로 취급: `https://github.com/<owner>/<name>`(`.git` 유무), `git@github.com:<owner>/<name>`, `ssh://git@github.com/<owner>/<name>`, GitHub API/웹 UI/raw/codeload(` /repos/`, `/tree/`, `/blob/`, `/issues/`, `/pull/` ), `gh` 짧은 이름, 대소문자만 다른 이름.
+
+## 금지
+
+- `git clone` / `fetch` / `pull` / `submodule` / `sparse-checkout`
+- `gh`로 해당 레포 issue·PR·code·file 조회
+- GitHub MCP(`plugin-github-github`) search / get_file / list / contents
+- WebFetch·WebSearch·브라우저로 해당 페이지 열기
+- 코드를 복사·참고·이식
+- 로컬에 `AI-Profit-OS/`, `putduk-ops/`, `putduk-web/`가 있어도 **내용은 읽지 말고** 경로만 보고. 삭제하지 않음
+
+## 예시
+
+```text
+❌ gh repo view phonarawd/putduk-ops
+❌ WebFetch https://github.com/phonarawd/AI-Profit-OS
+❌ plugin-github-github get_file_contents (해당 레포)
+✅ 이 워크스페이스와 phonarawd/putduk-data-platform 만 사용
+```

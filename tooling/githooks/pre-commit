@@ -1,0 +1,10 @@
+#!/bin/sh
+# 차단된 외부 레포 URL·사본이 커밋에 들어오면 실패한다.
+set -e
+root="$(git rev-parse --show-toplevel)"
+cd "$root" || exit 1
+if ! command -v node >/dev/null 2>&1; then
+  echo "차단 가드: node가 필요합니다." >&2
+  exit 1
+fi
+exec node tooling/scripts/block-foreign-repos.mjs --staged

@@ -1,0 +1,61 @@
+# 이 워크스페이스 로컬 include 전용. 전역 git config가 아니다.
+# 차단 레포 URL을 죽은 프로토콜로 바꿔 clone/fetch가 실패하게 한다.
+
+[url "blocked://putduk-blocked-source/AI-Profit-OS"]
+	insteadOf = https://github.com/phonarawd/AI-Profit-OS
+	insteadOf = http://github.com/phonarawd/AI-Profit-OS
+	insteadOf = https://www.github.com/phonarawd/AI-Profit-OS
+	insteadOf = http://www.github.com/phonarawd/AI-Profit-OS
+	insteadOf = git@github.com:phonarawd/AI-Profit-OS
+	insteadOf = ssh://git@github.com/phonarawd/AI-Profit-OS
+	insteadOf = ssh://github.com/phonarawd/AI-Profit-OS
+	insteadOf = git://github.com/phonarawd/AI-Profit-OS
+	insteadOf = git+https://github.com/phonarawd/AI-Profit-OS
+	insteadOf = git+ssh://git@github.com/phonarawd/AI-Profit-OS
+	insteadOf = https://api.github.com/repos/phonarawd/AI-Profit-OS
+	insteadOf = http://api.github.com/repos/phonarawd/AI-Profit-OS
+	insteadOf = https://raw.githubusercontent.com/phonarawd/AI-Profit-OS
+	insteadOf = https://codeload.github.com/phonarawd/AI-Profit-OS
+	insteadOf = https://github.com/phonarawd/ai-profit-os
+	insteadOf = http://github.com/phonarawd/ai-profit-os
+	insteadOf = https://www.github.com/phonarawd/ai-profit-os
+	insteadOf = git@github.com:phonarawd/ai-profit-os
+	insteadOf = ssh://git@github.com/phonarawd/ai-profit-os
+	insteadOf = git://github.com/phonarawd/ai-profit-os
+	insteadOf = git+https://github.com/phonarawd/ai-profit-os
+	insteadOf = git+ssh://git@github.com/phonarawd/ai-profit-os
+	insteadOf = https://api.github.com/repos/phonarawd/ai-profit-os
+	insteadOf = https://raw.githubusercontent.com/phonarawd/ai-profit-os
+	insteadOf = https://codeload.github.com/phonarawd/ai-profit-os
+
+[url "blocked://putduk-blocked-source/putduk-ops"]
+	insteadOf = https://github.com/phonarawd/putduk-ops
+	insteadOf = http://github.com/phonarawd/putduk-ops
+	insteadOf = https://www.github.com/phonarawd/putduk-ops
+	insteadOf = http://www.github.com/phonarawd/putduk-ops
+	insteadOf = git@github.com:phonarawd/putduk-ops
+	insteadOf = ssh://git@github.com/phonarawd/putduk-ops
+	insteadOf = ssh://github.com/phonarawd/putduk-ops
+	insteadOf = git://github.com/phonarawd/putduk-ops
+	insteadOf = git+https://github.com/phonarawd/putduk-ops
+	insteadOf = git+ssh://git@github.com/phonarawd/putduk-ops
+	insteadOf = https://api.github.com/repos/phonarawd/putduk-ops
+	insteadOf = http://api.github.com/repos/phonarawd/putduk-ops
+	insteadOf = https://raw.githubusercontent.com/phonarawd/putduk-ops
+	insteadOf = https://codeload.github.com/phonarawd/putduk-ops
+
+[url "blocked://putduk-blocked-source/putduk-web"]
+	insteadOf = https://github.com/phonarawd/putduk-web
+	insteadOf = http://github.com/phonarawd/putduk-web
+	insteadOf = https://www.github.com/phonarawd/putduk-web
+	insteadOf = http://www.github.com/phonarawd/putduk-web
+	insteadOf = git@github.com:phonarawd/putduk-web
+	insteadOf = ssh://git@github.com/phonarawd/putduk-web
+	insteadOf = ssh://github.com/phonarawd/putduk-web
+	insteadOf = git://github.com/phonarawd/putduk-web
+	insteadOf = git+https://github.com/phonarawd/putduk-web
+	insteadOf = git+ssh://git@github.com/phonarawd/putduk-web
+	insteadOf = https://api.github.com/repos/phonarawd/putduk-web
+	insteadOf = http://api.github.com/repos/phonarawd/putduk-web
+	insteadOf = https://raw.githubusercontent.com/phonarawd/putduk-web
+	insteadOf = https://codeload.github.com/phonarawd/putduk-web

@@ -1,0 +1,58 @@
+name: Supabase 배포
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "supabase/migrations/**"
+      - "supabase/functions/**"
+      - ".github/workflows/supabase-deploy.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: putduk-supabase-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: 마이그레이션·Edge Function 배포
+    runs-on: ubuntu-latest
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+      SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+    steps:
+      - name: 저장소 가져오기
+        uses: actions/checkout@v4
+
+      - name: Supabase CLI 준비
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: 프로젝트 연결
+        run: supabase link --project-ref "$SUPABASE_PROJECT_REF"
+
+      - name: 데이터베이스 마이그레이션
+        run: supabase db push
+
+      - name: Edge Function 시크릿 반영
+        env:
+          PUTDUK_ALLOWED_ORIGINS: ${{ secrets.PUTDUK_ALLOWED_ORIGINS }}
+        run: |
+          if [ -n "$PUTDUK_ALLOWED_ORIGINS" ]; then
+            supabase secrets set PUTDUK_ALLOWED_ORIGINS="$PUTDUK_ALLOWED_ORIGINS" --project-ref "$SUPABASE_PROJECT_REF"
+          fi
+
+      - name: Edge Function 배포
+        run: |
+          supabase functions deploy admin-control --project-ref "$SUPABASE_PROJECT_REF"
+          supabase functions deploy member-finance --project-ref "$SUPABASE_PROJECT_REF"
+
+      - name: 헬스체크
+        run: node scripts/automation/health-check.mjs
+        env:
+          SUPABASE_URL: https://${{ secrets.SUPABASE_PROJECT_REF }}.supabase.co

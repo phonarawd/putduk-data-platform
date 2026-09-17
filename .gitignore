@@ -1,0 +1,30 @@
+# 의존성과 로컬 산출물
+node_modules/
+.turbo/
+.pnpm-store/
+
+# 테스트·성능 리포트
+playwright-report/
+test-results/
+blob-report/
+.lighthouseci/
+coverage/
+
+# 환경 비밀. 예시는 추적한다.
+.env
+.env.*
+!.env.example
+
+# Supabase CLI 로컬 캐시
+supabase/.temp/
+
+# 로그·OS
+*.log
+.DS_Store
+Thumbs.db
+_wu_cleanup.log
+
+# 차단된 외부 레포 사본. 내용을 읽거나 커밋하지 않는다.
+AI-Profit-OS/
+putduk-ops/
+putduk-web/

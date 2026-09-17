@@ -1,0 +1,52 @@
+name: 퍼뜩 릴리스 확인
+
+on:
+  workflow_dispatch:
+    inputs:
+      deploy:
+        description: Cloudflare Pages까지 배포할지 여부
+        required: true
+        default: 'false'
+        type: choice
+        options:
+          - 'false'
+          - 'true'
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    name: 검증 후 선택 배포
+    runs-on: ubuntu-latest
+    steps:
+      - name: 저장소 가져오기
+        uses: actions/checkout@v4
+
+      - name: pnpm 준비
+        uses: pnpm/action-setup@v4
+        with:
+          version: 12.4.2
+
+      - name: Node.js 준비
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: 의존성 설치
+        run: pnpm install --frozen-lockfile
+
+      - name: 로컬 릴리스 검증
+        run: pnpm release:deploy
+
+      - name: 릴리스 초안
+        run: pnpm release:notes
+
+      - name: Cloudflare 배포
+        if: ${{ inputs.deploy == 'true' }}
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_PAGES_PROJECT: ${{ secrets.CLOUDFLARE_PAGES_PROJECT }}
+        run: pnpm release:deploy -- --deploy

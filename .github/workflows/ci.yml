@@ -14,7 +14,7 @@ concurrency:
 
 jobs:
   verify:
-    name: 정적 파일·워크스페이스 확인
+    name: 정적 파일·테스트·보안 확인
     runs-on: ubuntu-latest
     steps:
       - name: 저장소 가져오기
@@ -36,3 +36,24 @@ jobs:
 
       - name: 출시 파일 확인
         run: pnpm verify
+
+      - name: 문법 확인
+        run: pnpm typecheck
+
+      - name: 단위 테스트
+        run: pnpm test
+
+      - name: 정적 E2E
+        run: pnpm test:e2e
+
+      - name: 접근성 정적 검사
+        run: pnpm test:a11y
+
+      - name: 보안 검사
+        run: pnpm security:scan
+
+      - name: 성능 설정 검사
+        run: pnpm test:performance
+
+      - name: 로컬 헬스체크
+        run: pnpm healthcheck

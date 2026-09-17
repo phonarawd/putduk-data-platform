@@ -1,5 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.0";
+import { handleOpsAction } from "../_shared/admin-ops.ts";
 
 type JsonRecord = Record<string, unknown>;
 
@@ -54,6 +55,12 @@ function corsHeaders(request: Request): HeadersInit {
     "Access-Control-Max-Age": "86400",
     "Vary": "Origin"
   };
+}
+
+function httpErrorStatus(error: unknown): number | null {
+  if (!error || typeof error !== "object") return null;
+  const status = (error as { status?: unknown }).status;
+  return typeof status === "number" && status >= 400 && status < 600 ? status : null;
 }
 
 function jsonResponse(request: Request, body: JsonRecord, status = 200): Response {
@@ -162,11 +169,11 @@ async function listCatalog() {
   const [brandResult, nodeResult] = await Promise.all([
     admin
       .from("partner_brands")
-      .select("id,slug,display_name_ko,legal_name,category,verification_status,verification_note,logo_asset_path,logo_usage_status,published,created_at,updated_at")
+      .select("id,slug,display_name_ko,legal_name,category,description_ko,verification_status,verification_note,logo_asset_path,photo_asset_path,logo_usage_status,published,created_at,updated_at")
       .order("display_name_ko", { ascending: true }),
     admin
       .from("nodes")
-      .select("id,public_id,partner_brand_id,title_ko,description_ko,node_family,difficulty,estimated_seconds,reward_min,reward_max,daily_capacity,enabled,motion_profile,motion_version,supply_source,catalog_status,published_at,published_by,created_at,updated_at")
+      .select("id,public_id,partner_brand_id,title_ko,description_ko,node_family,difficulty,estimated_seconds,reward_min,reward_max,daily_capacity,enabled,motion_profile,motion_version,allowed_tiers,scene_theme,vehicle_type,route_type,particle_style,completion_effect,supply_source,catalog_status,published_at,published_by,created_at,updated_at")
       .order("created_at", { ascending: false })
   ]);
 
@@ -346,6 +353,8 @@ async function updateBrand(userId: string, payload: JsonRecord, action: "update"
     const logoPath = textValue(payload.logo_asset_path ?? before.logo_asset_path, "로고 파일 경로", 500, false);
     if (!logoPath) throw new HttpError(400, "승인 전에 로고 파일 경로를 등록해 주세요.");
     patch.logo_asset_path = logoPath;
+    const photoPath = textValue(payload.photo_asset_path ?? before.photo_asset_path, "사진 파일 경로", 500, false);
+    if (photoPath) patch.photo_asset_path = photoPath;
     patch.published = false;
   } else if (action === "publish") {
     if (before.verification_status !== "approved" || before.logo_usage_status !== "approved" || !before.logo_asset_path) {
@@ -359,6 +368,7 @@ async function updateBrand(userId: string, payload: JsonRecord, action: "update"
     if (payload.logo_usage_status !== undefined) patch.logo_usage_status = logoUsageStatus(payload.logo_usage_status);
     if (payload.verification_note !== undefined) patch.verification_note = textValue(payload.verification_note, "확인 메모", 1000, false);
     if (payload.logo_asset_path !== undefined) patch.logo_asset_path = textValue(payload.logo_asset_path, "로고 파일 경로", 500, false);
+    if (payload.photo_asset_path !== undefined) patch.photo_asset_path = textValue(payload.photo_asset_path, "사진 파일 경로", 500, false);
     if (payload.published !== undefined) {
       if (Boolean(payload.published)) {
         if (before.verification_status !== "approved" || before.logo_usage_status !== "approved" || !before.logo_asset_path) {
@@ -375,7 +385,7 @@ async function updateBrand(userId: string, payload: JsonRecord, action: "update"
     .from("partner_brands")
     .update(patch)
     .eq("id", brandId)
-    .select("id,slug,display_name_ko,legal_name,category,verification_status,verification_note,logo_asset_path,logo_usage_status,published,created_at,updated_at")
+    .select("id,slug,display_name_ko,legal_name,category,verification_status,verification_note,logo_asset_path,photo_asset_path,logo_usage_status,published,created_at,updated_at")
     .single();
 
   if (error || !data) {
@@ -421,6 +431,9 @@ async function createNode(userId: string, payload: JsonRecord) {
   const dailyCapacity = numberValue(payload.daily_capacity ?? 0, "하루 처리 한도", 0, 1000000);
   const motionProfile = textValue(payload.motion_profile || "default", "연출 프로필", 80);
   const motionVersion = textValue(payload.motion_version || "1.0.0", "연출 버전", 40);
+  const allowedTiers = Array.isArray(payload.allowed_tiers)
+    ? payload.allowed_tiers.map((value) => String(value).trim()).filter(Boolean)
+    : [];
 
   const insertPayload = {
     public_id: `PDK-NODE-${crypto.randomUUID().slice(0, 8).toUpperCase()}`,
@@ -436,6 +449,12 @@ async function createNode(userId: string, payload: JsonRecord) {
     enabled: false,
     motion_profile: motionProfile,
     motion_version: motionVersion,
+    allowed_tiers: allowedTiers,
+    scene_theme: textValue(payload.scene_theme, "장면 테마", 80, false),
+    vehicle_type: textValue(payload.vehicle_type, "이동 수단", 80, false),
+    route_type: textValue(payload.route_type, "경로 종류", 80, false),
+    particle_style: textValue(payload.particle_style, "파티클 스타일", 80, false),
+    completion_effect: textValue(payload.completion_effect, "완료 효과", 80, false),
     supply_source: "operator",
     catalog_status: "draft"
   };
@@ -470,6 +489,16 @@ async function updateNode(userId: string, payload: JsonRecord) {
   if (payload.daily_capacity !== undefined) patch.daily_capacity = numberValue(payload.daily_capacity, "하루 처리 한도", 0, 1000000);
   if (payload.motion_profile !== undefined) patch.motion_profile = textValue(payload.motion_profile, "연출 프로필", 80);
   if (payload.motion_version !== undefined) patch.motion_version = textValue(payload.motion_version, "연출 버전", 40);
+  if (payload.allowed_tiers !== undefined) {
+    patch.allowed_tiers = Array.isArray(payload.allowed_tiers)
+      ? payload.allowed_tiers.map((value) => String(value).trim()).filter(Boolean)
+      : [];
+  }
+  if (payload.scene_theme !== undefined) patch.scene_theme = textValue(payload.scene_theme, "장면 테마", 80, false);
+  if (payload.vehicle_type !== undefined) patch.vehicle_type = textValue(payload.vehicle_type, "이동 수단", 80, false);
+  if (payload.route_type !== undefined) patch.route_type = textValue(payload.route_type, "경로 종류", 80, false);
+  if (payload.particle_style !== undefined) patch.particle_style = textValue(payload.particle_style, "파티클 스타일", 80, false);
+  if (payload.completion_effect !== undefined) patch.completion_effect = textValue(payload.completion_effect, "완료 효과", 80, false);
 
   if (payload.catalog_status !== undefined) {
     const status = catalogStatus(payload.catalog_status);
@@ -510,7 +539,7 @@ async function updateNode(userId: string, payload: JsonRecord) {
   return data;
 }
 
-async function updateNodeStatus(userId: string, payload: JsonRecord, status: "published" | "paused" | "archived") {
+async function updateNodeStatus(userId: string, payload: JsonRecord, status: "published" | "paused" | "archived" | "draft") {
   const nodeId = assertUuid(payload.node_id, "업무 카드");
   const before = await getNode(nodeId);
   const { data, error } = await admin
@@ -527,7 +556,7 @@ async function updateNodeStatus(userId: string, payload: JsonRecord, status: "pu
 
   await appendAudit(
     userId,
-    status === "published" ? "업무 카드 공개" : status === "paused" ? "업무 카드 일시중지" : "업무 카드 보관",
+    status === "published" ? "업무 카드 공개" : status === "paused" ? "업무 카드 일시중지" : status === "draft" ? "업무 카드 복구" : "업무 카드 보관",
     "node",
     nodeId,
     textValue(payload.reason, "사유", 240, false),
@@ -567,6 +596,20 @@ Deno.serve(async (request: Request) => {
         email: user.email || null,
         roles
       });
+    }
+
+    if (action === "record_session") {
+      const forwarded = request.headers.get("x-forwarded-for") || request.headers.get("cf-connecting-ip") || "";
+      const ip = forwarded.split(",")[0]?.trim() || null;
+      const { error } = await admin.rpc("putduk_member_record_session", {
+        p_user_id: user.id,
+        p_ip: ip
+      });
+      if (error) {
+        console.error("record session failed", error);
+        throw new HttpError(503, "접속 기록을 남기지 못했습니다.");
+      }
+      return jsonResponse(request, { ok: true });
     }
 
     if (action === "catalog" || action === "list_catalog") {
@@ -610,15 +653,27 @@ Deno.serve(async (request: Request) => {
       return jsonResponse(request, { ok: true, node: await updateNode(user.id, payload) });
     }
 
-    if (action === "publish_node" || action === "pause_node" || action === "archive_node") {
+    if (action === "publish_node" || action === "pause_node" || action === "archive_node" || action === "restore_node") {
       await requireRole(user.id, contentRoles);
-      const status = action === "publish_node" ? "published" : action === "pause_node" ? "paused" : "archived";
+      const status = action === "publish_node"
+        ? "published"
+        : action === "pause_node"
+          ? "paused"
+          : action === "restore_node"
+            ? "draft"
+            : "archived";
       return jsonResponse(request, { ok: true, node: await updateNodeStatus(user.id, payload, status) });
     }
 
+    const ops = await handleOpsAction(admin, user, action, payload);
+    if (ops) return jsonResponse(request, ops.body, ops.status || 200);
+
     throw new HttpError(404, "지원하지 않는 운영 메뉴입니다.");
   } catch (error) {
-    if (error instanceof HttpError) return jsonResponse(request, { ok: false, error: error.message }, error.status);
+    const status = httpErrorStatus(error);
+    if (status != null) {
+      return jsonResponse(request, { ok: false, error: (error as Error).message }, status);
+    }
     console.error("admin-control error", error);
     return jsonResponse(request, { ok: false, error: "운영 요청을 처리하지 못했습니다." }, 500);
   }
