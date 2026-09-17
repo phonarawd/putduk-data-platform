@@ -14,9 +14,27 @@ const mimeTypes = {
   '.txt': 'text/plain; charset=utf-8'
 };
 
-function resolveSafe(root, requestUrl) {
+function isOpsStaticPath(pathname) {
+  return pathname.startsWith('/assets/')
+    || pathname.startsWith('/icons/')
+    || pathname.startsWith('/admin/')
+    || pathname === '/admin'
+    || pathname === '/sw.js'
+    || pathname === '/manifest.webmanifest'
+    || pathname === '/favicon.svg'
+    || pathname === '/_headers'
+    || pathname === '/_redirects';
+}
+
+function resolveSafe(root, requestUrl, { opsMode = false } = {}) {
   const url = new URL(requestUrl, 'http://127.0.0.1');
   let pathname = decodeURIComponent(url.pathname);
+  if (pathname === '/admin') pathname = '/admin/';
+  if (opsMode) {
+    if (!isOpsStaticPath(pathname) || pathname === '/' || pathname === '' || pathname === '/index.html') {
+      pathname = '/admin/';
+    }
+  }
   if (pathname.endsWith('/')) pathname += 'index.html';
   const resolved = normalize(join(root, pathname));
   const rel = relative(root, resolved);
@@ -24,10 +42,10 @@ function resolveSafe(root, requestUrl) {
   return resolved;
 }
 
-export function startStaticServer(root, { host = '127.0.0.1', port = 0 } = {}) {
+export function startStaticServer(root, { host = '127.0.0.1', port = 0, opsMode = false } = {}) {
   const server = createServer(async (request, response) => {
     try {
-      const filePath = resolveSafe(root, request.url || '/');
+      const filePath = resolveSafe(root, request.url || '/', { opsMode });
       if (!filePath) {
         response.writeHead(403).end('Forbidden');
         return;
@@ -60,7 +78,10 @@ export function startStaticServer(root, { host = '127.0.0.1', port = 0 } = {}) {
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'dist');
-  const port = Number(process.env.PORT || 4173);
-  const started = await startStaticServer(root, { port });
-  console.log(`정적 dist 서버: ${started.url}`);
+  const memberPort = Number(process.env.PORT || 4173);
+  const opsPort = Number(process.env.OPS_PORT || 4174);
+  const member = await startStaticServer(root, { port: memberPort, opsMode: false });
+  const ops = await startStaticServer(root, { port: opsPort, opsMode: true });
+  console.log(`회원 dist: ${member.url}`);
+  console.log(`운영자 dist: ${ops.url}/admin/`);
 }

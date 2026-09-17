@@ -38,6 +38,8 @@ const requiredStatic = [
   'dist/admin/index.html',
   'dist/assets/app.js',
   'dist/assets/app.css',
+  'dist/assets/overlay-surface.js',
+  'dist/assets/overlay-surface.css',
   'dist/manifest.webmanifest',
   'dist/sw.js',
   'dist/favicon.svg',
@@ -49,7 +51,7 @@ const missingStatic = [];
 for (const file of requiredStatic) {
   if (!(await exists(file))) missingStatic.push(file);
 }
-items.push(result('static-files', '배포', '정적 출시 파일', missingStatic.length === 0, missingStatic.join(', ') || '12개 파일 확인', 'hard'));
+items.push(result('static-files', '배포', '정적 출시 파일', missingStatic.length === 0, missingStatic.join(', ') || `${requiredStatic.length}개 파일 확인`, 'hard'));
 items.push(result('lang-ko', 'UI', '회원·운영자 lang=ko', memberHtml.includes('lang="ko"') && adminHtml.includes('lang="ko"'), '문서 언어', 'hard'));
 items.push(result('work-member-open', '근무', '회원 enableWorkApi=true', /enableWorkApi:\s*true/.test(memberHtml) && !/enableWorkApi:\s*false/.test(memberHtml), '회원 dist 실근무 열림', 'hard'));
 items.push(result('work-admin-lock', '잠금', '운영자 enableWorkApi=false', /enableWorkApi:\s*false/.test(adminHtml) && !/enableWorkApi:\s*true/.test(adminHtml), '운영자 셸은 회원 근무 플래그를 켜지 않음', 'hard'));
@@ -93,7 +95,8 @@ items.push(result(
     && (await exists('supabase/migrations/20260917115028_trial_ops_withdraw_and_activate_confirmed.sql'))
     && (await exists('supabase/migrations/20260917120157_task_events_after_start.sql'))
     && (await exists('supabase/migrations/20260917120956_trial_ops_withdraw.sql'))
-    && (await exists('supabase/migrations/20260917144749_putduk_member_submit_work.sql')),
+    && (await exists('supabase/migrations/20260917144749_putduk_member_submit_work.sql'))
+    && (await exists('supabase/migrations/20260918033000_putduk_inspect_bundle_submit.sql')),
   '원격과 같은 버전. 중복 push 없음'
 ));
 items.push(result('kyc-bucket-code', 'DB', 'KYC 버킷 마이그레이션 문구', (await exists('supabase/migrations/20260916233653_putduk_ops_finance_schema.sql')) && (await read('supabase/migrations/20260916233653_putduk_ops_finance_schema.sql')).includes('putduk-private'), '원격 storage.buckets는 아직 비어 있었음'));

@@ -19,7 +19,9 @@ const required = [
   "supabase/migrations/20260917115028_trial_ops_withdraw_and_activate_confirmed.sql",
   "supabase/migrations/20260917120157_task_events_after_start.sql",
   "supabase/migrations/20260917120956_trial_ops_withdraw.sql",
-  "supabase/migrations/20260917144749_putduk_member_submit_work.sql"
+  "supabase/migrations/20260917144749_putduk_member_submit_work.sql",
+  "supabase/migrations/20260918033000_putduk_inspect_bundle_submit.sql",
+  "supabase/migrations/20260918061600_putduk_catalog_checkpoint_submit.sql"
 ];
 
 const missing = required.filter((file) => !existsSync(path.join(root, file)));
