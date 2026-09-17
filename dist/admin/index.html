@@ -16,9 +16,11 @@
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="color-scheme" content="light dark" />
     <title>퍼뜩 · 운영자 관리센터</title>
+    <script src="../assets/origin-split.js?v=20260918-pin1"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <script>tailwind.config = { theme: { extend: { fontFamily: { sans: ['Pretendard', 'Noto Sans KR', 'Apple SD Gothic Neo', 'sans-serif'] } } } };</script>
-    <link rel="stylesheet" href="../assets/app.css?v=20260918-idcard1" />
+    <link rel="stylesheet" href="../assets/app.css?v=20260918-flash2" />
+    <link rel="stylesheet" href="../assets/overlay-surface.css?v=20260918-flash2" />
     <link rel="stylesheet" href="./admin.css?v=20260917-ops5" />
     <script src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
@@ -31,11 +33,14 @@
         supabaseUrl: 'https://gaugwamwceqdnqdqrxqg.supabase.co',
         supabasePublishableKey: 'sb_publishable_gQehI4oD_qQm2MEtZ1-OpQ_wLY1SFBb',
         enableWorkApi: false,
-        enableFinanceApi: false
+        enableFinanceApi: false,
+        memberOrigin: 'https://app.hiptk.app',
+        opsOrigin: 'https://ops.hiptk.app'
       };
     </script>
-    <script src="../assets/motion-runtime.js?v=20260917-cinematic6"></script>
-    <script src="../assets/app.js?v=20260918-idcard1"></script>
-    <script src="./admin.js?v=20260917-ops5"></script>
+    <script src="../assets/motion-runtime.js?v=20260918-flash2"></script>
+    <script src="../assets/overlay-surface.js?v=20260918-flash2"></script>
+    <script src="../assets/app.js?v=20260918-flash2"></script>
+    <script src="./admin.js?v=20260918-pin1"></script>
   </body>
 </html>

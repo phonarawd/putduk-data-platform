@@ -10,8 +10,49 @@
   }
 
   function money(value) {
-    if (core()?.money) return core().money(value);
-    return `${Number(value || 0).toLocaleString('ko-KR')}원`;
+    if (value == null || value === '') return '확인 필요';
+    const amount = Number(value);
+    if (!Number.isFinite(amount)) return '확인 필요';
+    return `${Math.round(amount).toLocaleString('ko-KR')}원`;
+  }
+
+  function maskEmail(value) {
+    const email = String(value || '').trim();
+    if (!email) return '-';
+    if (email.includes('*')) return email;
+    const at = email.indexOf('@');
+    if (at < 1) return '***';
+    return `${email.slice(0, Math.min(2, at))}***@${email.slice(at + 1)}`;
+  }
+
+  function maskPhone(value) {
+    const raw = String(value || '').trim();
+    if (!raw) return '-';
+    if (raw.includes('*')) return raw;
+    const digits = raw.replace(/\D/g, '');
+    if (!digits) return '-';
+    const local = digits.startsWith('82') ? `0${digits.slice(2)}` : digits;
+    if (local.length === 11) return `${local.slice(0, 3)}-****-${local.slice(-4)}`;
+    return '****';
+  }
+
+  function maskIp(value) {
+    const ip = String(value || '').trim();
+    if (!ip || ip === '-') return '-';
+    if (ip.includes('*')) return ip;
+    const parts = ip.split('.');
+    if (parts.length !== 4) return '****';
+    return `${parts[0]}.***.***.${parts[3]}`;
+  }
+
+  function maskPersonName(value) {
+    const raw = String(value || '').trim();
+    if (!raw) return '-';
+    if (raw.includes('*')) return raw;
+    const chars = [...raw];
+    if (chars.length === 1) return '*';
+    if (chars.length === 2) return `${chars[0]}*`;
+    return `${chars[0]}${'*'.repeat(chars.length - 2)}${chars[chars.length - 1]}`;
   }
 
   function esc(value) {
@@ -223,6 +264,10 @@
   }
 
   function choiceLine(item, raw) {
+    const inspectLabel = String(item?.member_choice_label || '').trim();
+    if (item?.inspect_ok === true || /건 정상 검수/.test(inspectLabel)) {
+      return inspectLabel || '오늘 배정 물량 5건 정상 검수';
+    }
     const value = String(raw || item?.member_choice || '').trim().toLowerCase();
     const a = String(item?.choice_a_ko || '').trim();
     const b = String(item?.choice_b_ko || '').trim();
@@ -311,7 +356,7 @@
     const api = core();
     if (!api) return null;
     const state = api.getState();
-    const finance = state.adminFinance || { deposits: [], withdrawals: [], kyc: [], referrals: [] };
+    const finance = state.adminFinance || { deposits: [], withdrawals: [], kyc: [], referrals: [], destinations: [] };
     const withdrawals = Array.isArray(finance.withdrawals) ? finance.withdrawals : [];
     const wait = withdrawals.filter((row) => ['submitted', 'checking', 'approved'].includes(row.status)).length;
     const contractNote = state.adminFinanceContract === false
@@ -351,6 +396,15 @@
         : `<span style="color:var(--muted);font-size:12px">처리 끝</span>`;
       return `<tr><td>${esc(item.member_public_id || item.member_name || '-')}</td><td>${money(item.amount)}</td><td>${esc(item.status === 'approved' ? '확인' : item.status === 'rejected' ? '반려' : '대기')}</td><td>${actions}</td></tr>`;
     }).join('') || `<tr><td colspan="4"><div class="empty-state compact"><strong>입금 확인 대기가 없어요.</strong></div></td></tr>`;
+    const destinations = Array.isArray(finance.destinations) ? finance.destinations : [];
+    const destRows = destinations.map((item) => {
+      const kind = String(item.destination_type || '') === 'usdt' ? 'USDT' : '원화 계좌';
+      const line = [item.bank_name, item.account_holder, item.masked_value, item.usdt_network].filter(Boolean).join(' · ') || '확인 필요';
+      return `<tr><td>${esc(item.label || kind)}</td><td>${esc(kind)}</td><td>${esc(line)}<br><span style="color:var(--muted);font-size:11px">버전 ${Number(item.info_version || 1)} · ${item.address_mode === 'operator_fixed' || kind === 'USDT' ? '고정 주소' : '원화'}</span></td><td><span class="pill ${item.enabled === false ? 'wait' : 'ok'}">${item.enabled === false ? '숨김' : '회원 표시'}</span><div class="action-row"><button type="button" class="small-button" data-action="edit-payout-destination" data-destination-id="${esc(item.id)}">수정</button></div></td></tr>`;
+    }).join('') || `<tr><td colspan="4"><div class="empty-state compact"><strong>등록된 입금 계좌가 없어요.</strong><p>원문 계좌·USDT를 저장하면, 회원은 PIN 뒤에만 볼 수 있어요.</p></div></td></tr>`;
+    const pinAudit = Array.isArray(finance.pin_audit) ? finance.pin_audit : [];
+    const pinRows = pinAudit.map((item) => `<tr><td>${esc(item.event || '-')}</td><td>${esc(item.scope || '-')}</td><td>${item.created_at ? new Date(item.created_at).toLocaleString('ko-KR') : '-'}</td></tr>`).join('')
+      || `<tr><td colspan="3"><div class="empty-state compact"><strong>보안 PIN 기록이 아직 없어요.</strong></div></td></tr>`;
     return `<div class="section-heading" style="margin-top:0"><div><h1 class="page-title">입출금 처리</h1><p class="page-copy">출금은 완료 한 번으로 바로 처리해요. 회원 잔액은 서버가 바꿉니다.</p></div>${seedButtons('finance', state.adminFinanceLoading)}</div>${contractNote}${error}
       <div class="admin-stat-grid">
         <div class="admin-stat"><p>출금 신청</p><strong>${wait}</strong><span style="color:var(--gold)">바로 완료 가능</span></div>
@@ -362,6 +416,33 @@
       </div>
       <div class="admin-card"><div class="admin-card-head"><div><h3>입금 확인</h3><p>입금은 확인 후 회원 잔액에 반영돼요.</p></div></div>
         <div class="table-wrap"><table><thead><tr><th>사원번호</th><th>금액</th><th>상태</th><th></th></tr></thead><tbody>${depositRows}</tbody></table></div>
+      </div>
+      <div class="admin-card"><div class="admin-card-head"><div><h3>입금 안내 설정</h3><p>원화 계좌와 USDT(고정 TRC20) 원문을 저장해요. 회원은 보안 PIN 뒤에만 보고, 화면만 바꾸면 입금 추적이 깨져요. 같은 안내를 수정하면 버전이 올라갑니다.</p></div></div>
+        <div class="table-wrap"><table><thead><tr><th>이름</th><th>종류</th><th>안내</th><th>표시</th></tr></thead><tbody>${destRows}</tbody></table></div>
+        <form id="payoutDestinationForm" class="form-grid" style="margin-top:16px">
+          <input type="hidden" name="destination_id" value="" />
+          <div class="field"><label>종류</label><select name="destination_type"><option value="bank">원화 계좌</option><option value="usdt">USDT 고정 주소</option></select></div>
+          <div class="field"><label>표시 이름</label><input name="label" maxlength="80" placeholder="예: 퍼뜩 입금 계좌" /></div>
+          <div class="field"><label>은행명</label><input name="bank_name" maxlength="80" placeholder="예: 국민은행" /></div>
+          <div class="field"><label>예금주</label><input name="account_holder" maxlength="80" placeholder="예금주 이름" /></div>
+          <div class="field full"><label>계좌번호 (원화 원문)</label><input name="account_number" maxlength="80" placeholder="숫자 원문. 회원 화면에는 PIN 뒤에만 보여요" /></div>
+          <div class="field"><label>USDT 네트워크</label><input name="usdt_network" maxlength="40" placeholder="TRC20" value="TRC20" /></div>
+          <div class="field full"><label>USDT 주소 (고정)</label><input name="usdt_address" maxlength="200" placeholder="운영자 고정 TRC20. 회원별 자동생성 아님" /></div>
+          <div class="field full"><label>QR 이미지 경로</label><input name="qr_asset_path" maxlength="500" placeholder="putduk-private 경로. 없으면 회원 화면에서 주소 QR을 만들어요" /></div>
+          <div class="field full"><label>메모</label><input name="memo" maxlength="500" placeholder="회원에게 PIN 뒤에 보여줄 한 줄" /></div>
+          <div class="field full"><label>안내 문구</label><input name="guidance_text" maxlength="1000" placeholder="입금 후 확인 요청을 남겨 주세요" /></div>
+          <div class="field full"><label>변경 사유</label><input name="change_reason" maxlength="500" placeholder="계좌·주소를 바꾸면 필수" /></div>
+          <label class="check-row field full"><input type="checkbox" name="enabled" checked /> 회원 입금 화면에 바로 보여요</label>
+          <div class="modal-actions field full"><button class="primary-button" type="submit">입금 안내 저장</button></div>
+        </form>
+      </div>
+      <div class="admin-card"><div class="admin-card-head"><div><h3>보안 PIN 재설정</h3><p>운영자는 PIN 원문을 볼 수 없어요. 재설정만 하면 회원이 다시 만듭니다.</p></div></div>
+        <form id="securityPinResetForm" class="form-grid">
+          <div class="field"><label>회원</label>${memberPickerHtml()}</div>
+          <div class="field full"><label>사유</label><input name="reason" required maxlength="500" placeholder="재설정 사유" /></div>
+          <div class="modal-actions field full"><button class="primary-button" type="submit">PIN 재설정</button></div>
+        </form>
+        <div class="table-wrap" style="margin-top:16px"><table><thead><tr><th>기록</th><th>범위</th><th>시각</th></tr></thead><tbody>${pinRows}</tbody></table></div>
       </div>`;
   }
 
@@ -452,7 +533,7 @@
         ${item.question_prompt_ko ? `<p class="review-prompt">${esc(item.question_prompt_ko)}</p>` : ''}
         <div class="review-picks">
           <div><span>회원이 고른 보기</span><strong>${esc(memberPick || '제출 보기 없음')}</strong></div>
-          <div class="review-answer-ops"><span>운영자만 보는 정답</span><strong>${esc(correctText)}</strong></div>
+          <div class="review-answer-ops"><span>운영자만 보는 정답</span><strong>${esc(item.inspect_ok ? '전표·실물 5건 일치 여부' : correctText)}</strong></div>
         </div>
         ${actions}
       </article>`;
@@ -593,6 +674,77 @@
     }
   }
 
+  async function savePayoutDestination(event) {
+    const api = wrapCore();
+    if (!api) return;
+    const form = event.target;
+    const values = Object.fromEntries(new FormData(form).entries());
+    try {
+      await api.adminRequest('upsert_payout_destination', {
+        destination_id: values.destination_id || null,
+        destination_type: values.destination_type,
+        label: values.label,
+        bank_name: values.bank_name,
+        account_holder: values.account_holder,
+        account_number: values.account_number,
+        usdt_network: values.usdt_network || 'TRC20',
+        usdt_address: values.usdt_address,
+        qr_asset_path: values.qr_asset_path,
+        memo: values.memo,
+        guidance_text: values.guidance_text,
+        change_reason: values.change_reason,
+        enabled: form.querySelector('[name="enabled"]')?.checked !== false
+      });
+      form.reset();
+      const enabled = form.querySelector('[name="enabled"]');
+      if (enabled) enabled.checked = true;
+      const network = form.querySelector('[name="usdt_network"]');
+      if (network && !network.value) network.value = 'TRC20';
+      if (typeof api.loadAdminFinance === 'function') await api.loadAdminFinance({ silent: false });
+      else api.render();
+      api.showToast('✅ 회원 입금 안내를 저장했어요. 주소 추적 ID는 그대로 두고 버전만 올렸어요.', 'success');
+    } catch (error) {
+      api.showToast(error?.message || '입금 안내를 저장하지 못했어요.', 'warning');
+    }
+  }
+
+  function fillPayoutDestination(id) {
+    const api = wrapCore();
+    if (!api) return;
+    const item = (api.getState().adminFinance?.destinations || []).find((row) => String(row.id) === String(id));
+    const form = document.getElementById('payoutDestinationForm');
+    if (!item || !form) return;
+    form.destination_id.value = item.id || '';
+    form.destination_type.value = item.destination_type || 'bank';
+    form.label.value = item.label || '';
+    form.bank_name.value = item.bank_name || '';
+    form.account_holder.value = item.account_holder || '';
+    form.account_number.value = item.account_number || '';
+    form.usdt_network.value = item.usdt_network || 'TRC20';
+    form.usdt_address.value = item.usdt_address || '';
+    form.qr_asset_path.value = item.qr_asset_path || '';
+    form.memo.value = item.memo || '';
+    form.guidance_text.value = item.guidance_text || '';
+    form.change_reason.value = '';
+    const enabled = form.querySelector('[name="enabled"]');
+    if (enabled) enabled.checked = item.enabled !== false;
+    api.showToast('📝 선택한 입금 안내를 수정 칸에 넣었어요.', 'info');
+  }
+
+  async function resetMemberSecurityPin(event) {
+    const api = wrapCore();
+    if (!api) return;
+    const values = Object.fromEntries(new FormData(event.target).entries());
+    try {
+      await api.adminRequest('reset_security_pin', { user_id: values.user_id, reason: values.reason });
+      event.target.reset();
+      if (typeof api.loadAdminFinance === 'function') await api.loadAdminFinance({ silent: false });
+      api.showToast('✅ 보안 PIN을 재설정했어요. 원문은 보지 않았고, 회원이 다시 만들어요.', 'success');
+    } catch (error) {
+      api.showToast(error?.message || '보안 PIN을 재설정하지 못했어요.', 'warning');
+    }
+  }
+
   async function completeWithdrawal(id) {
     const api = core();
     if (!api || !id) return true;
@@ -698,21 +850,24 @@
       const status = item.status || 'pending';
       const ok = status === 'active';
       const memberId = esc(item.id || item.user_id || '');
+      const wallet = item.wallet || {};
       return `<tr>
         <td><strong>${esc(item.public_id || '-')}</strong></td>
-        <td>${esc(item.display_name || '퍼뜩 회원')}</td>
-        <td>${esc(item.email || '-')}</td>
-        <td>${esc(item.phone || item.phone_e164 || '-')}</td>
+        <td>${esc(maskPersonName(item.legal_name || item.display_name || '퍼뜩 회원'))}</td>
+        <td>${esc(maskEmail(item.email))}</td>
+        <td>${esc(maskPhone(item.phone || item.phone_e164))}</td>
         <td>${esc(badgeTier(item.member_tier))}</td>
         <td>${item.last_login_at ? displayTime(item.last_login_at) : '-'}</td>
-        <td>${esc(item.last_login_ip || '-')}</td>
-        <td><strong>${money(item.wallet?.available)}</strong></td>
+        <td>${esc(maskIp(item.last_login_ip))}</td>
+        <td><strong>${money(wallet.available)}</strong></td>
+        <td><strong>${money(wallet.work)}</strong></td>
+        <td><strong>${money(wallet.held)}</strong></td>
         <td><span class="pill ${ok ? 'ok' : 'wait'}">${esc(memberStatusLabel(status))}</span></td>
         <td><div class="action-row"><button class="small-button" data-action="member-detail" data-member-id="${memberId}">자세히</button><button class="small-button primary" data-action="member-credit" data-member-id="${memberId}">잔액 입금</button><button class="small-button" data-action="member-debit" data-member-id="${memberId}">잔액 차감</button></div></td>
       </tr>`;
     }).join('');
-    const body = rows || `<tr><td colspan="10"><div class="empty-state compact"><div class="empty-icon">${icon('users', 22)}</div><strong>${state.adminMembersLoading ? '회원 정보를 불러오고 있어요.' : '표시할 회원이 없어요.'}</strong><p>검색은 사원번호·이름·이메일·휴대폰을 기준으로 합니다.</p></div></td></tr>`;
-    return `<div class="section-heading" style="margin-top:0"><div><h1 class="page-title">회원 관리</h1><p class="page-copy">사원증·근무 활동·원장을 확인하고 필요한 조치를 할 수 있어요.</p></div><button class="secondary-button" data-action="refresh-members" ${state.adminMembersLoading ? 'disabled' : ''}>${icon('refresh-cw', 16)} ${state.adminMembersLoading ? '불러오는 중…' : '새로고침'}</button></div>${error}<div class="admin-card"><form id="memberSearchForm" class="search-bar"><input id="memberSearchInput" value="${esc(state.adminMemberQuery || '')}" placeholder="사원번호, 이름, 이메일, 휴대폰" /><button class="small-button primary" type="submit">찾기</button></form><div class="filter-row"><button class="filter-button ${filter === 'all' ? 'active' : ''}" data-member-filter="all">전체${state.adminMembersContract ? ` ${state.adminMemberTotal}` : ''}</button><button class="filter-button ${filter === 'active' ? 'active' : ''}" data-member-filter="active">활동 중</button><button class="filter-button ${filter === 'pending' ? 'active' : ''}" data-member-filter="pending">확인 중</button><button class="filter-button ${filter === 'blocked' ? 'active' : ''}" data-member-filter="blocked">차단</button></div><div class="table-wrap"><table><thead><tr><th>사원번호</th><th>이름</th><th>이메일</th><th>휴대폰</th><th>사원증</th><th>최근 접속</th><th>접속 주소</th><th>잔액</th><th>상태</th><th></th></tr></thead><tbody>${body}</tbody></table></div></div>`;
+    const body = rows || `<tr><td colspan="12"><div class="empty-state compact"><div class="empty-icon">${icon('users', 22)}</div><strong>${state.adminMembersLoading ? '회원 정보를 불러오고 있어요.' : '표시할 회원이 없어요.'}</strong><p>검색은 사원번호·이름·이메일·휴대폰을 기준으로 합니다.</p></div></td></tr>`;
+    return `<div class="section-heading" style="margin-top:0"><div><h1 class="page-title">회원 관리</h1><p class="page-copy">출금 가능·업무 진행·잠금 금액을 나눠 확인해요. 목록의 개인정보는 가려져 있어요.</p></div><button class="secondary-button" data-action="refresh-members" ${state.adminMembersLoading ? 'disabled' : ''}>${icon('refresh-cw', 16)} ${state.adminMembersLoading ? '불러오는 중…' : '새로고침'}</button></div>${error}<div class="admin-card"><form id="memberSearchForm" class="search-bar"><input id="memberSearchInput" value="${esc(state.adminMemberQuery || '')}" placeholder="사원번호, 이름, 이메일, 휴대폰" /><button class="small-button primary" type="submit">찾기</button></form><div class="filter-row"><button class="filter-button ${filter === 'all' ? 'active' : ''}" data-member-filter="all">전체${state.adminMembersContract ? ` ${state.adminMemberTotal}` : ''}</button><button class="filter-button ${filter === 'active' ? 'active' : ''}" data-member-filter="active">활동 중</button><button class="filter-button ${filter === 'pending' ? 'active' : ''}" data-member-filter="pending">확인 중</button><button class="filter-button ${filter === 'blocked' ? 'active' : ''}" data-member-filter="blocked">차단</button></div><div class="table-wrap"><table><thead><tr><th>사원번호</th><th>이름</th><th>이메일</th><th>휴대폰</th><th>사원증</th><th>최근 접속</th><th>접속 주소</th><th>출금 가능</th><th>업무 진행</th><th>잠금</th><th>상태</th><th></th></tr></thead><tbody>${body}</tbody></table></div></div>`;
   }
 
   function renderNotifications() {
@@ -789,10 +944,10 @@
       '접속 주소': displayText(priv.last_login_ip),
       '본인확인': kycStatusLabel(profile.kyc_status),
       '추천 수': String(Array.isArray(pack.referrals) ? pack.referrals.length : Number(pack.referral_count || 0)),
-      '지원금': money(wallet.support ?? bucket('support_grant').available_amount),
-      '근무 잔액': money(wallet.work ?? bucket('work_balance').available_amount),
       '출금 가능': money(wallet.available ?? bucket('available').available_amount),
-      '보류액': money(wallet.held ?? bucket('held').held_amount)
+      '업무 진행': money(wallet.work ?? bucket('work_balance').available_amount),
+      '잠금 금액': money(wallet.work_held ?? bucket('work_balance').held_amount),
+      '지원금': money(wallet.support ?? bucket('support_grant').available_amount),
     };
     root.querySelectorAll('.detail-list > div').forEach((row) => {
       const key = row.querySelector('span')?.textContent;
@@ -856,7 +1011,10 @@
     const wallet = member.wallet || {};
     const pack = currentMemberPack();
     const id = member.id || member.user_id || '';
-    return `<div class="modal-backdrop" data-modal="member-detail"><div class="modal member-detail-modal"><div class="modal-head"><div><h2>회원 자세히</h2><p>${esc(member.public_id || '사원번호 확인 중')}</p></div><button class="icon-button" data-action="close-modal">${icon('x', 18)}</button></div><div class="modal-body"><div class="detail-list"><div><span>이름</span><strong>${esc(displayText(member.display_name))}</strong></div><div><span>이메일</span><strong>${esc(displayText(member.email))}</strong></div><div><span>휴대폰</span><strong>${esc(displayText(member.phone || member.phone_e164))}</strong></div><div><span>사원증</span><strong>${esc(badgeTier(member.member_tier))}</strong></div><div><span>상태</span><strong>${esc(memberStatusLabel(member.status || 'pending'))}</strong></div><div><span>가입일</span><strong>${esc(displayTime(member.created_at))}</strong></div><div><span>최근 접속</span><strong>${esc(displayTime(member.last_login_at))}</strong></div><div><span>접속 주소</span><strong>${esc(displayText(member.last_login_ip))}</strong></div><div><span>본인확인</span><strong>${esc(kycStatusLabel(member.kyc_status))}</strong></div><div><span>추천 수</span><strong>${Number(member.referral_count || 0)}</strong></div><div><span>지원금</span><strong>${money(wallet.support)}</strong></div><div><span>근무 잔액</span><strong>${money(wallet.work ?? wallet.task)}</strong></div><div><span>출금 가능</span><strong>${money(wallet.available)}</strong></div><div><span>보류액</span><strong>${money(wallet.held)}</strong></div></div>${memberHistoriesHtml(pack)}<div class="action-row" style="margin-top:16px"><button class="small-button primary" data-action="member-credit" data-member-id="${esc(id)}">잔액 입금</button><button class="small-button" data-action="member-debit" data-member-id="${esc(id)}">잔액 차감</button><button class="small-button" data-action="member-block" data-member-id="${esc(id)}" data-member-status="blocked">차단</button><button class="small-button" data-action="member-block" data-member-id="${esc(id)}" data-member-status="active">차단 해제</button><button class="small-button" data-action="member-tier" data-member-id="${esc(id)}">등급 변경</button><button class="small-button" data-action="member-reset" data-member-id="${esc(id)}">비밀번호 재설정</button><button class="small-button primary" data-action="assign-task" data-member-id="${esc(id)}">업무 배정</button><button class="small-button" data-action="target-notice" data-member-id="${esc(id)}">알림</button></div></div></div></div>`;
+    const piiNote = pack && pack.pii_access === false
+      ? `<div class="notice" style="margin-bottom:12px"><span style="color:var(--gold)">${icon('shield-alert', 17)}</span><div>전체 개인정보는 최고 운영자만 볼 수 있어요.</div></div>`
+      : '';
+    return `<div class="modal-backdrop" data-modal="member-detail"><div class="modal member-detail-modal"><div class="modal-head"><div><h2>회원 자세히</h2><p>${esc(member.public_id || '사원번호 확인 중')}</p></div><button class="icon-button" data-action="close-modal">${icon('x', 18)}</button></div><div class="modal-body">${piiNote}<div class="detail-list"><div><span>이름</span><strong>${esc(displayText(member.display_name))}</strong></div><div><span>이메일</span><strong>${esc(displayText(member.email))}</strong></div><div><span>휴대폰</span><strong>${esc(displayText(member.phone || member.phone_e164))}</strong></div><div><span>사원증</span><strong>${esc(badgeTier(member.member_tier))}</strong></div><div><span>상태</span><strong>${esc(memberStatusLabel(member.status || 'pending'))}</strong></div><div><span>가입일</span><strong>${esc(displayTime(member.created_at))}</strong></div><div><span>최근 접속</span><strong>${esc(displayTime(member.last_login_at))}</strong></div><div><span>접속 주소</span><strong>${esc(displayText(member.last_login_ip))}</strong></div><div><span>본인확인</span><strong>${esc(kycStatusLabel(member.kyc_status))}</strong></div><div><span>추천 수</span><strong>${Number(member.referral_count || 0)}</strong></div><div><span>지원금</span><strong>${money(wallet.support)}</strong></div><div><span>출금 가능</span><strong>${money(wallet.available)}</strong></div><div><span>업무 진행</span><strong>${money(wallet.work)}</strong></div><div><span>잠금 금액</span><strong>${money(wallet.held)}</strong></div></div>${memberHistoriesHtml(pack)}<div class="action-row" style="margin-top:16px"><button class="small-button primary" data-action="member-credit" data-member-id="${esc(id)}">잔액 입금</button><button class="small-button" data-action="member-debit" data-member-id="${esc(id)}">잔액 차감</button><button class="small-button" data-action="member-block" data-member-id="${esc(id)}" data-member-status="blocked">차단</button><button class="small-button" data-action="member-block" data-member-id="${esc(id)}" data-member-status="active">차단 해제</button><button class="small-button" data-action="member-tier" data-member-id="${esc(id)}">등급 변경</button><button class="small-button" data-action="member-reset" data-member-id="${esc(id)}">비밀번호 재설정</button><button class="small-button primary" data-action="assign-task" data-member-id="${esc(id)}">업무 배정</button><button class="small-button" data-action="target-notice" data-member-id="${esc(id)}">알림</button></div></div></div></div>`;
   }
 
   function renderMemberTier() {
@@ -1007,6 +1165,10 @@
         completeWithdrawal(target.dataset.withdrawalId);
         return true;
       }
+      if (action === 'edit-payout-destination') {
+        fillPayoutDestination(target.dataset.destinationId);
+        return true;
+      }
       if (target?.dataset?.reviewAction === 'rework') {
         core()?.showToast('검수는 승인 또는 반려만 해요.', 'info');
         return true;
@@ -1035,9 +1197,15 @@
       event.stopImmediatePropagation();
       submitNodeForm(event);
     }
-    if (event.target?.id === 'motionSettingsForm') {
+    if (event.target?.id === 'payoutDestinationForm') {
       event.preventDefault();
-      saveMotion();
+      event.stopImmediatePropagation();
+      savePayoutDestination(event);
+    }
+    if (event.target?.id === 'securityPinResetForm') {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      resetMemberSecurityPin(event);
     }
   }, true);
 })();
