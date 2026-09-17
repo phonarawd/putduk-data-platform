@@ -7,6 +7,9 @@ const requiredFiles = [
   'dist/admin/index.html',
   'dist/assets/app.css',
   'dist/assets/app.js',
+  'dist/assets/overlay-surface.css',
+  'dist/assets/overlay-surface.js',
+  'dist/assets/origin-split.js',
   'dist/manifest.webmanifest',
   'dist/sw.js',
   'dist/_headers',
@@ -141,6 +144,9 @@ test('390 회원 시트는 탭바 위에 뜨고 원금·고액 확인이 있다'
   const { appJs, appCss } = await readLaunchFiles();
   assert.match(appCss, /--member-tabbar-stack/);
   assert.match(appCss, /html\[data-mode="member"\] \.modal-backdrop/);
+  assert.match(appCss, /justify-content:\s*flex-end/);
+  assert.match(appCss, /align-items:\s*center/);
+  assert.match(appCss, /width:\s*min\(100%,\s*420px\)/);
   assert.match(appJs, /penalty-figures/);
   assert.match(appJs, /지금 업무잔액\(원금\)/);
   assert.match(appJs, /deposit-jump/);
@@ -151,6 +157,29 @@ test('390 회원 시트는 탭바 위에 뜨고 원금·고액 확인이 있다'
   assert.equal(appJs.includes('Math.round(value/1000)}k'), false);
 });
 
+test('회원·운영자 origin이 분리되고 목록 잔액이 세 칸이다', async () => {
+  const { memberHtml, adminHtml, appJs, appCss } = await readLaunchFiles();
+  const adminJs = await readRepo('dist', 'admin', 'admin.js');
+  assert.match(memberHtml, /origin-split\.js/);
+  assert.match(adminHtml, /origin-split\.js/);
+  assert.match(memberHtml, /opsOrigin:\s*'https:\/\/ops\.hiptk\.app'/);
+  assert.match(appJs, /REVIEW_WAIT_STATUSES/);
+  assert.match(appJs, /검수 대기 업무/);
+  assert.match(appJs, /확인 필요/);
+  assert.match(appJs, /실물에 적힌 라벨 번호/);
+  assert.match(appJs, /상품명·가격·옵션·배송/);
+  assert.match(appJs, /checkpoint_work/);
+  assert.match(appJs, /이 이메일로는 바로 가입되지 않았어요/);
+  assert.match(appJs, /deposit_info_reveal/);
+  assert.match(appJs, /보안 PIN 입력 후 입금 안내 확인/);
+  assert.match(adminJs, /출금 가능/);
+  assert.match(adminJs, /업무 진행/);
+  assert.match(adminJs, /잠금/);
+  assert.equal(adminJs.includes('>잔액<'), false);
+  assert.match(appCss, /z-index:\s*400/);
+  assert.match(appCss, /html\[data-theme="dark"\] \.toast/);
+});
+
 test('근무 제출은 서버로 답을 보내고 검수에 고른 보기가 있다', async () => {
   const { appJs, memberHtml, adminHtml } = await readLaunchFiles();
   const adminJs = await readRepo('dist', 'admin', 'admin.js');
@@ -159,8 +188,46 @@ test('근무 제출은 서버로 답을 보내고 검수에 고른 보기가 있
   assert.doesNotMatch(memberHtml, /enableFinanceApi:\s*true/);
   assert.match(adminHtml, /enableFinanceApi:\s*false/);
   assert.match(appJs, /memberFinanceRequest\('submit_work'/);
+  assert.match(appJs, /checkpoint_work/);
+  assert.match(appJs, /work_kind: 'catalog_listing'/);
   assert.match(appJs, /choice_id: choice/);
+  assert.match(appJs, /inspect_answers:/);
+  assert.match(appJs, /isInspectBundleComplete/);
   assert.doesNotMatch(appJs, /from\('task_runs'\)\s*\.update\(\{ status: 'submitted' \}\)/);
   assert.match(adminJs, /회원이 고른 보기/);
   assert.match(adminJs, /문제 사진도 제출 보기도 없으면/);
+});
+
+test('같은 오버레이는 다시 페이드하지 않고 부트는 한 번만 그린다', async () => {
+  const { appJs, appCss, memberHtml, adminHtml } = await readLaunchFiles();
+  const overlaySrc = await readRepo('src', 'ui', 'overlay-surface.mjs');
+  const overlayCss = await readRepo('src', 'ui', 'overlay-surface.css');
+  const overlayDistJs = await readRepo('dist', 'assets', 'overlay-surface.js');
+  const overlayDistCss = await readRepo('dist', 'assets', 'overlay-surface.css');
+  assert.match(overlaySrc, /export function overlaySurfaceKey\(/);
+  assert.match(overlaySrc, /export function overlayPaintPlan\(/);
+  assert.match(overlaySrc, /export function shouldPaintBootImmediately\(/);
+  assert.match(overlaySrc, /REPLAY_LOCK_CUE_AFTER_START = false/);
+  assert.match(overlaySrc, /WAIT_FOR_SUBMIT_CUT = false/);
+  assert.equal(overlayDistCss.trim(), overlayCss.trim());
+  assert.match(overlayDistJs, /window\.PutdukOverlaySurface/);
+  assert.match(memberHtml, /overlay-surface\.css/);
+  assert.match(memberHtml, /overlay-surface\.js/);
+  assert.match(adminHtml, /overlay-surface\.js/);
+  assert.match(appJs, /PutdukOverlaySurface/);
+  assert.match(appJs, /function overlaySurfaceKey\(/);
+  assert.match(appJs, /function patchLiveOverlay\(/);
+  assert.match(appJs, /overlayPaintPlan/);
+  assert.match(appJs, /shouldPaintBootImmediately/);
+  assert.match(appJs, /overlayDismissed/);
+  assert.match(appCss, /\.player-backdrop \.player-sheet \{ animation: none/);
+  assert.match(overlayCss, /\.player-backdrop \.player-sheet \{ animation: none/);
+  assert.match(appJs, /initializeAuth\(\)\.then\(\(\) => render\(\)\)/);
+  assert.equal(appJs.includes('initializeAuth().then(() => render());\n  render();'), false);
+  assert.equal(appJs.includes("motion.playWorkPhase(canvas, motionPartner(node), 'lock'"), false);
+  assert.match(appJs, /document\.hidden\)[\s\S]{0,180}stopWorkPhase/);
+  const motionEngine = await readRepo('src', 'motion', 'motion-engine.ts');
+  const browserApi = await readRepo('src', 'motion', 'browser-api.ts');
+  assert.match(motionEngine, /hints\.hidden \|\| !this\.visible/);
+  assert.match(browserApi, /if \(document\.hidden\) stopWorkPhase/);
 });

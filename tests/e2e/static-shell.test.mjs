@@ -42,3 +42,26 @@ test('정적 셸 경로가 회원·운영자·PWA 파일을 제공한다', async
     assert.equal(response.status, 200, icon);
   }
 });
+
+test('운영자 포트 루트는 회원 화면이 아니라 운영자 셸이다', async (t) => {
+  const started = await startStaticServer(repoPath('dist'), { opsMode: true });
+  t.after(() => started.close());
+
+  const root = await fetchText(`${started.url}/`);
+  assert.equal(root.status, 200);
+  assert.match(root.text, /data-mode="admin"/);
+  assert.doesNotMatch(root.text, /data-mode="member"/);
+  assert.match(root.text, /운영자 관리센터/);
+
+  const indexHtml = await fetchText(`${started.url}/index.html`);
+  assert.match(indexHtml.text, /data-mode="admin"/);
+  assert.doesNotMatch(indexHtml.text, /data-mode="member"/);
+
+  const assets = await fetchText(`${started.url}/assets/origin-split.js`);
+  assert.equal(assets.status, 200);
+  assert.match(assets.text, /isOpsHost/);
+
+  const overlay = await fetchText(`${started.url}/assets/overlay-surface.js`);
+  assert.equal(overlay.status, 200);
+  assert.match(overlay.text, /PutdukOverlaySurface/);
+});
