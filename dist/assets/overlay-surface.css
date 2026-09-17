@@ -1,0 +1,5 @@
+/* 같은 근무·모달 표면은 fade를 다시 재생하지 않는다. */
+.modal-backdrop[data-stable="1"],
+.modal-backdrop[data-stable="1"] .modal,
+.player-backdrop,
+.player-backdrop .player-sheet { animation: none; }
