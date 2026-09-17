@@ -149,3 +149,46 @@ test('회원 대시보드는 오늘 작업 가능 횟수를 실제 서버 값으
   assert.match(financeSource, /action === "daily_task_quota"/);
   assert.match(guardSource, /"daily_task_quota"/);
 });
+
+test('라인 찾기 목록·업무 카드·출근 확인 화면이 대시보드와 같은 하루 한도 값을 재사용한다', async () => {
+  const { appJs } = await readLaunchFiles();
+  // 하나의 계산 함수(dailyQuotaParts/dailyQuotaSummaryText)를 두고 화면마다 재사용해야
+  // 숫자가 어긋나지 않는다. 각 화면이 state.dailyTaskQuota를 직접 다시 계산하지 않는지 확인.
+  assert.match(appJs, /function dailyQuotaParts\(\)/);
+  assert.match(appJs, /function dailyQuotaSummaryText\(\)/);
+
+  const nodesPageStart = appJs.indexOf('function renderNodesPage');
+  const nodesPageBody = appJs.slice(nodesPageStart, nodesPageStart + 1200);
+  assert.match(nodesPageBody, /dailyQuotaSummaryText\(\)/);
+
+  const nodeCardBody = appJs.slice(appJs.indexOf('function renderNodeCard'), appJs.indexOf('function renderNodeCard') + 1800);
+  assert.match(nodeCardBody, /dailyQuotaParts\(\)/);
+  assert.match(nodeCardBody, /오늘 소진/);
+
+  const startConfirmBody = appJs.slice(appJs.indexOf('function renderStartConfirm'), appJs.indexOf('function renderStartConfirm') + 1800);
+  assert.match(startConfirmBody, /dailyQuotaSummaryText\(\)/);
+
+  const dashboardStart = appJs.indexOf('function renderMemberDashboard');
+  const dashboardBody = appJs.slice(dashboardStart, dashboardStart + 2500);
+  assert.match(dashboardBody, /dailyQuotaParts\(\)/);
+});
+
+test('관리자 회원 상세는 같은 putduk_member_daily_task_quota RPC로 대상 회원의 오늘 사용/한도를 조회만 한다', async () => {
+  const adminOps = await readRepo('supabase', 'functions', '_shared', 'admin-ops.ts');
+  const adminJs = await readRepo('dist', 'admin', 'admin.js');
+  const { appJs } = await readLaunchFiles();
+
+  const getMemberBody = adminOps.slice(adminOps.indexOf('export async function getMember('), adminOps.indexOf('export async function listMemberActivity'));
+  assert.match(getMemberBody, /admin\.rpc\("putduk_member_daily_task_quota", \{ p_user_id: memberId \}\)/);
+  assert.match(getMemberBody, /daily_task_quota: quotaResult\.data \|\| null/);
+
+  assert.match(adminJs, /function memberQuotaText\(quota\)/);
+  assert.match(adminJs, /오늘 작업\(사용\/한도\)/);
+  assert.match(adminJs, /memberQuotaText\(member\.daily_task_quota\)/);
+
+  // 조회만 하고, 운영자가 값을 조정하는 입력 UI는 이번에 추가하지 않았다.
+  assert.doesNotMatch(adminJs, /data-action="set-tier-daily-limit"/);
+
+  // app.js의 flattenMemberDetail이 daily_task_quota를 흘려보내야 admin.js가 값을 받는다.
+  assert.match(appJs, /daily_task_quota: payload\.daily_task_quota \|\| null/);
+});

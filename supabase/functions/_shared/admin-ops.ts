@@ -441,7 +441,7 @@ export async function getMember(admin: AdminClient, userId: string, payload: Jso
   const revealPii = canRevealMemberPii(roles);
   const memberId = assertUuid(payload.user_id || payload.member_id, "회원");
 
-  const [profileResult, privateResult, walletResult, taskResult, depositResult, withdrawalResult, kycResult, referralResult, assignResult, ledgerResult, submissionResult, eventResult] = await Promise.all([
+  const [profileResult, privateResult, walletResult, taskResult, depositResult, withdrawalResult, kycResult, referralResult, assignResult, ledgerResult, submissionResult, eventResult, quotaResult] = await Promise.all([
     admin.from("profiles").select("id,public_id,display_name,member_tier,status,kyc_status,referral_code,trial_consumed_at,line_open,line_closed_at,priority_pick,dedicated_queue,weekly_volume_boost,high_value_notice,principal_withdraw_count,created_at,updated_at").eq("id", memberId).maybeSingle(),
     admin.schema("private").from("profile_private").select("legal_name,birth_date,phone_e164,email_snapshot,last_login_at,last_login_ip,marketing_opt_in").eq("user_id", memberId).maybeSingle(),
     admin.from("wallet_accounts").select("bucket,currency,available_amount,held_amount,updated_at").eq("user_id", memberId),
@@ -453,7 +453,8 @@ export async function getMember(admin: AdminClient, userId: string, payload: Jso
     admin.from("task_assignments").select("id,node_id,partner_brand_id,reward_amount,estimated_seconds,reason,status,visible_from,visible_until,created_at").eq("user_id", memberId).order("created_at", { ascending: false }).limit(20),
     admin.schema("private").from("ledger_entries").select("id,public_id,bucket,currency,amount,entry_type,reference_type,created_at").eq("user_id", memberId).order("created_at", { ascending: false }).limit(80),
     admin.from("work_submissions").select("id,task_run_id,answer_payload,auto_score,submitted_at").eq("user_id", memberId).order("submitted_at", { ascending: false }).limit(40),
-    admin.from("task_events").select("id,task_run_id,event_type,event_payload,created_at").eq("user_id", memberId).order("created_at", { ascending: false }).limit(50)
+    admin.from("task_events").select("id,task_run_id,event_type,event_payload,created_at").eq("user_id", memberId).order("created_at", { ascending: false }).limit(50),
+    admin.rpc("putduk_member_daily_task_quota", { p_user_id: memberId })
   ]);
 
   if (profileResult.error || !profileResult.data) {
@@ -463,6 +464,7 @@ export async function getMember(admin: AdminClient, userId: string, payload: Jso
   if (submissionResult.error) console.error("member submission read failed", submissionResult.error);
   if (eventResult.error) console.error("member task event read failed", eventResult.error);
   if (taskResult.error) console.error("member task run read failed", taskResult.error);
+  if (quotaResult.error) console.error("member daily task quota read failed", quotaResult.error);
 
   const runs = (taskResult.data || []) as JsonRecord[];
   const nodeIds = [...new Set(runs.map((row) => String(row.node_id || "")).filter(Boolean))];
@@ -537,6 +539,7 @@ export async function getMember(admin: AdminClient, userId: string, payload: Jso
     referrals: referralResult.data || [],
     assignments: assignResult.data || [],
     wallet_summary: walletSummary((walletResult.data || []) as JsonRecord[]),
+    daily_task_quota: quotaResult.data || null,
     pii_access: revealPii,
     pii_masked: !revealPii,
     auth: {
