@@ -35,6 +35,7 @@ test('플래그가 꺼지면 입금·일반 출금은 서버에서 거절하고 
   assert.equal(payout.code, FINANCE_API_CLOSED);
   const trial = financeActionGuard({ ...closed, action: 'withdraw_request', amount: 3000, currency: 'KRW' });
   assert.equal(trial.ok, true);
+  assert.equal(financeActionGuard({ ...closed, action: 'daily_task_quota' }).ok, true);
 });
 
 test('Edge 회원 금융은 화면 플래그 우회를 서버에서 막는다', async () => {

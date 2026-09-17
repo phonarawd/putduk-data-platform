@@ -25,7 +25,9 @@ export const FINANCE_ALWAYS_ALLOWED_ACTIONS = Object.freeze([
   'submit_task',
   'submit_run',
   'submit_kyc',
-  'request_upload'
+  'request_upload',
+  'daily_task_quota',
+  'work_quota'
 ]);
 
 const always = new Set(FINANCE_ALWAYS_ALLOWED_ACTIONS);

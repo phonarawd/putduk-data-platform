@@ -74,6 +74,7 @@
     modal: null,
     modalPayload: null,
     wallet: { support: null, work: null, task: null, referral: null, available: null, held: null },
+    dailyTaskQuota: null,
     run: null,
     reviewWait: null,
     history: [],
@@ -1091,6 +1092,7 @@
     }
     switchToUserState(session.user.id);
     state.wallet = { support: null, work: null, task: null, referral: null, available: null, held: null };
+    state.dailyTaskQuota = null;
     state.history = [];
     state.notifications = [];
     state.referrals = [];
@@ -1117,6 +1119,12 @@
       if (!walletResult.error && Array.isArray(walletResult.data) && walletResult.data.length) {
         applyWalletRows(walletResult.data);
       }
+
+      state.dailyTaskQuota = null;
+      try {
+        const quotaResult = await memberFinanceRequest('daily_task_quota');
+        state.dailyTaskQuota = quotaResult.quota || null;
+      } catch (_) {}
 
       const runResult = await supabaseClient
         .from('task_runs')
@@ -2348,6 +2356,9 @@
     const partner = crewPartnerCompany();
     const attendance = crewAttendance(partner);
     const heroLine = partner ? `오늘 ${esc(partner.name)} 라인 근무` : (authState.session ? '오늘 라인 근무' : '로그인하면 오늘 라인에 출근해요');
+    const quota = state.dailyTaskQuota;
+    const quotaValue = !authState.session ? '-' : !quota ? '확인 중' : (quota.unlimited ? '무제한' : `${quota.remaining_today}/${quota.daily_limit}`);
+    const quotaSuffix = (authState.session && quota && !quota.unlimited) ? '회 남음' : '';
     return `
       ${renderTrustStrip()}
       ${renderFomoBoard('dashboard')}
@@ -2357,7 +2368,7 @@
           <h1 class="hero-title">작업실에 출근하고<br><span style="color:var(--emerald-strong)">한 칸만 확인해요.</span></h1>
           <p class="hero-copy">오늘 배정된 물량 5건의 실물 라벨 번호를 입력해 대조하고 제출하면 돼요. 일이 끝나면 원금과 수당이 잔액에 같이 반영돼요.</p>
           <div class="hero-actions"><button class="primary-button" data-nav="nodes">${icon('waypoints', 18)} 라인 찾기</button>${accountButton}</div>
-          <div class="hero-metrics"><div><div class="metric-label">오늘 라인</div><div class="metric-value">${memberCatalogNodes().length}<small>칸</small></div></div><div><div class="metric-label">검수 완료</div><div class="metric-value">${state.history.filter((item) => item.status === '검수 완료').length}<small>건</small></div></div><div><div class="metric-label">근무 상태</div><div class="metric-value" style="font-size:18px;color:var(--emerald-strong)">${esc(attendance.label)}</div></div></div>
+          <div class="hero-metrics"><div><div class="metric-label">오늘 라인</div><div class="metric-value">${memberCatalogNodes().length}<small>칸</small></div></div><div><div class="metric-label">검수 완료</div><div class="metric-value">${state.history.filter((item) => item.status === '검수 완료').length}<small>건</small></div></div><div><div class="metric-label">오늘 작업 가능</div><div class="metric-value">${esc(quotaValue)}<small>${esc(quotaSuffix)}</small></div></div><div><div class="metric-label">근무 상태</div><div class="metric-value" style="font-size:18px;color:var(--emerald-strong)">${esc(attendance.label)}</div></div></div>
         </div>
         <div class="panel panel-pad crew-side">
           ${renderCrewIdCard()}
@@ -3564,6 +3575,10 @@
         }
       }
       await refreshMemberWallet();
+      try {
+        const quotaResult = await memberFinanceRequest('daily_task_quota');
+        state.dailyTaskQuota = quotaResult.quota || null;
+      } catch (_) {}
       overlayDismissed = false;
       saveState();
       render();

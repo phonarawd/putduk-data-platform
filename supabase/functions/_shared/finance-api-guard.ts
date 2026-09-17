@@ -24,7 +24,9 @@ const always = new Set([
   "submit_task",
   "submit_run",
   "submit_kyc",
-  "request_upload"
+  "request_upload",
+  "daily_task_quota",
+  "work_quota"
 ]);
 
 export function isFinanceApiOpen(raw: unknown) {

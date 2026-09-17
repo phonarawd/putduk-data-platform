@@ -257,6 +257,15 @@ async function walletSnapshot(userId: string) {
   };
 }
 
+async function dailyTaskQuota(userId: string) {
+  const { data, error } = await admin.rpc("putduk_member_daily_task_quota", { p_user_id: userId });
+  if (error || !data) {
+    console.error("daily task quota failed", error);
+    throw new HttpError(503, "오늘 작업 가능 횟수를 불러오지 못했어요.");
+  }
+  return data;
+}
+
 async function submitWithdrawal(userId: string, payload: JsonRecord) {
   const currency = String(payload.currency || "KRW").toUpperCase();
   if (!isSupportedCurrency(currency)) throw new HttpError(400, "출금 통화를 확인해 주세요.");
@@ -387,6 +396,10 @@ Deno.serve(async (request: Request) => {
 
     if (action === "wallet" || action === "wallet_snapshot") {
       return jsonResponse(request, { ok: true, wallet: await walletSnapshot(user.id) });
+    }
+
+    if (action === "daily_task_quota" || action === "work_quota") {
+      return jsonResponse(request, { ok: true, quota: await dailyTaskQuota(user.id) });
     }
 
     if (action === "submit_withdrawal" || action === "withdraw_request") {
