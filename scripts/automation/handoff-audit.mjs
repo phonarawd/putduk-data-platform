@@ -77,14 +77,14 @@ items.push(result('scripts', '자동화', '검증 스크립트', ['verify', 'tes
 
 let remoteCounts = null;
 try {
-  const brands = /partner_brands/.test(await read('supabase/migrations/20260916090000_putduk_foundation.sql'));
+  const brands = /partner_brands/.test(await read('supabase/migrations/20260916192740_putduk_foundation.sql'));
   items.push(result('schema-foundation', 'DB', '로컬 기초 스키마', brands, 'migrations 존재'));
 } catch {
   items.push(result('schema-foundation', 'DB', '로컬 기초 스키마', false, 'foundation migration 없음', 'hard'));
 }
 
-items.push(result('ops-migration-local', 'DB', '입출금·KYC 로컬 마이그레이션', await exists('supabase/migrations/20260917180000_putduk_ops_finance_schema.sql'), '원격 적용 여부는 운영 배포 항목'));
-items.push(result('kyc-bucket-code', 'DB', 'KYC 버킷 마이그레이션 문구', (await exists('supabase/migrations/20260917180000_putduk_ops_finance_schema.sql')) && (await read('supabase/migrations/20260917180000_putduk_ops_finance_schema.sql')).includes('putduk-private'), '원격 storage.buckets는 아직 비어 있었음'));
+items.push(result('ops-migration-local', 'DB', '입출금·KYC 로컬 마이그레이션', await exists('supabase/migrations/20260916233653_putduk_ops_finance_schema.sql'), '원격 적용 여부는 운영 배포 항목'));
+items.push(result('kyc-bucket-code', 'DB', 'KYC 버킷 마이그레이션 문구', (await exists('supabase/migrations/20260916233653_putduk_ops_finance_schema.sql')) && (await read('supabase/migrations/20260916233653_putduk_ops_finance_schema.sql')).includes('putduk-private'), '원격 storage.buckets는 아직 비어 있었음'));
 
 const automation = [
   'scripts/automation/release.mjs',

@@ -12,9 +12,9 @@ const required = [
   "dist/sw.js",
   "supabase/functions/admin-control/index.ts",
   "supabase/functions/member-finance/index.ts",
-  "supabase/migrations/20260917180000_putduk_ops_finance_schema.sql",
-  "supabase/migrations/20260917190000_putduk_ops_finance_rpc.sql",
-  "supabase/migrations/20260917200000_putduk_task_assignment_guard.sql"
+  "supabase/migrations/20260916233653_putduk_ops_finance_schema.sql",
+  "supabase/migrations/20260916233710_putduk_ops_finance_rpc_member.sql",
+  "supabase/migrations/20260916233907_putduk_task_assignment_guard.sql"
 ];
 
 const missing = required.filter((file) => !existsSync(path.join(root, file)));
