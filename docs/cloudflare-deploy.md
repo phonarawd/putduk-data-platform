@@ -14,8 +14,11 @@
 
 ## 도메인 연결 후 확인할 주소
 
-- 회원 화면: `/`
-- 운영자 화면: `/admin/`
+회원 화면과 운영자 화면은 **서로 다른 origin**으로 연다. 같은 주소의 `/`와 `/admin/`을 같이 쓰면 브라우저 Auth 세션이 섞인다.
+
+- 회원 화면: `https://app.hiptk.app/` 또는 `https://hiptk.app/`
+- 운영자 화면: `https://ops.hiptk.app/admin/`
+- 로컬: 회원 `http://127.0.0.1:4173/` , 운영자 `http://127.0.0.1:4174/admin/`
 - PWA 매니페스트: `/manifest.webmanifest`
 - 서비스 워커: `/sw.js`
 - 파비콘: `/favicon.svg`
@@ -28,13 +31,17 @@ PWA 설치는 HTTPS가 적용된 도메인에서 확인합니다. iPhone·iPad�
 Supabase Auth의 Site URL과 Redirect URLs에 운영 도메인을 등록합니다.
 
 ```text
-https://운영도메인.example/
-https://운영도메인.example/admin/
+https://app.hiptk.app/
+https://ops.hiptk.app/admin/
+http://127.0.0.1:4173/
+http://127.0.0.1:4174/admin/
 ```
 
 브라우저에는 publishable key만 사용합니다. `service_role` 또는 secret key는 HTML, GitHub, Cloudflare Pages 환경변수에 넣지 않습니다.
 
 ## 배포 전 확인
+
+0. **app origin과 ops origin이 실제로 다른 호스트인지** 브라우저 주소창과 HTML `<title>`로 확인합니다. `app.hiptk.app`은 회원(`퍼뜩 · 라인 근무`), `ops.hiptk.app`은 운영자(`퍼뜩 · 운영자 관리센터`)여야 합니다. 같은 셸이 두 호스트에 올라가면 배포하지 않습니다.
 
 1. 이메일 인증 메일의 발신자와 리디렉션 주소를 확인합니다.
 2. 운영자 Auth 계정을 만들고 `private.admin_roles`에 역할을 등록합니다.
