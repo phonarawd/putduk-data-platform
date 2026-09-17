@@ -2,6 +2,14 @@
 import { detectQuality, clampDpr, readBrowserQualityHints, type QualityProfile } from './motion-quality.ts';
 import { resolveMotion } from './motion-registry.ts';
 import { hashSeed, phaseLocalProgress, resolvePhase, resolveProgress, type MotionFrame } from './motion-timeline.ts';
+import {
+  applyWorkCamera,
+  drawWorkCinematic,
+  readPrincipal,
+  readStipend,
+  readWorkCut,
+  readWorkLocal
+} from './work-phase.ts';
 import { drawScene as drawRoad } from './scenes/road-logistics.scene.ts';
 import { drawScene as drawAir } from './scenes/air-cargo.scene.ts';
 import { drawScene as drawOcean } from './scenes/ocean-vessel.scene.ts';
@@ -41,6 +49,12 @@ type EngineInput = Record<string, unknown> & {
   started_at?: string | number | null;
   expected_completed_at?: string | number | null;
   motion_seed?: string | number | null;
+  work_cut?: string | null;
+  workCut?: string | null;
+  work_local?: number;
+  workLocal?: number;
+  principal?: number;
+  stipend?: number;
 };
 
 const scenes = {
@@ -53,7 +67,7 @@ const scenes = {
 };
 
 export class MotionEngine {
-  private canvas: HTMLCanvasElement;
+  readonly canvas: HTMLCanvasElement;
   private glCanvas: OffscreenCanvas | HTMLCanvasElement | null = null;
   private gl: WebGL2RenderingContext | null = null;
   private program: WebGLProgram | null = null;
@@ -63,7 +77,7 @@ export class MotionEngine {
   private packets: Packet[] = [];
   private bitmap: ImageBitmap | null = null;
   private observer: IntersectionObserver | null = null;
-  private visible = true;
+  visible = true;
   private lastDraw = 0;
   private quality: QualityProfile;
 
@@ -79,11 +93,12 @@ export class MotionEngine {
   frame(input: EngineInput): void {
     const hints = readBrowserQualityHints();
     this.quality = this.refreshQuality();
-    if (!this.visible || hints.hidden) return;
+    const workCut = readWorkCut(input);
+    if ((hints.hidden || !this.visible) && !workCut) return;
 
     const now = performance.now();
     const minDelta = 1000 / Math.max(1, this.quality.targetFps);
-    if (now - this.lastDraw < minDelta && this.quality.level !== 'static') return;
+    if (now - this.lastDraw < minDelta && this.quality.level !== 'static' && !workCut) return;
     this.lastDraw = now;
 
     const rect = this.canvas.getBoundingClientRect();
@@ -110,7 +125,12 @@ export class MotionEngine {
       vehicle: descriptor.vehicle_type,
       route: descriptor.route_type,
       particle: descriptor.particle_style,
-      completion: descriptor.completion_effect
+      completion: descriptor.completion_effect,
+      workCut,
+      workLocal: readWorkLocal(input),
+      principal: readPrincipal(input),
+      stipend: readStipend(input),
+      clock: (typeof performance !== 'undefined' ? performance.now() : 0) / 1000
     };
 
     this.requestWorker(frame, descriptor.motion_profile);
@@ -185,7 +205,9 @@ export class MotionEngine {
       seed: frame.seed,
       count: this.quality.particleCount,
       profile,
-      phase: frame.phase
+      phase: frame.phase,
+      workCut: frame.workCut,
+      workLocal: frame.workLocal
     });
   }
 
@@ -281,8 +303,17 @@ export class MotionEngine {
     ctx.clearRect(0, 0, frame.width, frame.height);
     if (this.glCanvas && this.packets.length) ctx.drawImage(this.glCanvas as CanvasImageSource, 0, 0, frame.width, frame.height);
     else if (this.bitmap) ctx.drawImage(this.bitmap, 0, 0, frame.width, frame.height);
+    ctx.save();
+    applyWorkCamera(ctx, frame);
     scenes[profile](ctx, frame);
-    if (frame.phase === 'sync' && frame.completion === 'gold_sync') {
+    if (frame.workCut === 'lock' || frame.workCut === 'submit') {
+      drawWorkCinematic(ctx, frame);
+    }
+    ctx.restore();
+    if (frame.workCut === 'approve' || frame.workCut === 'pwa_home' || frame.workCut === 'demote') {
+      drawWorkCinematic(ctx, frame);
+    }
+    if (frame.phase === 'sync' && frame.completion === 'gold_sync' && !frame.workCut) {
       ctx.fillStyle = `rgba(243, 205, 107, ${0.08 + frame.phaseLocal * 0.12})`;
       ctx.fillRect(0, 0, frame.width, frame.height);
     }

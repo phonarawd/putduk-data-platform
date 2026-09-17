@@ -2,6 +2,9 @@
 
 export type MotionPhase = 'connect' | 'travel' | 'inspect' | 'sync';
 
+/** 근무 플로우 시네마틱 컷. 한 번에 한 장면만. */
+export type WorkCut = 'lock' | 'submit' | 'approve' | 'pwa_home' | 'demote';
+
 export type MotionFrame = {
   width: number;
   height: number;
@@ -16,6 +19,11 @@ export type MotionFrame = {
   route: string;
   particle: string;
   completion: string;
+  workCut: WorkCut | null;
+  workLocal: number;
+  principal: number;
+  stipend: number;
+  clock: number;
 };
 
 const CONNECT_END = 15 / 60;

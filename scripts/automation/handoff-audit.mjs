@@ -51,8 +51,9 @@ for (const file of requiredStatic) {
 }
 items.push(result('static-files', '배포', '정적 출시 파일', missingStatic.length === 0, missingStatic.join(', ') || '12개 파일 확인', 'hard'));
 items.push(result('lang-ko', 'UI', '회원·운영자 lang=ko', memberHtml.includes('lang="ko"') && adminHtml.includes('lang="ko"'), '문서 언어', 'hard'));
-items.push(result('work-lock', '잠금', 'enableWorkApi=false', /enableWorkApi:\s*false/.test(html) && !/enableWorkApi:\s*true/.test(html), '운영 테스트 전 잠금', 'hard'));
-items.push(result('finance-lock', '잠금', 'enableFinanceApi=false', /enableFinanceApi:\s*false/.test(html) && !/enableFinanceApi:\s*true/.test(html), '입출금·KYC 완료 전 잠금', 'hard'));
+items.push(result('work-member-open', '근무', '회원 enableWorkApi=true', /enableWorkApi:\s*true/.test(memberHtml) && !/enableWorkApi:\s*false/.test(memberHtml), '회원 dist 실근무 열림', 'hard'));
+items.push(result('work-admin-lock', '잠금', '운영자 enableWorkApi=false', /enableWorkApi:\s*false/.test(adminHtml) && !/enableWorkApi:\s*true/.test(adminHtml), '운영자 셸은 회원 근무 플래그를 켜지 않음', 'hard'));
+items.push(result('finance-lock', '잠금', 'enableFinanceApi=false', /enableFinanceApi:\s*false/.test(memberHtml) && /enableFinanceApi:\s*false/.test(adminHtml) && !/enableFinanceApi:\s*true/.test(html), '입출금·KYC 완료 전 잠금', 'hard'));
 items.push(result('no-service-role', '보안', '브라우저에 service_role 없음', !launch.includes('service_role') && !launch.includes('sb_secret_'), 'publishable key만 허용', 'hard'));
 items.push(result('no-demo', 'UI', '데모 문구 제거', !['운영자 데모', '미리보기 화면', 'putduk-demo-state'].some((value) => launch.includes(value)), '출시 화면 내부 표현', 'hard'));
 items.push(result('forbidden-ops', 'UI', '운영자 금지 기술 문구 없음', !['API 오류', 'RPC 오류', '토큰 오류', '데이터베이스 오류', 'CRUD'].some((value) => launch.includes(value)), '한국어 대체 문구 사용', 'hard'));
@@ -84,6 +85,17 @@ try {
 }
 
 items.push(result('ops-migration-local', 'DB', '입출금·KYC 로컬 마이그레이션', await exists('supabase/migrations/20260916233653_putduk_ops_finance_schema.sql'), '원격 적용 여부는 운영 배포 항목'));
+items.push(result(
+  'migration-history-align',
+  'DB',
+  '원격 시드·근무 이력 파일',
+  (await exists('supabase/migrations/20260917115001_seed_published_work_ladder_cards_v2.sql'))
+    && (await exists('supabase/migrations/20260917115028_trial_ops_withdraw_and_activate_confirmed.sql'))
+    && (await exists('supabase/migrations/20260917120157_task_events_after_start.sql'))
+    && (await exists('supabase/migrations/20260917120956_trial_ops_withdraw.sql'))
+    && (await exists('supabase/migrations/20260917144749_putduk_member_submit_work.sql')),
+  '원격과 같은 버전. 중복 push 없음'
+));
 items.push(result('kyc-bucket-code', 'DB', 'KYC 버킷 마이그레이션 문구', (await exists('supabase/migrations/20260916233653_putduk_ops_finance_schema.sql')) && (await read('supabase/migrations/20260916233653_putduk_ops_finance_schema.sql')).includes('putduk-private'), '원격 storage.buckets는 아직 비어 있었음'));
 
 const automation = [
@@ -123,11 +135,11 @@ items.push({
 });
 
 items.push({
-  id: 'nodes-zero',
+  id: 'nodes-published',
   group: '운영',
   title: '공개 업무 카드',
-  pass: false,
-  detail: '원격 업무 카드 1건은 일시 중지. 회원 공개 0건. enableWorkApi는 공개 카드·실회원 테스트 후 판단',
+  pass: true,
+  detail: '원격 공개·활성 카드 13건, 일시 중지 1건. 회원 enableWorkApi true',
   severity: 'soft'
 });
 
@@ -144,8 +156,8 @@ items.push({
   id: 'security-advisor',
   group: '보안',
   title: 'Supabase Security Advisor',
-  pass: true,
-  detail: '경고 0건',
+  pass: false,
+  detail: '유출 비밀번호 보호는 Free 플랜에서 켤 수 없음(402). Pro 이상에서 활성화',
   severity: 'soft'
 });
 
@@ -154,16 +166,16 @@ items.push({
   group: '배포',
   title: 'admin-control ACTIVE + JWT',
   pass: true,
-  detail: 'version 3, verify_jwt=true',
+  detail: 'admin-control v24, member-finance v10, verify_jwt=true',
   severity: 'soft'
 });
 
 items.push({
   id: 'cors',
   group: '보안',
-  title: 'CORS 운영도메인 제한',
-  pass: false,
-  detail: 'Edge Function이 PUTDUK_ALLOWED_ORIGINS 없으면 * . GitHub Secret 없음',
+  title: 'CORS 허용 오리진 제한',
+  pass: true,
+  detail: 'Functions 시크릿이 설정되어 * 가 아님. 값은 출력하지 않음. Auth/.env에 운영 HTTPS 오리진은 없음',
   severity: 'soft'
 });
 
@@ -172,7 +184,7 @@ items.push({
   group: '배포',
   title: 'Cloudflare HTTPS 실측',
   pass: false,
-  detail: 'PUTDUK_SITE_URL 없음. 운영 도메인 미확인',
+  detail: '운영 HTTPS 도메인·Pages 실측은 wrangler 로그인 없이 미확인',
   severity: 'soft'
 });
 
@@ -199,7 +211,7 @@ items.push({
   group: '업무',
   title: '업무 시작→제출→검수→지급 실측',
   pass: false,
-  detail: 'enableWorkApi=false 유지. 공개 노드 0. 운영자 검수 샘플 생성·반려는 완료. 회원 실업무 사이클은 잠금',
+  detail: '회원 enableWorkApi=true, 공개·활성 카드 13. 이 스크립트는 시작→제출→검수→지급 실측을 다시 돌리지 않음',
   severity: 'soft'
 });
 

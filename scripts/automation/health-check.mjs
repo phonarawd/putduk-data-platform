@@ -14,7 +14,12 @@ const required = [
   "supabase/functions/member-finance/index.ts",
   "supabase/migrations/20260916233653_putduk_ops_finance_schema.sql",
   "supabase/migrations/20260916233710_putduk_ops_finance_rpc_member.sql",
-  "supabase/migrations/20260916233907_putduk_task_assignment_guard.sql"
+  "supabase/migrations/20260916233907_putduk_task_assignment_guard.sql",
+  "supabase/migrations/20260917115001_seed_published_work_ladder_cards_v2.sql",
+  "supabase/migrations/20260917115028_trial_ops_withdraw_and_activate_confirmed.sql",
+  "supabase/migrations/20260917120157_task_events_after_start.sql",
+  "supabase/migrations/20260917120956_trial_ops_withdraw.sql",
+  "supabase/migrations/20260917144749_putduk_member_submit_work.sql"
 ];
 
 const missing = required.filter((file) => !existsSync(path.join(root, file)));

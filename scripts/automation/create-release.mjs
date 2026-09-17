@@ -18,7 +18,7 @@ const notes = [
   '## 배포 전 확인',
   '',
   '- pnpm verify / test / test:e2e / test:a11y / security:scan 통과',
-  '- enableWorkApi·enableFinanceApi 잠금 유지',
+  '- 회원 dist enableWorkApi=true, enableFinanceApi=false. 운영자 dist는 둘 다 false',
   '- GitHub Actions 성공',
   '- 비밀 키를 로그에 출력하지 않음',
   '',

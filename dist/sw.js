@@ -1,4 +1,4 @@
-const CACHE_NAME = 'putduk-shell-v4';
+const CACHE_NAME = 'putduk-shell-v12';
 const SHELL = ['/', '/admin/', '/assets/app.css', '/assets/app.js', '/manifest.webmanifest', '/favicon.svg', '/icons/icon-180.png', '/icons/icon-192.png', '/icons/icon-512.png', '/icons/icon-192.svg', '/icons/icon-512.svg'];
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(SHELL)).then(() => self.skipWaiting()));

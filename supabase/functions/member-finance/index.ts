@@ -10,6 +10,7 @@ import {
   isOwnStoragePath,
   isSixDigitPin,
   isSupportedCurrency,
+  isUuid,
   MAX_UPLOAD_BYTES,
   PRIVATE_BUCKET,
   SIGNED_URL_SECONDS
@@ -134,18 +135,71 @@ async function setPin(userId: string, payload: JsonRecord) {
   return { saved: true };
 }
 
+async function lockStake(userId: string, payload: JsonRecord) {
+  const runId = String(payload.task_run_id || payload.run_id || "").trim();
+  if (!isUuid(runId)) throw new HttpError(400, "근무 정보가 필요해요.");
+  const { data, error } = await admin.rpc("putduk_member_lock_stake", {
+    p_user_id: userId,
+    p_task_run_id: runId
+  });
+  if (error || !data) throw new HttpError(400, rpcMessage(error, "근무 보증을 잠그지 못했어요."));
+  return data;
+}
+
+async function submitWork(userId: string, payload: JsonRecord) {
+  const runId = String(payload.task_run_id || payload.run_id || "").trim();
+  if (!isUuid(runId)) throw new HttpError(400, "근무 정보가 필요해요.");
+  const choiceId = String(payload.choice_id || payload.choice || payload.picked || "").trim();
+  if (!choiceId) throw new HttpError(400, "맞아요 / 달라요 중 하나를 골라 주세요.");
+  const label = textValue(payload.choice_label || payload.label, "고른 보기", 80, false);
+
+  const { data, error } = await admin.rpc("putduk_member_submit_work", {
+    p_user_id: userId,
+    p_task_run_id: runId,
+    p_choice_id: choiceId,
+    p_choice_label: label
+  });
+  if (error || !data) throw new HttpError(400, rpcMessage(error, "근무를 제출하지 못했어요."));
+  return data;
+}
+
+async function walletSnapshot(userId: string) {
+  const { data, error } = await admin
+    .from("wallet_accounts")
+    .select("bucket,currency,available_amount,held_amount")
+    .eq("user_id", userId)
+    .eq("currency", "KRW");
+  if (error) {
+    console.error("wallet snapshot failed", error);
+    throw new HttpError(503, "지갑을 불러오지 못했어요.");
+  }
+  const rows = Array.isArray(data) ? data : [];
+  const buckets = Object.fromEntries(rows.map((row) => [row.bucket, row]));
+  const work = buckets.work_balance || {};
+  return {
+    support_grant: Number(buckets.support_grant?.available_amount || 0),
+    work_balance: Number(work.available_amount || 0),
+    available: Number(buckets.available?.available_amount || 0),
+    held_amount: Number(work.held_amount || 0),
+    buckets: rows
+  };
+}
+
 async function submitWithdrawal(userId: string, payload: JsonRecord) {
   const currency = String(payload.currency || "KRW").toUpperCase();
   if (!isSupportedCurrency(currency)) throw new HttpError(400, "출금 통화를 확인해 주세요.");
   if (!isAmountInRange(payload.amount)) throw new HttpError(400, "출금 금액을 확인해 주세요.");
   if (!isSixDigitPin(payload.pin)) throw new HttpError(400, "출금 비밀번호는 숫자 6자리여야 합니다.");
+  const includePrincipal = payload.include_principal === true
+    || ["1", "true", "yes", "원금포함", "원금", "include_principal", "principal"].includes(String(payload.include_principal ?? payload.kind ?? "").trim().toLowerCase());
 
-  const { data, error } = await admin.rpc("putduk_member_submit_withdrawal", {
+  const { data, error } = await admin.rpc("putduk_member_withdraw_request", {
     p_user_id: userId,
     p_currency: currency,
     p_amount: Number(payload.amount),
     p_pin: String(payload.pin),
     p_destination_type: textValue(payload.destination_type, "출금 방법", 20),
+    p_include_principal: includePrincipal,
     p_bank_name: textValue(payload.bank_name, "은행명", 80, false),
     p_account_holder: textValue(payload.account_holder, "예금주", 80, false),
     p_account_number: textValue(payload.account_number, "계좌번호", 80, false),
@@ -207,7 +261,19 @@ Deno.serve(async (request: Request) => {
       return jsonResponse(request, { ok: true, ...(await setPin(user.id, payload)) });
     }
 
-    if (action === "submit_withdrawal") {
+    if (action === "lock_stake" || action === "start_lock") {
+      return jsonResponse(request, { ok: true, lock: await lockStake(user.id, payload) });
+    }
+
+    if (action === "submit_work" || action === "submit_task" || action === "submit_run") {
+      return jsonResponse(request, { ok: true, run: await submitWork(user.id, payload) });
+    }
+
+    if (action === "wallet" || action === "wallet_snapshot") {
+      return jsonResponse(request, { ok: true, wallet: await walletSnapshot(user.id) });
+    }
+
+    if (action === "submit_withdrawal" || action === "withdraw_request") {
       return jsonResponse(request, { ok: true, withdrawal: await submitWithdrawal(user.id, payload) }, 201);
     }
 

@@ -56,7 +56,21 @@ export function rpcMessage(error: { message?: string } | null, fallback: string)
     message.includes("올바르") ||
     message.includes("찾을 수") ||
     message.includes("잠겨") ||
-    message.includes("선택")
+    message.includes("선택") ||
+    message.includes("잠금") ||
+    message.includes("소진") ||
+    message.includes("체험") ||
+    message.includes("출금") ||
+    message.includes("거절") ||
+    message.includes("이중") ||
+    message.includes("처리 중") ||
+    message.includes("근무") ||
+    message.includes("카드") ||
+    message.includes("라인") ||
+    message.includes("예상") ||
+    message.includes("골라") ||
+    message.includes("보기") ||
+    message.includes("제출")
   ) {
     return message;
   }

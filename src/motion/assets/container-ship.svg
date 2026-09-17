@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 130" fill="none" role="img" aria-label="�Lt ">
+  <ellipse cx="160" cy="118" rx="130" ry="8" fill="#0a2a36" opacity=".35"/>
+  <path d="M18 78c22 18 70 28 142 28 78 0 122-8 142-24-12 4-28 2-40-8H56c-12 8-26 10-38 4Z" fill="#1b2430"/>
+  <path d="M28 78h250c8-6 16-16 20-26H48c-8 8-14 18-20 26Z" fill="#42b0d5"/>
+  <rect x="58" y="36" width="28" height="18" fill="#c0392b"/>
+  <rect x="88" y="36" width="28" height="18" fill="#f3cd6b"/>
+  <rect x="118" y="36" width="28" height="18" fill="#2ecc71"/>
+  <rect x="148" y="36" width="28" height="18" fill="#3498db"/>
+  <rect x="178" y="36" width="28" height="18" fill="#8e44ad"/>
+  <rect x="208" y="36" width="28" height="18" fill="#e67e22"/>
+  <rect x="58" y="54" width="28" height="18" fill="#f3cd6b"/>
+  <rect x="88" y="54" width="28" height="18" fill="#2c3e50"/>
+  <rect x="118" y="54" width="28" height="18" fill="#c0392b"/>
+  <rect x="148" y="54" width="28" height="18" fill="#16a085"/>
+  <rect x="178" y="54" width="28" height="18" fill="#3498db"/>
+  <rect x="208" y="54" width="28" height="18" fill="#f3cd6b"/>
+  <rect x="236" y="28" width="22" height="44" fill="#ecf0f1"/>
+  <rect x="240" y="14" width="14" height="16" fill="#bdc3c7"/>
+  <rect x="244" y="4" width="6" height="12" fill="#7f8c8d"/>
+  <path d="M20 86c24 6 70 10 140 10 64 0 110-4 132-10" stroke="#d6f3ff" stroke-width="2" opacity=".45"/>
+</svg>

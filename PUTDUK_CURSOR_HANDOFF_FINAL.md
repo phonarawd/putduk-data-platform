@@ -98,11 +98,11 @@ https://github.com/phonarawd/putduk-data-platform/actions/runs/35157352696
 원격 DB 확인 결과:
 
 ~~~text
-협력사: 8개
-업무 노드: 0개
-운영자 역할: 0개
+협력사: 8개 (승인·회원 공개)
+업무 노드: 14개 (공개·활성 13, 일시 중지 1)
+운영자 역할: 1개
 지원금 캠페인: 1개
-업무 실행 기록: 0개
+업무 실행 기록: 3개
 ~~~
 
 등록 협력사:
@@ -118,14 +118,14 @@ CJ대한통운
 GXO
 ~~~
 
-협력사는 모두 초기 pending 상태다. 실제 협력자료와 로고 파일을 운영자가 등록하고 승인한 후에만 회원 화면에 공개한다.
+협력사 8곳은 승인·회원 공개 상태다. 회원 화면에는 승인·공개된 협력사와 연결된 공개 업무만 노출한다.
 
 Edge Function:
 
 ~~~text
 이름: admin-control
 상태: ACTIVE
-버전: 3
+버전: 24
 JWT 검증: 활성화
 주소:
 https://gaugwamwceqdnqdqrxqg.supabase.co/functions/v1/admin-control
@@ -134,7 +134,7 @@ https://gaugwamwceqdnqdqrxqg.supabase.co/functions/v1/admin-control
 Supabase Security Advisor 결과:
 
 ~~~text
-경고 0건
+유출 비밀번호 보호: 꺼짐 (Free 플랜, 활성화 시 402)
 ~~~
 
 ## 4. 현재 구현 완료 범위
@@ -912,16 +912,23 @@ PUTDUK_ALLOWED_ORIGINS=https://운영도메인
 
 ## 17. 현재 잠금 플래그
 
-현재:
+회원 dist:
+
+~~~js
+enableWorkApi: true
+enableFinanceApi: false
+~~~
+
+운영자 dist:
 
 ~~~js
 enableWorkApi: false
 enableFinanceApi: false
 ~~~
 
-운영자 계정, 협력사 승인, 업무 카드 등록, 업무 공개, 실제 회원 테스트, 검수·지갑·알림 테스트를 모두 완료한 뒤에만 enableWorkApi를 true로 변경한다.
+회원 실근무는 열려 있다. 회원 dist의 `enableWorkApi`를 false로 되돌리지 않는다.
 
-입출금·KYC·원장 구현이 끝날 때까지 enableFinanceApi는 false로 유지한다.
+`enableFinanceApi`는 KYC/PG 전에 전체 오픈하지 않는다.
 
 ## 18. 최종 테스트
 

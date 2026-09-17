@@ -1,7 +1,7 @@
 {
-  "name": "퍼뜩 데이터 노드",
+  "name": "퍼뜩 · 라인 근무",
   "short_name": "퍼뜩",
-  "description": "퍼뜩 데이터 노드 작업 플랫폼",
+  "description": "협력사 라인에서 근무하고 확인하는 퍼뜩",
   "id": "/",
   "start_url": "/",
   "scope": "/",

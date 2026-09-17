@@ -135,6 +135,79 @@ async function optionalList<T>(fn: () => Promise<T[]>): Promise<T[]> {
   }
 }
 
+function isMissingRpc(error: { message?: string } | null): boolean {
+  const message = String(error?.message || "");
+  return /could not find the function|does not exist|schema cache|PGRST202/i.test(message);
+}
+
+function isMissingColumn(error: { message?: string } | null): boolean {
+  const message = String(error?.message || "");
+  return /column|schema cache|42703/i.test(message);
+}
+
+const WITHDRAWAL_SELECT_BASIC =
+  "id,public_id,user_id,currency,amount,destination_type,destination_label,destination_masked,status,transaction_reference,rejection_reason,created_at,reviewed_at";
+const WITHDRAWAL_SELECT_FULL =
+  `${WITHDRAWAL_SELECT_BASIC},include_principal,principal_included,principal_amount,stipend_amount,note,completed_at,completed_by,demotion_applied,previous_member_tier,new_member_tier,line_closed`;
+
+function shapeWithdrawal(row: JsonRecord): JsonRecord {
+  const includePrincipal = includePrincipalFlag(row.include_principal)
+    || includePrincipalFlag(row.principal_included)
+    || Number(row.principal_amount || 0) > 0
+    || includePrincipalFlag(row.note)
+    || includePrincipalFlag(row.destination_label)
+    || /원금/.test(String(row.note || row.destination_label || ""));
+  return {
+    ...row,
+    include_principal: includePrincipal,
+    kind_label: includePrincipal ? "원금포함" : "수당만",
+    employee_no: row.member_public_id || null
+  };
+}
+
+function walletSummary(rows: JsonRecord[] | null | undefined) {
+  const list = Array.isArray(rows) ? rows : [];
+  const krw = list.filter((row) => String(row.currency || "KRW").toUpperCase() === "KRW");
+  const byBucket = new Map(krw.map((row) => [String(row.bucket || ""), row]));
+  const amountOf = (bucket: string, field: "available_amount" | "held_amount") =>
+    Number(byBucket.get(bucket)?.[field] || 0);
+  return {
+    support: amountOf("support_grant", "available_amount"),
+    work: amountOf("work_balance", "available_amount"),
+    work_held: amountOf("work_balance", "held_amount"),
+    task: amountOf("task_reward", "available_amount"),
+    referral: amountOf("referral_reward", "available_amount"),
+    available: amountOf("available", "available_amount"),
+    available_held: amountOf("available", "held_amount"),
+    held: amountOf("held", "held_amount")
+  };
+}
+
+const MOTION_SETTINGS_PATH = "ops/motion-settings.json";
+const MEMBER_COPY_PATH = "ops/member-copy.json";
+const defaultMemberCopy = "가입을 환영해요. 업무를 시작하는 데 사용할 수 있는 지원금입니다.";
+const defaultMotionSettings = {
+  bot_enabled: true,
+  crowd_min: 8,
+  crowd_max: 24,
+  burn_per_minute: 2
+};
+
+function normalizeMotionSettings(value: JsonRecord | null | undefined) {
+  const source = value && typeof value === "object" ? value : {};
+  const crowdMin = Number(source.crowd_min ?? defaultMotionSettings.crowd_min);
+  const crowdMax = Number(source.crowd_max ?? defaultMotionSettings.crowd_max);
+  const burn = Number(source.burn_per_minute ?? source.burnPerMinute ?? defaultMotionSettings.burn_per_minute);
+  const min = Number.isFinite(crowdMin) ? Math.min(Math.max(0, Math.round(crowdMin)), 10000) : defaultMotionSettings.crowd_min;
+  const maxRaw = Number.isFinite(crowdMax) ? Math.min(Math.max(0, Math.round(crowdMax)), 10000) : defaultMotionSettings.crowd_max;
+  return {
+    bot_enabled: source.bot_enabled !== false && source.bot_on !== false,
+    crowd_min: min,
+    crowd_max: Math.max(min, maxRaw),
+    burn_per_minute: Number.isFinite(burn) ? Math.min(Math.max(0, Math.round(burn)), 100000) : defaultMotionSettings.burn_per_minute
+  };
+}
+
 async function attachMemberLabels(
   admin: AdminClient,
   rows: JsonRecord[],
@@ -175,25 +248,139 @@ export async function listMembers(admin: AdminClient, userId: string, payload: J
   return Array.isArray(data) ? data : [];
 }
 
+function stringList(value: unknown): string[] {
+  if (Array.isArray(value)) return value.map((item) => String(item || "").trim()).filter(Boolean);
+  const text = String(value || "").trim();
+  return text ? [text] : [];
+}
+
+function payloadPhotos(payload: unknown): string[] {
+  if (!payload || typeof payload !== "object") return [];
+  const rec = payload as JsonRecord;
+  return [
+    ...stringList(rec.photos),
+    ...stringList(rec.images),
+    String(rec.photo || rec.image || rec.question_image_path || rec.evidence_path || rec.proof_path || "").trim()
+  ].filter(Boolean);
+}
+
+function payloadChoice(payload: unknown): string {
+  if (!payload || typeof payload !== "object") return "";
+  const rec = payload as JsonRecord;
+  return String(
+    rec.choice_id || rec.choice || rec.selected_choice || rec.picked || rec.answer || rec.selected || rec.member_choice || ""
+  ).trim();
+}
+
+function payloadChoiceLabel(payload: unknown): string {
+  if (!payload || typeof payload !== "object") return "";
+  const rec = payload as JsonRecord;
+  return String(rec.label || rec.choice_label || rec.member_choice_label || "").trim();
+}
+
+function payloadSubmittedAt(payload: unknown, fallback: unknown): string | null {
+  if (payload && typeof payload === "object") {
+    const rec = payload as JsonRecord;
+    const fromPayload = String(rec.submitted_at || rec.completed_at || "").trim();
+    if (fromPayload) return fromPayload;
+  }
+  const extra = String(fallback || "").trim();
+  return extra || null;
+}
+
+function allowDevSeed(payload: JsonRecord): boolean {
+  return payload.dev_seed === true;
+}
+
+async function listMemberTaskRuns(admin: AdminClient, memberId: string) {
+  const full = await admin
+    .from("task_runs")
+    .select("id,public_id,node_id,status,reward_amount,reward_status,created_at,completed_at,is_trial,locked_stake_krw,stipend_krw")
+    .eq("user_id", memberId)
+    .order("created_at", { ascending: false })
+    .limit(40);
+  if (full.error && /is_trial|locked_stake_krw|stipend_krw/i.test(String(full.error.message || ""))) {
+    return admin
+      .from("task_runs")
+      .select("id,public_id,node_id,status,reward_amount,reward_status,created_at,completed_at")
+      .eq("user_id", memberId)
+      .order("created_at", { ascending: false })
+      .limit(40);
+  }
+  return full;
+}
+
 export async function getMember(admin: AdminClient, userId: string, payload: JsonRecord) {
   await requireRole(admin, userId, memberRoles);
   const memberId = assertUuid(payload.user_id || payload.member_id, "회원");
 
-  const [profileResult, privateResult, walletResult, taskResult, depositResult, withdrawalResult, kycResult, referralResult, assignResult] = await Promise.all([
-    admin.from("profiles").select("id,public_id,display_name,member_tier,status,kyc_status,referral_code,created_at,updated_at").eq("id", memberId).maybeSingle(),
+  const [profileResult, privateResult, walletResult, taskResult, depositResult, withdrawalResult, kycResult, referralResult, assignResult, ledgerResult, submissionResult, eventResult] = await Promise.all([
+    admin.from("profiles").select("id,public_id,display_name,member_tier,status,kyc_status,referral_code,trial_consumed_at,line_open,line_closed_at,priority_pick,dedicated_queue,weekly_volume_boost,high_value_notice,principal_withdraw_count,created_at,updated_at").eq("id", memberId).maybeSingle(),
     admin.schema("private").from("profile_private").select("legal_name,birth_date,phone_e164,email_snapshot,last_login_at,last_login_ip,marketing_opt_in").eq("user_id", memberId).maybeSingle(),
     admin.from("wallet_accounts").select("bucket,currency,available_amount,held_amount,updated_at").eq("user_id", memberId),
-    admin.from("task_runs").select("id,public_id,node_id,status,reward_amount,reward_status,created_at,completed_at").eq("user_id", memberId).order("created_at", { ascending: false }).limit(40),
+    listMemberTaskRuns(admin, memberId),
     admin.from("deposit_requests").select("id,public_id,currency,amount,status,created_at,reviewed_at,rejection_reason").eq("user_id", memberId).order("created_at", { ascending: false }).limit(40),
-    admin.from("withdrawal_requests").select("id,public_id,currency,amount,status,destination_type,destination_masked,transaction_reference,created_at,rejection_reason").eq("user_id", memberId).order("created_at", { ascending: false }).limit(40),
+    admin.from("withdrawal_requests").select("id,public_id,currency,amount,status,destination_type,destination_masked,transaction_reference,created_at,rejection_reason,include_principal,stipend_amount,principal_amount,completed_at,demotion_applied,previous_member_tier,new_member_tier,line_closed").eq("user_id", memberId).order("created_at", { ascending: false }).limit(40),
     admin.schema("private").from("kyc_documents").select("id,document_kind,status,reviewed_at,rejection_reason,created_at").eq("user_id", memberId),
     admin.from("referral_relations").select("id,referrer_id,invitee_id,status,created_at").or(`referrer_id.eq.${memberId},invitee_id.eq.${memberId}`),
-    admin.from("task_assignments").select("id,node_id,partner_brand_id,reward_amount,estimated_seconds,reason,status,visible_from,visible_until,created_at").eq("user_id", memberId).order("created_at", { ascending: false }).limit(20)
+    admin.from("task_assignments").select("id,node_id,partner_brand_id,reward_amount,estimated_seconds,reason,status,visible_from,visible_until,created_at").eq("user_id", memberId).order("created_at", { ascending: false }).limit(20),
+    admin.schema("private").from("ledger_entries").select("id,public_id,bucket,currency,amount,entry_type,reference_type,created_at").eq("user_id", memberId).order("created_at", { ascending: false }).limit(80),
+    admin.from("work_submissions").select("id,task_run_id,answer_payload,auto_score,submitted_at").eq("user_id", memberId).order("submitted_at", { ascending: false }).limit(40),
+    admin.from("task_events").select("id,task_run_id,event_type,event_payload,created_at").eq("user_id", memberId).order("created_at", { ascending: false }).limit(50)
   ]);
 
   if (profileResult.error || !profileResult.data) {
     throw new HttpError(404, "회원 정보를 찾을 수 없습니다.");
   }
+  if (ledgerResult.error) console.error("member ledger read failed", ledgerResult.error);
+  if (submissionResult.error) console.error("member submission read failed", submissionResult.error);
+  if (eventResult.error) console.error("member task event read failed", eventResult.error);
+  if (taskResult.error) console.error("member task run read failed", taskResult.error);
+
+  const runs = (taskResult.data || []) as JsonRecord[];
+  const nodeIds = [...new Set(runs.map((row) => String(row.node_id || "")).filter(Boolean))];
+  const nodeResult = nodeIds.length
+    ? await admin.from("nodes").select("id,title_ko,question_image_path,choice_a_ko,choice_b_ko,stake_krw,stipend_krw,tier_band,completion_effect").in("id", nodeIds)
+    : { data: [] as JsonRecord[], error: null };
+  if (nodeResult.error) console.error("member task node read failed", nodeResult.error);
+
+  const nodeMap = new Map((nodeResult.data || []).map((row) => [String(row.id), row]));
+  const submissionMap = new Map((submissionResult.data || []).map((row) => [String(row.task_run_id), row]));
+  const eventChoice = new Map<string, string>();
+  const eventPhotos = new Map<string, string[]>();
+  for (const row of (eventResult.data || []) as JsonRecord[]) {
+    const runId = String(row.task_run_id || "");
+    const choice = payloadChoice(row.event_payload);
+    if (runId && choice && !eventChoice.has(runId)) eventChoice.set(runId, choice);
+    const photos = payloadPhotos(row.event_payload);
+    if (runId && photos.length) eventPhotos.set(runId, [...(eventPhotos.get(runId) || []), ...photos]);
+  }
+
+  const taskRuns = runs.map((row) => {
+    const node = nodeMap.get(String(row.node_id || "")) || {};
+    const submission = submissionMap.get(String(row.id || "")) || null;
+    const answerPayload = submission?.answer_payload || {};
+    const questionPhoto = String(node.question_image_path || "").trim();
+    const photos = [
+      ...payloadPhotos(answerPayload),
+      ...(eventPhotos.get(String(row.id || "")) || []),
+      questionPhoto
+    ].filter(Boolean);
+    return {
+      ...row,
+      node_title: node.title_ko || null,
+      stake_amount: Number(row.locked_stake_krw || node.stake_krw || 0),
+      stipend_amount: Number(row.stipend_krw ?? row.reward_amount ?? node.stipend_krw ?? 0),
+      question_image_path: questionPhoto || null,
+      choice_a_ko: node.choice_a_ko || null,
+      choice_b_ko: node.choice_b_ko || null,
+      member_choice: payloadChoice(answerPayload) || eventChoice.get(String(row.id || "")) || null,
+      member_choice_label: payloadChoiceLabel(answerPayload) || null,
+      submitted_at: payloadSubmittedAt(answerPayload, submission?.submitted_at) || row.completed_at || null,
+      photos: [...new Set(photos)],
+      submission
+    };
+  });
 
   const authUser = await admin.auth.admin.getUserById(memberId);
   const auth = authUser.data?.user || null;
@@ -202,12 +389,16 @@ export async function getMember(admin: AdminClient, userId: string, payload: Jso
     profile: profileResult.data,
     private_profile: privateResult.data || null,
     wallets: walletResult.data || [],
-    task_runs: taskResult.data || [],
+    task_runs: taskRuns,
     deposits: depositResult.data || [],
     withdrawals: withdrawalResult.data || [],
+    ledger: ledgerResult.data || [],
+    work_submissions: submissionResult.data || [],
+    task_events: eventResult.data || [],
     kyc_documents: kycResult.data || [],
     referrals: referralResult.data || [],
     assignments: assignResult.data || [],
+    wallet_summary: walletSummary((walletResult.data || []) as JsonRecord[]),
     auth: {
       email: auth?.email || null,
       last_sign_in_at: auth?.last_sign_in_at || null
@@ -418,9 +609,9 @@ export async function createReviewRun(admin: AdminClient, userId: string, payloa
   await requireRole(admin, userId, ["super_admin", "work_review", "content"]);
   const memberId = assertUuid(payload.user_id || payload.member_id, "회원");
   const nodeId = assertUuid(payload.node_id, "업무 카드");
-  const node = await admin.from("nodes").select("id,title_ko,reward_min,reward_max").eq("id", nodeId).maybeSingle();
+  const node = await admin.from("nodes").select("id,title_ko,reward_min,reward_max,stipend_krw,stake_krw,is_trial,tier_band").eq("id", nodeId).maybeSingle();
   if (node.error || !node.data) throw new HttpError(404, "업무 카드를 찾을 수 없습니다.");
-  const reward = Number(payload.reward_amount ?? node.data.reward_min ?? 0);
+  const reward = Number(payload.reward_amount ?? node.data.stipend_krw ?? node.data.reward_min ?? 0);
   const seed = Array.from(crypto.getRandomValues(new Uint8Array(16))).map((value) => value.toString(16).padStart(2, "0")).join("");
   const insertPayload = {
     public_id: `PDK-RUN-${new Date().toISOString().slice(2, 10).replace(/-/g, "")}-${crypto.randomUUID().slice(0, 8).toUpperCase()}`,
@@ -432,6 +623,10 @@ export async function createReviewRun(admin: AdminClient, userId: string, payloa
     motion_variant: "a",
     motion_seed: seed,
     reward_amount: Number.isFinite(reward) ? Math.max(0, reward) : 0,
+    stipend_krw: Number.isFinite(reward) ? Math.max(0, reward) : 0,
+    locked_stake_krw: 0,
+    is_trial: Boolean(node.data.is_trial || node.data.tier_band === "체험"),
+    stake_released: true,
     reward_status: "pending"
   };
   const { data, error } = await admin.from("task_runs").insert(insertPayload).select("*").single();
@@ -585,13 +780,21 @@ export async function listDeposits(admin: AdminClient, userId: string) {
 
 export async function listWithdrawals(admin: AdminClient, userId: string) {
   await requireRole(admin, userId, financeRoles);
-  const { data, error } = await admin
+  let result = await admin
     .from("withdrawal_requests")
-    .select("id,public_id,user_id,currency,amount,destination_type,destination_label,destination_masked,status,transaction_reference,rejection_reason,created_at,reviewed_at")
+    .select(WITHDRAWAL_SELECT_FULL)
     .order("created_at", { ascending: false })
     .limit(120);
-  if (error) throw new HttpError(503, "출금내역을 불러오지 못했습니다.");
-  return data || [];
+  if (result.error && isMissingColumn(result.error)) {
+    result = await admin
+      .from("withdrawal_requests")
+      .select(WITHDRAWAL_SELECT_BASIC)
+      .order("created_at", { ascending: false })
+      .limit(120);
+  }
+  if (result.error) throw new HttpError(503, "출금내역을 불러오지 못했습니다.");
+  const labeled = await attachMemberLabels(admin, (result.data || []) as JsonRecord[]);
+  return labeled.map(shapeWithdrawal);
 }
 
 export async function reviewDeposit(admin: AdminClient, userId: string, payload: JsonRecord) {
@@ -619,6 +822,211 @@ export async function reviewWithdrawal(admin: AdminClient, userId: string, paylo
   return data;
 }
 
+function includePrincipalFlag(value: unknown): boolean {
+  const raw = String(value ?? "").trim().toLowerCase();
+  return value === true || ["1", "true", "yes", "원금포함", "원금", "include_principal", "principal"].includes(raw);
+}
+
+function asBoolFlag(value: unknown): boolean | undefined {
+  if (value === true || value === false) return value;
+  const raw = String(value ?? "").trim().toLowerCase();
+  if (["1", "true", "on", "yes"].includes(raw)) return true;
+  if (["0", "false", "off", "no"].includes(raw)) return false;
+  return undefined;
+}
+
+function nodeUpsertPayload(payload: JsonRecord): JsonRecord {
+  const body: JsonRecord = {};
+  const copy = [
+    "partner_brand_id", "title_ko", "description_ko", "node_family", "difficulty",
+    "estimated_seconds", "stake_krw", "stipend_krw", "tier_band", "partner_slug",
+    "question_prompt_ko", "question_image_path", "choice_a_ko", "choice_b_ko", "correct_choice",
+    "daily_cap", "daily_capacity", "requires_assign", "is_trial",
+    "motion_profile", "motion_version", "scene_theme", "vehicle_type", "route_type",
+    "particle_style", "catalog_status", "reward_min", "reward_max"
+  ];
+  for (const key of copy) {
+    if (payload[key] !== undefined && payload[key] !== "") body[key] = payload[key];
+  }
+  if (payload.allowed_tiers !== undefined) body.allowed_tiers = payload.allowed_tiers;
+  if (body.stake_krw === undefined && payload.stake !== undefined) body.stake_krw = payload.stake;
+  if (body.stipend_krw === undefined && payload.stipend !== undefined) body.stipend_krw = payload.stipend;
+  if (body.stipend_krw === undefined && payload.reward_min !== undefined) body.stipend_krw = payload.reward_min;
+  if (body.daily_cap === undefined && payload.slots !== undefined) body.daily_cap = payload.slots;
+  if (body.daily_cap === undefined && payload.daily_capacity !== undefined) body.daily_cap = payload.daily_capacity;
+  if (body.choice_a_ko === undefined && payload.choice_1) body.choice_a_ko = payload.choice_1;
+  if (body.choice_b_ko === undefined && payload.choice_2) body.choice_b_ko = payload.choice_2;
+  if (body.question_image_path === undefined && payload.photo_1) body.question_image_path = payload.photo_1;
+  if (body.correct_choice === undefined && payload.answer !== undefined) {
+    const answer = Number(payload.answer);
+    if (answer === 1) body.correct_choice = "a";
+    if (answer === 2) body.correct_choice = "b";
+  }
+  if (body.choice_a_ko === undefined && Array.isArray(payload.choices) && payload.choices[0]) {
+    body.choice_a_ko = payload.choices[0];
+  }
+  if (body.choice_b_ko === undefined && Array.isArray(payload.choices) && payload.choices[1]) {
+    body.choice_b_ko = payload.choices[1];
+  }
+  if (body.question_image_path === undefined && Array.isArray(payload.photos) && payload.photos[0]) {
+    body.question_image_path = payload.photos[0];
+  }
+  const assign = asBoolFlag(payload.requires_assign);
+  if (assign !== undefined) body.requires_assign = assign;
+  const trial = asBoolFlag(payload.is_trial);
+  if (trial !== undefined) body.is_trial = trial;
+  for (const key of ["stake_krw", "stipend_krw", "daily_cap", "daily_capacity", "estimated_seconds", "reward_min", "reward_max"]) {
+    if (body[key] !== undefined && body[key] !== null && body[key] !== "") body[key] = Number(body[key]);
+  }
+  const choice = String(body.correct_choice || "").toLowerCase();
+  if (choice === "a" || choice === "b") body.correct_choice = choice;
+  return body;
+}
+
+export async function upsertWorkNode(admin: AdminClient, userId: string, payload: JsonRecord) {
+  await requireRole(admin, userId, contentRoles);
+  const nodeId = payload.node_id ? assertUuid(payload.node_id, "업무 카드") : null;
+  const data = await callRpc<JsonRecord>(admin, "putduk_admin_upsert_node", {
+    p_admin_id: userId,
+    p_node_id: nodeId,
+    p_payload: nodeUpsertPayload(payload)
+  }, "업무 카드를 저장하지 못했습니다.");
+  await appendAudit(
+    admin,
+    userId,
+    nodeId ? "업무 카드 수정" : "업무 카드 등록",
+    "node",
+    String(data.id || ""),
+    textValue(payload.reason, "사유", 240, false),
+    null,
+    data
+  );
+  return data;
+}
+
+function immediateWithdrawRef(withdrawalId: string): string {
+  const day = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+  return `즉시처리-${day}-${withdrawalId.slice(0, 8)}`;
+}
+
+export async function completeWithdrawal(admin: AdminClient, userId: string, payload: JsonRecord) {
+  await requireRole(admin, userId, financeRoles);
+  const withdrawalId = assertUuid(payload.withdrawal_id || payload.request_id, "출금");
+  const reference = textValue(payload.transaction_reference, "거래번호", 120, false) || immediateWithdrawRef(withdrawalId);
+  const reason = textValue(payload.reason, "사유", 500, false);
+  const data = await callRpc<JsonRecord>(admin, "putduk_admin_withdraw_complete", {
+    p_admin_id: userId,
+    p_withdrawal_id: withdrawalId,
+    p_transaction_reference: reference,
+    p_reason: reason
+  }, "출금 완료를 저장하지 못했습니다.");
+  await appendAudit(admin, userId, "출금 즉시 완료", "withdrawal_request", String(data.id || withdrawalId), reason, null, data);
+  return { ...data, rpc_name: "putduk_admin_withdraw_complete" };
+}
+
+async function readMotionSettingsRow(admin: AdminClient): Promise<JsonRecord | null> {
+  const { data, error } = await admin.rpc("putduk_admin_motion_settings_get");
+  if (error) {
+    console.error("motion settings db read failed", error);
+    throw new HttpError(503, "연출 값을 불러오지 못했어요.");
+  }
+  return data && typeof data === "object" ? data as JsonRecord : null;
+}
+
+async function readMotionSettingsFile(admin: AdminClient): Promise<JsonRecord | null> {
+  const { data, error } = await admin.storage.from(PRIVATE_BUCKET).download(MOTION_SETTINGS_PATH);
+  if (error || !data) return null;
+  try {
+    const buffer = await data.arrayBuffer();
+    const parsed = JSON.parse(new TextDecoder().decode(buffer)) as JsonRecord;
+    return parsed && typeof parsed === "object" ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+async function writeMotionSettingsRow(admin: AdminClient, settings: ReturnType<typeof normalizeMotionSettings>, userId: string) {
+  const { data, error } = await admin.rpc("putduk_admin_motion_settings_save", {
+    p_admin_id: userId,
+    p_bot_enabled: settings.bot_enabled,
+    p_crowd_min: settings.crowd_min,
+    p_crowd_max: settings.crowd_max,
+    p_burn_per_minute: settings.burn_per_minute
+  });
+  if (error) {
+    console.error("motion settings db write failed", error);
+    throw new HttpError(503, "연출 값을 저장하지 못했어요.");
+  }
+  return data && typeof data === "object" ? data as JsonRecord : settings;
+}
+
+async function writeMotionSettingsFile(admin: AdminClient, settings: ReturnType<typeof normalizeMotionSettings>) {
+  const bytes = new TextEncoder().encode(JSON.stringify(settings));
+  const { error } = await admin.storage.from(PRIVATE_BUCKET).upload(MOTION_SETTINGS_PATH, bytes, {
+    upsert: true,
+    contentType: "application/json"
+  });
+  if (error) console.error("motion settings storage backup failed", error);
+}
+
+export async function getMotionSettings(admin: AdminClient, userId: string) {
+  await requireRole(admin, userId, contentRoles);
+  const row = await readMotionSettingsRow(admin);
+  if (row) return { ...normalizeMotionSettings(row), stored: "api" as const };
+  const fromFile = await readMotionSettingsFile(admin);
+  if (fromFile) {
+    const settings = normalizeMotionSettings(fromFile);
+    try {
+      await writeMotionSettingsRow(admin, settings, userId);
+    } catch (error) {
+      console.error("motion settings storage import failed", error);
+    }
+    return { ...settings, stored: "api" as const };
+  }
+  return { ...defaultMotionSettings, stored: "default" as const };
+}
+
+export async function getMemberCopy(admin: AdminClient, userId: string) {
+  await requireRole(admin, userId, [...contentRoles, ...financeRoles]);
+  const { data, error } = await admin.storage.from(PRIVATE_BUCKET).download(MEMBER_COPY_PATH);
+  if (error || !data) return { copy: defaultMemberCopy, stored: "local" as const };
+  try {
+    const buffer = await data.arrayBuffer();
+    const parsed = JSON.parse(new TextDecoder().decode(buffer)) as JsonRecord;
+    const copy = String(parsed.copy || parsed.member_copy || defaultMemberCopy).trim() || defaultMemberCopy;
+    return { copy, stored: "api" as const };
+  } catch {
+    return { copy: defaultMemberCopy, stored: "local" as const };
+  }
+}
+
+export async function saveMemberCopy(admin: AdminClient, userId: string, payload: JsonRecord) {
+  await requireRole(admin, userId, [...contentRoles, ...financeRoles]);
+  const copy = textValue(payload.copy || payload.member_copy, "회원에게 보여줄 안내", 500) || defaultMemberCopy;
+  const settings = { copy };
+  const bytes = new TextEncoder().encode(JSON.stringify(settings));
+  const { error } = await admin.storage.from(PRIVATE_BUCKET).upload(MEMBER_COPY_PATH, bytes, {
+    upsert: true,
+    contentType: "application/json"
+  });
+  await appendAudit(admin, userId, "회원 안내 문구 저장", "ops_settings", null, null, null, settings);
+  return { copy, stored: error ? "local" : "api" };
+}
+
+export async function saveMotionSettings(admin: AdminClient, userId: string, payload: JsonRecord) {
+  await requireRole(admin, userId, contentRoles);
+  const settings = normalizeMotionSettings({
+    bot_enabled: payload.bot_enabled ?? payload.bot_on,
+    crowd_min: payload.crowd_min,
+    crowd_max: payload.crowd_max,
+    burn_per_minute: payload.burn_per_minute
+  });
+  await writeMotionSettingsRow(admin, settings, userId);
+  await writeMotionSettingsFile(admin, settings);
+  await appendAudit(admin, userId, "연출 설정 저장", "ops_settings", null, null, null, settings);
+  return { ...settings, stored: "api" as const };
+}
+
 export async function listFinance(admin: AdminClient, userId: string) {
   const [deposits, withdrawals, kyc, referrals] = await Promise.all([
     optionalList(() => listDeposits(admin, userId)),
@@ -628,7 +1036,7 @@ export async function listFinance(admin: AdminClient, userId: string) {
   ]);
   return {
     deposits: await attachMemberLabels(admin, deposits as JsonRecord[]),
-    withdrawals: await attachMemberLabels(admin, withdrawals as JsonRecord[]),
+    withdrawals: (withdrawals as JsonRecord[]).map((row) => shapeWithdrawal(row)),
     kyc: (kyc as JsonRecord[]).map((row) => ({
       ...row,
       user_id: row.id || row.user_id,
@@ -646,13 +1054,15 @@ export async function adjustMemberBalance(admin: AdminClient, userId: string, pa
   const amount = amountValue(payload.amount, "금액");
   const currency = currencyValue(payload.currency);
   const reason = textValue(payload.reason, "사유", 500);
+  const bucketRaw = textValue(payload.bucket, "지갑 칸", 40, false);
   const data = await callRpc<JsonRecord>(admin, "putduk_admin_adjust_balance", {
     p_admin_id: userId,
     p_user_id: memberId,
     p_direction: direction,
     p_amount: amount,
     p_currency: currency,
-    p_reason: reason
+    p_reason: reason,
+    p_bucket: bucketRaw
   }, "잔액 조정을 저장하지 못했습니다.");
   await appendAudit(
     admin,
@@ -879,9 +1289,15 @@ export async function handleOpsAction(
     return { body: { ok: true, ...(await broadcastNotice(admin, user.id, payload)) } };
   }
   if (action === "create_deposit_request" || action === "create_operator_deposit") {
+    if (!allowDevSeed(payload)) {
+      throw new HttpError(403, "운영 화면에서는 가짜 입금을 만들지 않아요.");
+    }
     return { body: { ok: true, deposit: await createOperatorDeposit(admin, user.id, payload) }, status: 201 };
   }
   if (action === "create_review_run") {
+    if (!allowDevSeed(payload)) {
+      throw new HttpError(403, "운영 화면에서는 가짜 검수 대상을 만들지 않아요.");
+    }
     return { body: { ok: true, task_run: await createReviewRun(admin, user.id, payload) }, status: 201 };
   }
   if (action === "assign_task") {
@@ -902,6 +1318,12 @@ export async function handleOpsAction(
   if (action === "list_brand_evidence") {
     return { body: { ok: true, evidence: await listBrandEvidence(admin, user.id, payload) } };
   }
+  if (action === "create_node" || action === "upsert_node") {
+    return { body: { ok: true, node: await upsertWorkNode(admin, user.id, payload) }, status: action === "create_node" ? 201 : 200 };
+  }
+  if (action === "update_node") {
+    return { body: { ok: true, node: await upsertWorkNode(admin, user.id, { ...payload, node_id: payload.node_id }) } };
+  }
   if (action === "deposits" || action === "list_deposits") {
     return { body: { ok: true, deposits: await listDeposits(admin, user.id) } };
   }
@@ -920,6 +1342,21 @@ export async function handleOpsAction(
   }
   if (action === "review_withdrawal") {
     return { body: { ok: true, withdrawal: await reviewWithdrawal(admin, user.id, payload) } };
+  }
+  if (action === "withdraw_complete" || action === "complete_withdrawal") {
+    return { body: { ok: true, withdrawal: await completeWithdrawal(admin, user.id, payload) } };
+  }
+  if (action === "get_motion_settings" || action === "motion_settings") {
+    return { body: { ok: true, settings: await getMotionSettings(admin, user.id) } };
+  }
+  if (action === "save_motion_settings" || action === "update_motion_settings") {
+    return { body: { ok: true, settings: await saveMotionSettings(admin, user.id, payload) } };
+  }
+  if (action === "get_member_copy" || action === "member_copy") {
+    return { body: { ok: true, ...(await getMemberCopy(admin, user.id)) } };
+  }
+  if (action === "save_member_copy" || action === "update_member_copy") {
+    return { body: { ok: true, ...(await saveMemberCopy(admin, user.id, payload)) } };
   }
   if (action === "kyc" || action === "list_kyc") {
     return { body: { ok: true, members: await listKyc(admin, user.id) } };

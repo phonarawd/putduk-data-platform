@@ -1,21 +1,20 @@
-/** GXO 창고 격자·재고 분산. */
+/** GXO 창고. 랙·조명·지게차가 실제 물류 장면으로 움직인다. */
 import type { MotionFrame } from '../motion-timeline.ts';
+import { clockOf, drawForklift, drawWarehouseWorld, travelOf } from '../cinematic-draw.ts';
 
 export const id = 'warehouse_edge';
 
 export function drawScene(ctx: CanvasRenderingContext2D, frame: MotionFrame): void {
-  const { width: w, height: h, progress: t, color } = frame;
-  for (let row = 0; row < 4; row += 1) {
-    for (let col = 0; col < 8; col += 1) {
-      const x = w * 0.12 + col * (w * 0.1);
-      const y = h * 0.28 + row * 38;
-      const lit = ((col + row + Math.floor(t * 12)) % 4) === 0;
-      ctx.strokeStyle = lit ? color : 'rgba(255,255,255,0.16)';
-      ctx.strokeRect(x, y, 28, 22);
-      if (lit && frame.phase !== 'connect') {
-        ctx.fillStyle = 'rgba(243, 205, 107, 0.28)';
-        ctx.fillRect(x, y, 28, 22);
-      }
-    }
-  }
+  const { width: w, height: h, color } = frame;
+  const t = travelOf(frame);
+  const clock = clockOf(frame);
+  drawWarehouseWorld(ctx, frame);
+  const x = w * (0.14 + t * 0.62);
+  const y = h * 0.78;
+  const scale = Math.min(w, h) / 82;
+  drawForklift(ctx, x, y, scale, color, clock);
+  ctx.fillStyle = '#f3cd6b';
+  ctx.fillRect(x + 16 * scale, y - 28 * scale + Math.sin(clock * 2) * 3, 22 * scale, 14 * scale);
+  ctx.fillStyle = 'rgba(255,255,255,0.18)';
+  ctx.fillRect(x + 16 * scale, y - 28 * scale + Math.sin(clock * 2) * 3, 22 * scale, 3);
 }

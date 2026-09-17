@@ -1,6 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.0";
-import { handleOpsAction } from "../_shared/admin-ops.ts";
+import { handleOpsAction, upsertWorkNode } from "../_shared/admin-ops.ts";
 
 type JsonRecord = Record<string, unknown>;
 
@@ -106,6 +106,148 @@ function catalogStatus(value: unknown): "draft" | "published" | "paused" | "arch
   return candidate as "draft" | "published" | "paused" | "archived";
 }
 
+type WorkSpec = {
+  v: 1;
+  stake: number;
+  stipend: number;
+  photos: string[];
+  choices: string[];
+  answer: number;
+  slots: number;
+};
+
+function parseWorkSpec(value: unknown): WorkSpec | null {
+  const raw = typeof value === "string" ? value.trim() : value && typeof value === "object" ? JSON.stringify(value) : "";
+  if (!raw.startsWith("{")) return null;
+  try {
+    const parsed = JSON.parse(raw) as JsonRecord;
+    if (!parsed || parsed.v !== 1) return null;
+    const choices = Array.isArray(parsed.choices) ? parsed.choices.map((item) => String(item || "").trim()).filter(Boolean) : [];
+    const photos = Array.isArray(parsed.photos) ? parsed.photos.map((item) => String(item || "").trim()).filter(Boolean) : [];
+    return {
+      v: 1,
+      stake: Number(parsed.stake || 0),
+      stipend: Number(parsed.stipend || 0),
+      photos,
+      choices,
+      answer: Number(parsed.answer || 1),
+      slots: Number(parsed.slots || 0)
+    };
+  } catch {
+    return null;
+  }
+}
+
+function stringList(value: unknown): string[] {
+  if (Array.isArray(value)) return value.map((item) => String(item || "").trim()).filter(Boolean);
+  return [];
+}
+
+function payloadPhotos(payload: unknown): string[] {
+  if (!payload || typeof payload !== "object") return [];
+  const rec = payload as JsonRecord;
+  const nested = Array.isArray(rec.photos) ? rec.photos : [];
+  const extra = [rec.photo, rec.image, rec.question_image_path, rec.evidence_path, rec.proof_path]
+    .map((item) => String(item || "").trim())
+    .filter(Boolean);
+  return [...nested.map((item) => String(item || "").trim()).filter(Boolean), ...extra];
+}
+
+function payloadChoice(payload: unknown): string {
+  if (!payload || typeof payload !== "object") return "";
+  const rec = payload as JsonRecord;
+  return String(
+    rec.choice_id || rec.choice || rec.selected_choice || rec.picked || rec.answer || rec.selected || rec.member_choice || ""
+  ).trim();
+}
+
+function payloadChoiceLabel(payload: unknown): string {
+  if (!payload || typeof payload !== "object") return "";
+  const rec = payload as JsonRecord;
+  return String(rec.label || rec.choice_label || rec.member_choice_label || "").trim();
+}
+
+function payloadSubmittedAt(payload: unknown, fallback: unknown): string | null {
+  if (payload && typeof payload === "object") {
+    const rec = payload as JsonRecord;
+    const fromPayload = String(rec.submitted_at || rec.completed_at || "").trim();
+    if (fromPayload) return fromPayload;
+  }
+  const extra = String(fallback || "").trim();
+  return extra || null;
+}
+
+function hasReviewPhoto(paths: string[]): boolean {
+  return paths.some((item) => String(item || "").trim().length > 0);
+}
+
+function buildWorkSpec(payload: JsonRecord, before?: JsonRecord | null): string | null {
+  const existing = parseWorkSpec(payload.work_spec || payload.completion_effect || before?.completion_effect);
+  const photos = stringList(payload.photos).length
+    ? stringList(payload.photos)
+    : [payload.photo_1, payload.photo_2].map((item) => String(item || "").trim()).filter(Boolean);
+  const choices = stringList(payload.choices).length
+    ? stringList(payload.choices)
+    : [payload.choice_1, payload.choice_2].map((item) => String(item || "").trim()).filter(Boolean);
+  const touched = payload.stake !== undefined
+    || payload.stipend !== undefined
+    || payload.slots !== undefined
+    || payload.answer !== undefined
+    || photos.length > 0
+    || choices.length > 0
+    || payload.work_spec !== undefined;
+  if (!touched && !existing) {
+    return textValue(payload.completion_effect, "완료 효과", 80, false);
+  }
+  if (choices.length === 1) throw new HttpError(400, "보기는 두 개를 모두 입력해 주세요.");
+  if (choices.length > 2) throw new HttpError(400, "보기는 두 개만 입력해 주세요.");
+  const stake = payload.stake !== undefined ? numberValue(payload.stake, "근무 보증", 0, 100000000) : Number(existing?.stake || 0);
+  const stipend = payload.stipend !== undefined
+    ? numberValue(payload.stipend, "수당", 0, 100000000)
+    : Number(existing?.stipend ?? payload.reward_max ?? payload.reward_min ?? 0);
+  const slots = payload.slots !== undefined
+    ? numberValue(payload.slots, "슬롯", 0, 1000000)
+    : Number(existing?.slots ?? payload.daily_capacity ?? 0);
+  const answer = payload.answer !== undefined ? numberValue(payload.answer, "정답", 1, 2) : Number(existing?.answer || 1);
+  if (choices.length === 2 && (answer < 1 || answer > 2)) {
+    throw new HttpError(400, "정답은 보기 1 또는 보기 2여야 합니다.");
+  }
+  const spec: WorkSpec = {
+    v: 1,
+    stake,
+    stipend,
+    photos: photos.length ? photos : (existing?.photos || []),
+    choices: choices.length === 2 ? choices : (existing?.choices || []),
+    answer,
+    slots
+  };
+  return JSON.stringify(spec);
+}
+
+function withWorkSpec<T extends JsonRecord>(row: T): T & { work_spec: WorkSpec | null } {
+  const fromJson = parseWorkSpec(row.completion_effect);
+  const columnChoices = [row.choice_a_ko, row.choice_b_ko].map((item) => String(item || "").trim()).filter(Boolean);
+  const choices = columnChoices.length === 2
+    ? columnChoices
+    : (fromJson?.choices?.length ? fromJson.choices : columnChoices);
+  const photos = String(row.question_image_path || "").trim()
+    ? [String(row.question_image_path).trim()]
+    : (fromJson?.photos?.length ? fromJson.photos : []);
+  const choice = String(row.correct_choice || "").toLowerCase();
+  const answer = choice === "b" ? 2 : choice === "a" ? 1 : Number(fromJson?.answer || 1);
+  const spec: WorkSpec = {
+    v: 1,
+    stake: Number(row.stake_krw ?? fromJson?.stake ?? 0),
+    stipend: Number(row.stipend_krw ?? fromJson?.stipend ?? row.reward_max ?? row.reward_min ?? 0),
+    photos,
+    choices,
+    answer,
+    slots: Number(row.daily_cap ?? fromJson?.slots ?? row.daily_capacity ?? 0)
+  };
+  const has = spec.stake || spec.stipend || spec.photos.length || spec.choices.length || spec.slots;
+  return { ...row, work_spec: has || fromJson ? spec : null };
+}
+
 async function authenticate(request: Request) {
   const header = request.headers.get("authorization") || "";
   const token = header.replace(/^Bearer\s+/i, "").trim();
@@ -166,33 +308,63 @@ async function parseRequest(request: Request): Promise<JsonRecord> {
 }
 
 async function listCatalog() {
-  const [brandResult, nodeResult] = await Promise.all([
-    admin
-      .from("partner_brands")
-      .select("id,slug,display_name_ko,legal_name,category,description_ko,verification_status,verification_note,logo_asset_path,photo_asset_path,logo_usage_status,published,created_at,updated_at")
-      .order("display_name_ko", { ascending: true }),
-    admin
+  const brandResult = await admin
+    .from("partner_brands")
+    .select("id,slug,display_name_ko,legal_name,category,description_ko,verification_status,verification_note,logo_asset_path,photo_asset_path,logo_usage_status,published,created_at,updated_at")
+    .order("display_name_ko", { ascending: true });
+
+  let nodeResult = await admin
+    .from("nodes")
+    .select("id,public_id,partner_brand_id,title_ko,description_ko,node_family,difficulty,estimated_seconds,reward_min,reward_max,daily_capacity,enabled,motion_profile,motion_version,allowed_tiers,scene_theme,vehicle_type,route_type,particle_style,completion_effect,supply_source,catalog_status,published_at,published_by,created_at,updated_at,stake_krw,stipend_krw,tier_band,partner_slug,question_prompt_ko,question_image_path,choice_a_ko,choice_b_ko,daily_cap,requires_assign,is_trial")
+    .order("created_at", { ascending: false });
+
+  if (nodeResult.error) {
+    nodeResult = await admin
       .from("nodes")
       .select("id,public_id,partner_brand_id,title_ko,description_ko,node_family,difficulty,estimated_seconds,reward_min,reward_max,daily_capacity,enabled,motion_profile,motion_version,allowed_tiers,scene_theme,vehicle_type,route_type,particle_style,completion_effect,supply_source,catalog_status,published_at,published_by,created_at,updated_at")
-      .order("created_at", { ascending: false })
-  ]);
+      .order("created_at", { ascending: false });
+  }
 
   if (brandResult.error || nodeResult.error) {
     console.error("catalog read failed", brandResult.error || nodeResult.error);
     throw new HttpError(503, "업무 카탈로그를 불러오지 못했습니다.");
   }
 
-  return { brands: brandResult.data || [], nodes: nodeResult.data || [] };
+  const nodes = (nodeResult.data || []) as JsonRecord[];
+  const nodeIds = nodes.map((row) => String(row.id || "")).filter(Boolean);
+  const answers = nodeIds.length
+    ? await admin.schema("private").from("node_answer_keys").select("node_id,correct_choice").in("node_id", nodeIds)
+    : { data: [] as { node_id: string; correct_choice: string }[], error: null };
+  const answerMap = new Map((answers.data || []).map((row) => [row.node_id, row.correct_choice]));
+
+  return {
+    brands: brandResult.data || [],
+    nodes: nodes.map((row) => withWorkSpec({
+      ...row,
+      correct_choice: answerMap.get(String(row.id || "")) || null
+    }))
+  };
 }
 
 async function listReviews() {
   const reviewStatuses = ["submitted", "review_pending", "approved", "rework", "rejected"];
-  const { data: runs, error: runError } = await admin
+  const runSelectWithTrial = "id,public_id,user_id,node_id,status,reward_amount,progress,created_at,completed_at,updated_at,is_trial,stake_bucket";
+  const runSelect = "id,public_id,user_id,node_id,status,reward_amount,progress,created_at,completed_at,updated_at";
+  let runQuery = await admin
     .from("task_runs")
-    .select("id,public_id,user_id,node_id,status,reward_amount,progress,created_at,completed_at,updated_at")
+    .select(runSelectWithTrial)
     .in("status", reviewStatuses)
     .order("updated_at", { ascending: false })
     .limit(120);
+  if (runQuery.error && /is_trial|stake_bucket/i.test(String(runQuery.error.message || ""))) {
+    runQuery = await admin
+      .from("task_runs")
+      .select(runSelect)
+      .in("status", reviewStatuses)
+      .order("updated_at", { ascending: false })
+      .limit(120);
+  }
+  const { data: runs, error: runError } = runQuery;
 
   if (runError) {
     console.error("review queue read failed", runError);
@@ -203,14 +375,17 @@ async function listReviews() {
   const userIds = [...new Set(rows.map((row) => row.user_id).filter(Boolean))];
   const nodeIds = [...new Set(rows.map((row) => row.node_id).filter(Boolean))];
 
-  const [profileResult, nodeResult] = await Promise.all([
+  const [profileResult, nodeFull] = await Promise.all([
     userIds.length
       ? admin.from("profiles").select("id,public_id,display_name,member_tier").in("id", userIds)
       : Promise.resolve({ data: [], error: null }),
     nodeIds.length
-      ? admin.from("nodes").select("id,public_id,partner_brand_id,title_ko,node_family").in("id", nodeIds)
+      ? admin.from("nodes").select("id,public_id,partner_brand_id,title_ko,node_family,reward_min,reward_max,completion_effect,stake_krw,stipend_krw,is_trial,tier_band,question_image_path,choice_a_ko,choice_b_ko,question_prompt_ko").in("id", nodeIds)
       : Promise.resolve({ data: [], error: null })
   ]);
+  const nodeResult = nodeFull.error && nodeIds.length
+    ? await admin.from("nodes").select("id,public_id,partner_brand_id,title_ko,node_family,reward_min,reward_max,completion_effect").in("id", nodeIds)
+    : nodeFull;
 
   if (profileResult.error || nodeResult.error) {
     console.error("review context read failed", profileResult.error || nodeResult.error);
@@ -230,17 +405,67 @@ async function listReviews() {
   }
 
   const brandMap = new Map((brandResult.data || []).map((row) => [row.id, row]));
+  const runIds = rows.map((row) => String(row.id || "")).filter(Boolean);
+  const [submissionResult, answerResult, eventResult] = await Promise.all([
+    runIds.length
+      ? admin.from("work_submissions").select("task_run_id,answer_payload,submitted_at").in("task_run_id", runIds)
+      : Promise.resolve({ data: [] as JsonRecord[], error: null }),
+    nodeIds.length
+      ? admin.schema("private").from("node_answer_keys").select("node_id,correct_choice").in("node_id", nodeIds)
+      : Promise.resolve({ data: [] as { node_id: string; correct_choice: string }[], error: null }),
+    runIds.length
+      ? admin.from("task_events").select("task_run_id,event_type,event_payload,created_at").in("task_run_id", runIds).eq("event_type", "submitted").order("created_at", { ascending: false })
+      : Promise.resolve({ data: [] as JsonRecord[], error: null })
+  ]);
+  if (submissionResult.error) console.error("review submission read failed", submissionResult.error);
+  if (answerResult.error) console.error("review answer key read failed", answerResult.error);
+  if (eventResult.error) console.error("review event read failed", eventResult.error);
+  const submissionMap = new Map((submissionResult.data || []).map((row) => [String(row.task_run_id), row]));
+  const correctMap = new Map((answerResult.data || []).map((row) => [String(row.node_id), row.correct_choice]));
+  const eventChoice = new Map<string, string>();
+  const eventLabel = new Map<string, string>();
+  const eventSubmittedAt = new Map<string, string>();
+  for (const row of (eventResult.data || []) as JsonRecord[]) {
+    const runId = String(row.task_run_id || "");
+    const choice = payloadChoice(row.event_payload);
+    const label = payloadChoiceLabel(row.event_payload);
+    const submittedAt = payloadSubmittedAt(row.event_payload, row.created_at);
+    if (runId && choice && !eventChoice.has(runId)) eventChoice.set(runId, choice);
+    if (runId && label && !eventLabel.has(runId)) eventLabel.set(runId, label);
+    if (runId && submittedAt && !eventSubmittedAt.has(runId)) eventSubmittedAt.set(runId, submittedAt);
+  }
   const reviews = rows.map((row) => {
     const profile = profileMap.get(row.user_id);
     const node = nodeMap.get(row.node_id);
     const brand = node ? brandMap.get(node.partner_brand_id) : null;
+    const spec = parseWorkSpec(node?.completion_effect);
+    const stipend = Number(node?.stipend_krw ?? spec?.stipend ?? row.reward_amount ?? node?.reward_max ?? node?.reward_min ?? 0);
+    const stake = Number(node?.stake_krw ?? spec?.stake ?? 0);
+    const trial = row.is_trial === true
+      || node?.is_trial === true
+      || node?.tier_band === "체험"
+      || String(row.stake_bucket || "") === "support_grant"
+      || (stake === 10000 && stipend === 3000);
+    const submission = submissionMap.get(String(row.id || ""));
+    const questionPhoto = String(node?.question_image_path || spec?.photos?.[0] || "").trim();
+    const submissionPhotos = payloadPhotos(submission?.answer_payload);
+    const photos = [...new Set([questionPhoto, ...submissionPhotos].filter(Boolean))];
+    const choiceA = String(node?.choice_a_ko || spec?.choices?.[0] || "").trim();
+    const choiceB = String(node?.choice_b_ko || spec?.choices?.[1] || "").trim();
+    const correctRaw = String(correctMap.get(String(row.node_id || "")) || "").toLowerCase();
+    const correctAnswer = correctRaw === "b" ? 2 : correctRaw === "a" ? 1 : Number(spec?.answer || 1);
+    const memberChoiceRaw = payloadChoice(submission?.answer_payload) || eventChoice.get(String(row.id || "")) || "";
+    const memberChoiceLabel = payloadChoiceLabel(submission?.answer_payload) || eventLabel.get(String(row.id || "")) || "";
+    const submittedAt = payloadSubmittedAt(submission?.answer_payload, submission?.submitted_at)
+      || eventSubmittedAt.get(String(row.id || ""))
+      || String(row.completed_at || "");
     return {
       id: row.id,
       public_id: row.public_id,
       user_id: row.user_id,
       member_public_id: profile?.public_id || null,
       member_name: profile?.display_name || "퍼뜩 회원",
-      member_tier: profile?.member_tier || "일반 파트너",
+      member_tier: profile?.member_tier || "라인",
       node_id: row.node_id,
       node_public_id: node?.public_id || null,
       company_name: brand?.display_name_ko || "협력사 미지정",
@@ -248,10 +473,26 @@ async function listReviews() {
       node_family: node?.node_family || null,
       status: row.status,
       reward_amount: Number(row.reward_amount || 0),
+      stake_amount: stake,
+      stipend_amount: stipend,
+      is_trial: trial,
       progress: Number(row.progress || 0),
       created_at: row.created_at,
       completed_at: row.completed_at,
-      updated_at: row.updated_at
+      updated_at: row.updated_at,
+      question_image_path: questionPhoto || null,
+      question_prompt_ko: String(node?.question_prompt_ko || "").trim() || null,
+      choice_a_ko: choiceA || null,
+      choice_b_ko: choiceB || null,
+      correct_choice: correctRaw === "b" ? "b" : correctRaw === "a" ? "a" : (correctAnswer === 2 ? "b" : "a"),
+      correct_answer: correctAnswer,
+      member_choice: memberChoiceRaw || null,
+      member_choice_label: memberChoiceLabel || null,
+      submitted_at: submittedAt || null,
+      has_member_choice: Boolean(memberChoiceRaw || memberChoiceLabel),
+      photos,
+      has_photo: hasReviewPhoto(photos),
+      high_value: stake >= 100000000
     };
   });
 
@@ -284,6 +525,41 @@ async function reviewTask(userId: string, payload: JsonRecord) {
     throw new HttpError(503, "검수 대상 업무를 확인하지 못했습니다.");
   }
   if (!before.data) throw new HttpError(404, "검수 대상 업무를 찾을 수 없습니다.");
+
+  if (decision === "approved") {
+    const node = await admin
+      .from("nodes")
+      .select("id,stake_krw,question_image_path,completion_effect,tier_band,title_ko")
+      .eq("id", before.data.node_id)
+      .maybeSingle();
+    const spec = parseWorkSpec(node.data?.completion_effect);
+    const stake = Number(node.data?.stake_krw ?? spec?.stake ?? 0);
+    const submission = await admin
+      .from("work_submissions")
+      .select("answer_payload,submitted_at")
+      .eq("task_run_id", taskRunId)
+      .maybeSingle();
+    const events = await admin
+      .from("task_events")
+      .select("event_payload,created_at")
+      .eq("task_run_id", taskRunId)
+      .eq("event_type", "submitted")
+      .order("created_at", { ascending: false })
+      .limit(5);
+    const photos = [
+      String(node.data?.question_image_path || "").trim(),
+      ...(spec?.photos || []),
+      ...payloadPhotos(submission.data?.answer_payload)
+    ].filter(Boolean);
+    const eventChoice = (events.data || []).map((row) => payloadChoice(row.event_payload)).find(Boolean) || "";
+    const memberChoice = payloadChoice(submission.data?.answer_payload) || eventChoice;
+    if (!hasReviewPhoto(photos) && !memberChoice) {
+      throw new HttpError(400, "문제 사진도 제출 보기도 없으면 승인할 수 없어요.");
+    }
+    if (stake >= 100000000 && !hasReviewPhoto(photos)) {
+      throw new HttpError(400, "1억 칸은 문제 사진이 있어야 승인할 수 있어요. 사진 없는 근무는 승인하지 마세요.");
+    }
+  }
 
   const { data, error } = await admin.rpc("putduk_admin_review_task", {
     p_task_run_id: taskRunId,
@@ -418,125 +694,14 @@ async function ensureBrand(id: string) {
 }
 
 async function createNode(userId: string, payload: JsonRecord) {
-  const partnerBrandId = assertUuid(payload.partner_brand_id, "협력사");
-  await ensureBrand(partnerBrandId);
-
-  const title = textValue(payload.title_ko, "업무 이름", 120);
-  const description = textValue(payload.description_ko, "업무 설명", 1000);
-  const nodeFamily = textValue(payload.node_family, "업무 분류", 80);
-  const difficulty = textValue(payload.difficulty || "일반 처리", "난이도", 40);
-  const estimatedSeconds = numberValue(payload.estimated_seconds, "예상 처리 시간", 30, 5400);
-  const rewardMin = numberValue(payload.reward_min ?? 0, "최소 보상", 0, 100000000);
-  const rewardMax = numberValue(payload.reward_max ?? rewardMin, "최대 보상", rewardMin, 100000000);
-  const dailyCapacity = numberValue(payload.daily_capacity ?? 0, "하루 처리 한도", 0, 1000000);
-  const motionProfile = textValue(payload.motion_profile || "default", "연출 프로필", 80);
-  const motionVersion = textValue(payload.motion_version || "1.0.0", "연출 버전", 40);
-  const allowedTiers = Array.isArray(payload.allowed_tiers)
-    ? payload.allowed_tiers.map((value) => String(value).trim()).filter(Boolean)
-    : [];
-
-  const insertPayload = {
-    public_id: `PDK-NODE-${crypto.randomUUID().slice(0, 8).toUpperCase()}`,
-    partner_brand_id: partnerBrandId,
-    title_ko: title,
-    description_ko: description,
-    node_family: nodeFamily,
-    difficulty,
-    estimated_seconds: estimatedSeconds,
-    reward_min: rewardMin,
-    reward_max: rewardMax,
-    daily_capacity: dailyCapacity,
-    enabled: false,
-    motion_profile: motionProfile,
-    motion_version: motionVersion,
-    allowed_tiers: allowedTiers,
-    scene_theme: textValue(payload.scene_theme, "장면 테마", 80, false),
-    vehicle_type: textValue(payload.vehicle_type, "이동 수단", 80, false),
-    route_type: textValue(payload.route_type, "경로 종류", 80, false),
-    particle_style: textValue(payload.particle_style, "파티클 스타일", 80, false),
-    completion_effect: textValue(payload.completion_effect, "완료 효과", 80, false),
-    supply_source: "operator",
-    catalog_status: "draft"
-  };
-
-  const { data, error } = await admin.from("nodes").insert(insertPayload).select("*").single();
-  if (error || !data) {
-    console.error("node create failed", error);
-    throw new HttpError(503, "업무 카드를 등록하지 못했습니다.");
-  }
-
-  await appendAudit(userId, "업무 카드 등록", "node", data.id, textValue(payload.reason, "사유", 240, false), null, data);
-  return data;
+  const data = await upsertWorkNode(admin, userId, payload);
+  return withWorkSpec(data);
 }
 
 async function updateNode(userId: string, payload: JsonRecord) {
   const nodeId = assertUuid(payload.node_id, "업무 카드");
-  const before = await getNode(nodeId);
-  const patch: JsonRecord = {};
-
-  if (payload.partner_brand_id !== undefined) {
-    const partnerBrandId = assertUuid(payload.partner_brand_id, "협력사");
-    await ensureBrand(partnerBrandId);
-    patch.partner_brand_id = partnerBrandId;
-  }
-  if (payload.title_ko !== undefined) patch.title_ko = textValue(payload.title_ko, "업무 이름", 120);
-  if (payload.description_ko !== undefined) patch.description_ko = textValue(payload.description_ko, "업무 설명", 1000);
-  if (payload.node_family !== undefined) patch.node_family = textValue(payload.node_family, "업무 분류", 80);
-  if (payload.difficulty !== undefined) patch.difficulty = textValue(payload.difficulty, "난이도", 40);
-  if (payload.estimated_seconds !== undefined) patch.estimated_seconds = numberValue(payload.estimated_seconds, "예상 처리 시간", 30, 5400);
-  if (payload.reward_min !== undefined) patch.reward_min = numberValue(payload.reward_min, "최소 보상", 0, 100000000);
-  if (payload.reward_max !== undefined) patch.reward_max = numberValue(payload.reward_max, "최대 보상", Number(patch.reward_min ?? before.reward_min), 100000000);
-  if (payload.daily_capacity !== undefined) patch.daily_capacity = numberValue(payload.daily_capacity, "하루 처리 한도", 0, 1000000);
-  if (payload.motion_profile !== undefined) patch.motion_profile = textValue(payload.motion_profile, "연출 프로필", 80);
-  if (payload.motion_version !== undefined) patch.motion_version = textValue(payload.motion_version, "연출 버전", 40);
-  if (payload.allowed_tiers !== undefined) {
-    patch.allowed_tiers = Array.isArray(payload.allowed_tiers)
-      ? payload.allowed_tiers.map((value) => String(value).trim()).filter(Boolean)
-      : [];
-  }
-  if (payload.scene_theme !== undefined) patch.scene_theme = textValue(payload.scene_theme, "장면 테마", 80, false);
-  if (payload.vehicle_type !== undefined) patch.vehicle_type = textValue(payload.vehicle_type, "이동 수단", 80, false);
-  if (payload.route_type !== undefined) patch.route_type = textValue(payload.route_type, "경로 종류", 80, false);
-  if (payload.particle_style !== undefined) patch.particle_style = textValue(payload.particle_style, "파티클 스타일", 80, false);
-  if (payload.completion_effect !== undefined) patch.completion_effect = textValue(payload.completion_effect, "완료 효과", 80, false);
-
-  if (payload.catalog_status !== undefined) {
-    const status = catalogStatus(payload.catalog_status);
-    patch.catalog_status = status;
-    patch.enabled = status === "published";
-  } else if (payload.enabled !== undefined) {
-    if (payload.enabled === true && before.catalog_status !== "published") {
-      throw new HttpError(400, "공개 승인된 카드만 켤 수 있습니다.");
-    }
-    patch.enabled = Boolean(payload.enabled);
-  }
-
-  if (Object.keys(patch).length === 0) {
-    throw new HttpError(400, "변경할 항목이 없습니다.");
-  }
-
-  const { data, error } = await admin
-    .from("nodes")
-    .update(patch)
-    .eq("id", nodeId)
-    .select("*")
-    .single();
-
-  if (error || !data) {
-    console.error("node update failed", error);
-    throw new HttpError(503, "업무 카드 설정을 저장하지 못했습니다.");
-  }
-
-  await appendAudit(
-    userId,
-    "업무 카드 수정",
-    "node",
-    nodeId,
-    textValue(payload.reason, "사유", 240, false),
-    before,
-    data
-  );
-  return data;
+  const data = await upsertWorkNode(admin, userId, { ...payload, node_id: nodeId });
+  return withWorkSpec(data);
 }
 
 async function updateNodeStatus(userId: string, payload: JsonRecord, status: "published" | "paused" | "archived" | "draft") {
@@ -643,9 +808,9 @@ Deno.serve(async (request: Request) => {
       return jsonResponse(request, { ok: true, brand: await updateBrand(user.id, payload, actionName) });
     }
 
-    if (action === "create_node") {
+    if (action === "create_node" || action === "upsert_node") {
       await requireRole(user.id, contentRoles);
-      return jsonResponse(request, { ok: true, node: await createNode(user.id, payload) }, 201);
+      return jsonResponse(request, { ok: true, node: await createNode(user.id, payload) }, action === "create_node" ? 201 : 200);
     }
 
     if (action === "update_node") {

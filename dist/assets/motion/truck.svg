@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 110" fill="none" role="img" aria-label="T< Έν">
+  <ellipse cx="118" cy="98" rx="92" ry="8" fill="#000" opacity=".28"/>
+  <path d="M54 34h132a8 8 0 0 1 8 8v36H46V42a8 8 0 0 1 8-8Z" fill="#d6a21a"/>
+  <path d="M54 34h132a8 8 0 0 1 8 8v8H46V42a8 8 0 0 1 8-8Z" fill="#f0c14b"/>
+  <path d="M62 42v28M78 42v28M94 42v28M110 42v28M126 42v28M142 42v28M158 42v28M174 42v28" stroke="#8a6410" stroke-width="1.4" opacity=".55"/>
+  <rect x="178" y="46" width="10" height="26" rx="1.5" fill="#1b2228"/>
+  <path d="M8 44h48l12 8v26H14a6 6 0 0 1-6-6V50a6 6 0 0 1 6-6Z" fill="#1c242c"/>
+  <path d="M18 48h30l8 6v12H18V48Z" fill="#7ec8e8" opacity=".9"/>
+  <path d="M18 48h30l8 6H18V48Z" fill="#eaf6ff" opacity=".55"/>
+  <rect x="12" y="70" width="54" height="8" fill="#11161b"/>
+  <rect x="46" y="70" width="148" height="8" fill="#161c22"/>
+  <circle cx="38" cy="84" r="14" fill="#1a1c1e"/>
+  <circle cx="38" cy="84" r="8.5" fill="#3a3f45"/>
+  <circle cx="38" cy="84" r="3.2" fill="#cfd3d7"/>
+  <circle cx="168" cy="84" r="14" fill="#1a1c1e"/>
+  <circle cx="168" cy="84" r="8.5" fill="#3a3f45"/>
+  <circle cx="168" cy="84" r="3.2" fill="#cfd3d7"/>
+  <path d="M8 58h6v8H8z" fill="#ffe08a"/>
+  <path d="M194 58h8v8h-8z" fill="#ff5a4a"/>
+</svg>

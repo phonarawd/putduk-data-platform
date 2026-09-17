@@ -4,6 +4,7 @@
   const isAdmin = document.documentElement.dataset.mode === 'admin';
   const config = window.PUTDUK_CONFIG || {};
   const adminFunctionUrl = config.adminFunctionUrl || (config.supabaseUrl ? `${config.supabaseUrl}/functions/v1/admin-control` : '');
+  const memberFinanceUrl = config.memberFinanceUrl || (config.supabaseUrl ? `${config.supabaseUrl}/functions/v1/member-finance` : '');
   const storageKey = 'putduk-state-v2';
   const supabaseClient = window.supabase && config.supabaseUrl && config.supabasePublishableKey
     ? window.supabase.createClient(config.supabaseUrl, config.supabasePublishableKey, {
@@ -25,6 +26,15 @@
     { id: 'satellite_network', label: '위성 회선' },
     { id: 'default', label: '기본 회선' }
   ];
+  const FOMO_FEED_SLOTS = 4;
+  const FOMO_NAME_COOLDOWN = FOMO_FEED_SLOTS * 4;
+  const FOMO_SURNAMES = ['김', '이', '박', '최', '정', '강', '조', '윤', '장', '임', '한', '오', '서', '신', '권', '황', '안', '송', '전', '홍', '유', '고', '문', '양', '손', '배', '백', '허', '남', '심'];
+  const FOMO_GIVEN = ['은', '호', '영', '진', '우', '서', '민', '아', '준', '현', '수', '지', '윤', '하', '린', '솔', '빈', '재', '성', '혜', '나', '율', '원', '기', '태', '석', '희', '정', '훈', '경'];
+  const FOMO_NAME_POOL = FOMO_SURNAMES.flatMap((sur) => FOMO_GIVEN.map((tail) => `${sur}○${tail}`));
+  const FOMO_ACTIONS = ['방금 출근했어요', '자리를 가져갔어요', '라인에 들어왔어요', '근무를 시작했어요'];
+  let fomoTimer = null;
+  let fomoFeedCache = { bucket: -1, items: [] };
+  let fomoNameCooldown = [];
 
   const defaultState = {
     theme: 'light',
@@ -33,7 +43,7 @@
     authMode: 'signup',
     modal: null,
     modalPayload: null,
-    wallet: { support: 0, task: 0, referral: 0, available: 0, held: 0 },
+    wallet: { support: 0, work: 0, task: 0, referral: 0, available: 0, held: 0 },
     run: null,
     history: [],
     notifications: [],
@@ -43,6 +53,18 @@
     companies: [],
     nodeEnabled: {},
     supportGrant: 10000,
+    onboardingStep: null,
+    onboardingPwaDone: false,
+    onboardingGrantSeen: false,
+    helpTab: 'work',
+    walletLedgerTab: 'all',
+    lastCrewPartnerId: null,
+    idCardFlipped: false,
+    startNodeId: null,
+    depositJump: null,
+    player: null,
+    resultScene: null,
+    withdrawIntent: 'allowance',
     adminReviews: [],
     adminReviewPendingCount: 0,
     adminReviewCompletedCount: 0,
@@ -71,6 +93,9 @@
     adminCampaignsError: null,
     adminCampaignsContract: null,
     adminFormBusy: false,
+    adminMotion: { bot_enabled: true, crowd_min: 8, crowd_max: 24, burn_per_minute: 2 },
+    adminMotionError: null,
+    crewPulse: { stored: 'default', live: true, crowd_min: 8, crowd_max: 24, burn_per_minute: 2 },
     toast: null
   };
 
@@ -79,6 +104,7 @@
   let runFrame = null;
   let chartInstance = null;
   let syncTimer = null;
+  let fomoClockBound = false;
   const toastRecent = new Map();
   const toastTimers = new Set();
 
@@ -105,7 +131,8 @@
 
   function saveState() {
     try {
-      const safe = { ...state, run: state.run ? { ...state.run, overlayOpen: false } : null, toast: null, modal: null, modalPayload: null, adminMemberDetail: null };
+      const { _workLockCue, _playedMotionCue, _motionCanvas, toast, modal, modalPayload, adminMemberDetail, depositJump, adminMotion, adminMotionError, crewPulse, ...rest } = state;
+      const safe = { ...rest, run: state.run ? { ...state.run, overlayOpen: false } : null, toast: null, modal: null, modalPayload: null, adminMemberDetail: null };
       localStorage.setItem(activeStorageKey, JSON.stringify(safe));
     } catch (_) {}
   }
@@ -150,6 +177,324 @@
     return config.enableFinanceApi === true;
   }
 
+  function workEnabled() {
+    return config.enableWorkApi === true;
+  }
+
+  function lockToast(kind) {
+    if (kind === 'work') {
+      showToast('🔒 실제 근무 제출은 아직 준비 중이에요. 잔액은 그대로예요.', 'warning');
+      return;
+    }
+    showToast('🔒 입출금은 아직 운영 확인 중이에요. 신청은 접수되지 않고 잔액은 그대로예요.', 'warning');
+  }
+
+  const STAKE_LADDER = [30000, 50000, 70000, 100000, 300000, 500000, 1000000, 3000000, 5000000, 10000000, 30000000, 100000000];
+  const HIGH_JUMP_MIN = 3000000;
+  const PAY_BY_STAKE = {
+    30000: 3000,
+    50000: 5000,
+    70000: 7000,
+    100000: 10000,
+    300000: 30000,
+    500000: 50000,
+    1000000: 100000,
+    3000000: 300000,
+    5000000: 500000,
+    10000000: 1000000,
+    30000000: 3000000,
+    100000000: 10000000
+  };
+
+  function nodePay(node) {
+    return Number(node?.stipend || node?.stipend_krw || node?.reward || node?.rewardMax || 0);
+  }
+
+  function nodeStake(node) {
+    const explicit = Number(node?.stake || node?.stake_krw || node?.lockAmount || 0);
+    if (explicit > 0) return explicit;
+    const pay = nodePay(node);
+    if (pay >= 30000) return pay;
+    if (pay <= 0) return 0;
+    const guessed = pay * 10;
+    return STAKE_LADDER.reduce((best, item) => Math.abs(item - guessed) < Math.abs(best - guessed) ? item : best, STAKE_LADDER[0]);
+  }
+
+  function nextStakeSlot(stake) {
+    return STAKE_LADDER.find((item) => item > Number(stake || 0)) || null;
+  }
+
+  function payForStake(stake) {
+    return PAY_BY_STAKE[stake] || 0;
+  }
+
+  function stipendGuess(stake) {
+    const n = Number(stake || 0);
+    if (PAY_BY_STAKE[n]) return PAY_BY_STAKE[n];
+    const rung = [...STAKE_LADDER].reverse().find((item) => item <= n);
+    if (rung && PAY_BY_STAKE[rung]) return Math.round(PAY_BY_STAKE[rung] * (n / rung));
+    return Math.round(n * 0.1);
+  }
+
+  function isHighJumpAmount(amount) {
+    return Number(amount || 0) >= HIGH_JUMP_MIN;
+  }
+
+  function demoteBandLabel(label) {
+    const order = ['전담', '선임', '크루', '라인'];
+    const idx = order.indexOf(String(label || ''));
+    if (idx < 0) return '라인';
+    return order[Math.min(idx + 1, order.length - 1)];
+  }
+
+  function eulo(word) {
+    const text = String(word || '');
+    const code = text.charCodeAt(text.length - 1);
+    if (code < 0xac00 || code > 0xd7a3) return '로';
+    return ((code - 0xac00) % 28) ? '으로' : '로';
+  }
+
+  function ieya(word) {
+    const text = String(word || '');
+    const code = text.charCodeAt(text.length - 1);
+    if (code < 0xac00 || code > 0xd7a3) return '예요';
+    return ((code - 0xac00) % 28) ? '이에요' : '예요';
+  }
+
+  function formatChartTick(value) {
+    const n = Number(value) || 0;
+    if (n === 0) return '0원';
+    if (Math.abs(n) >= 10000) return `${Math.round(n / 10000).toLocaleString('ko-KR')}만`;
+    return `${Math.round(n).toLocaleString('ko-KR')}원`;
+  }
+
+  function memberCatalogNodes() {
+    const work = Number(state.wallet.work || 0);
+    const support = Number(state.wallet.support || 0);
+    const trialDone = Boolean(authState.profile?.trial_consumed_at);
+    const completedStakes = new Set(
+      (state.history || [])
+        .filter((item) => item.status === '검수 완료')
+        .map((item) => nodeStake(nodeById(item.nodeId)))
+        .filter((stake) => stake > 0)
+    );
+    const maxDone = Math.max(0, ...completedStakes);
+    return nodes
+      .filter((node) => {
+        if (node.enabled === false) return false;
+        const stake = nodeStake(node);
+        if (node.requiresAssign || node.tierBand === '초고액' || stake >= 30000000) return false;
+        if (node.isTrial) return !trialDone && support > 0;
+        if (work >= stake) return true;
+        if (stake <= 100000) return true;
+        const prev = STAKE_LADDER.filter((item) => item < stake).pop() || 0;
+        return maxDone >= prev || work >= prev;
+      })
+      .sort((a, b) => {
+        const trialDelta = Number(Boolean(b.isTrial)) - Number(Boolean(a.isTrial));
+        if (trialDelta) return trialDelta;
+        return nodeStake(a) - nodeStake(b);
+      });
+  }
+
+  function canStartNode(node) {
+    if (!node) return false;
+    if (node.isTrial) return Number(state.wallet.support || 0) > 0;
+    return Number(state.wallet.work || 0) >= nodeStake(node);
+  }
+
+  function findCompany(id) {
+    if (id == null || id === '' || id === 'unknown-company') return null;
+    return companies.find((company) => String(company.id) === String(id)) || null;
+  }
+
+  function rememberCrewPartner(companyId) {
+    const company = findCompany(companyId);
+    if (!company) return;
+    state.lastCrewPartnerId = company.id;
+  }
+
+  function isUltraNode(node) {
+    return Boolean(node?.requiresAssign || node?.tierBand === '초고액' || nodeStake(node) >= 30000000);
+  }
+
+  function nodeDailyRemaining(node) {
+    const cap = Number(node?.available || 0);
+    if (!(cap > 0)) return Number.POSITIVE_INFINITY;
+    const today = new Date().toDateString();
+    return Math.max(0, cap - (state.history || []).filter((item) => {
+      if (String(item.nodeId) !== String(node.id)) return false;
+      const at = new Date(item.createdAt || item.date || '');
+      return !Number.isNaN(at.getTime()) && at.toDateString() === today;
+    }).length);
+  }
+
+  function canAttendNode(node) {
+    if (!node || node.enabled === false) return false;
+    if (isUltraNode(node)) return false;
+    if (nodeDailyRemaining(node) <= 0) return false;
+    return canStartNode(node);
+  }
+
+  function crewPartnerCompany() {
+    if (state.run?.nodeId) {
+      const fromRun = findCompany(nodeById(state.run.nodeId).companyId);
+      if (fromRun) return fromRun;
+    }
+    const remembered = findCompany(state.lastCrewPartnerId);
+    if (remembered) return remembered;
+    const recent = (state.history || []).find((item) => item.nodeId);
+    if (recent) {
+      const fromHistory = findCompany(nodeById(recent.nodeId).companyId);
+      if (fromHistory) return fromHistory;
+    }
+    const startable = memberCatalogNodes().find((node) => canAttendNode(node));
+    if (startable) {
+      const fromReady = findCompany(startable.companyId);
+      if (fromReady) return fromReady;
+    }
+    const catalog = memberCatalogNodes()[0];
+    return catalog ? findCompany(catalog.companyId) : null;
+  }
+
+  function lineNameForNode(node) {
+    const company = findCompany(node?.companyId);
+    if (company) return company.name;
+    return '라인 확인 중';
+  }
+
+  function crewAttendance(company = crewPartnerCompany()) {
+    if (!authState.session) return { ok: false, label: '로그인 후 출근' };
+    if (!company) return { ok: false, label: '라인 배정 전' };
+    const lineNodes = nodes.filter((node) => String(node.companyId) === String(company.id) && node.enabled !== false);
+    if (!lineNodes.length) return { ok: false, label: '오늘 라인 대기' };
+    if (lineNodes.some((node) => canAttendNode(node))) return { ok: true, label: '출근 가능' };
+    if (lineNodes.every(isUltraNode)) return { ok: false, label: '운영자 확인 후 열림' };
+    const work = Number(state.wallet.work || 0);
+    const support = Number(state.wallet.support || 0);
+    const trialOpen = lineNodes.some((node) => node.isTrial && support > 0 && !isUltraNode(node) && nodeDailyRemaining(node) > 0);
+    if (!trialOpen && work <= 0) return { ok: false, label: '잔액 모으면 출근' };
+    const anySeat = lineNodes.some((node) => !isUltraNode(node) && nodeDailyRemaining(node) > 0);
+    if (!anySeat) return { ok: false, label: '오늘 라인 대기' };
+    const paidLine = lineNodes.filter((node) => !isUltraNode(node) && !node.isTrial);
+    if (paidLine.length && paidLine.every((node) => work < nodeStake(node))) return { ok: false, label: '잔액 모으면 출근' };
+    return { ok: false, label: '오늘 라인 대기' };
+  }
+
+  function opsTrialWithdrawAllowed(amount, kind) {
+    return workEnabled()
+      && kind !== 'principal'
+      && Number(amount) > 0
+      && Number(amount) <= 3000;
+  }
+
+  function cardMoneyLines(node) {
+    const stake = nodeStake(node);
+    const pay = nodePay(node) || payForStake(stake) || stipendGuess(stake);
+    const trial = Boolean(node?.isTrial || node?.tierBand === '체험');
+    return {
+      stake,
+      pay,
+      trial,
+      html: `<div class="node-money"><div class="money-line">${icon('lock', 15)}<span>${trial ? '지원금 잠금' : '근무 보증'} ${money(stake)}</span></div><div class="money-line">${icon('coins', 15)}<span>끝나면 수당 ${money(pay)}</span></div>${settleNote('p', trial)}</div>`
+    };
+  }
+
+  function applyWalletRows(rows) {
+    const list = Array.isArray(rows) ? rows : [];
+    const buckets = Object.fromEntries(list.map((row) => [row.bucket, row]));
+    const work = buckets.work_balance || {};
+    state.wallet.support = Number(buckets.support_grant?.available_amount || 0);
+    state.wallet.work = Number(work.available_amount || 0);
+    state.wallet.held = Number(work.held_amount || 0);
+    state.wallet.available = Number(buckets.available?.available_amount || 0);
+    state.wallet.task = Number(buckets.task_reward?.available_amount || 0);
+    state.wallet.referral = Number(buckets.referral_reward?.available_amount || 0);
+  }
+
+  async function refreshMemberWallet() {
+    if (!authState.session) return;
+    if (supabaseClient) {
+      const walletResult = await supabaseClient
+        .from('wallet_accounts')
+        .select('bucket,currency,available_amount,held_amount')
+        .eq('user_id', authState.session.user.id)
+        .eq('currency', 'KRW');
+      if (!walletResult.error && Array.isArray(walletResult.data) && walletResult.data.length) {
+        applyWalletRows(walletResult.data);
+        return;
+      }
+    }
+    try {
+      const snap = await memberFinanceRequest('wallet_snapshot');
+      const wallet = snap.wallet || {};
+      if (Array.isArray(wallet.buckets) && wallet.buckets.length) {
+        applyWalletRows(wallet.buckets);
+        return;
+      }
+      state.wallet.support = Number(wallet.support_grant || 0);
+      state.wallet.work = Number(wallet.work_balance || 0);
+      state.wallet.held = Number(wallet.held_amount || 0);
+      state.wallet.available = Number(wallet.available || 0);
+    } catch (_) {}
+  }
+
+  function walletThree() {
+    return {
+      support: Number(state.wallet.support || 0),
+      work: Number(state.wallet.work || 0) + Number(state.wallet.held || 0),
+      workHeld: Number(state.wallet.held || 0),
+      withdrawable: Number(state.wallet.available || 0)
+    };
+  }
+
+  function renderWalletSlots() {
+    const w = walletThree();
+    const workHint = w.workHeld > 0 ? `잠금 ${money(w.workHeld)}` : '근무에 쓰는 돈';
+    return `<div class="wallet-slots"><div class="wallet-slot">${uiLead('gift', '지원금')}<strong>${money(w.support)}</strong><small>출금 안 됨</small></div><div class="wallet-slot">${uiLead('briefcase', '업무잔액')}<strong>${money(w.work)}</strong><small>${workHint}</small></div><div class="wallet-slot">${uiLead('banknote', '출금가능')}<strong>${money(w.withdrawable)}</strong><small>기본은 수당만</small></div></div>`;
+  }
+
+  function displayPublicId() {
+    const raw = String(publicId() || '');
+    if (!raw || raw.includes('준비') || raw.includes('발급')) return raw;
+    return raw.startsWith('PDK-') ? raw : `PDK-${raw}`;
+  }
+
+  function tierBand(tier) {
+    const raw = String(tier || authState.profile?.member_tier || '일반 파트너');
+    const map = { '일반 파트너': '라인', '인증 파트너': '크루', '우수 파트너': '선임', '글로벌 디렉터': '전담' };
+    return { raw, label: map[raw] || raw };
+  }
+
+  function isStandalonePwa() {
+    return window.navigator.standalone === true || window.matchMedia?.('(display-mode: standalone)').matches;
+  }
+
+  function queueOnboarding() {
+    if (isAdmin || !authState.session) {
+      state.onboardingStep = null;
+      return;
+    }
+    if (!state.onboardingPwaDone && !isStandalonePwa()) {
+      if (state.onboardingStep !== 'pwa') state._playedMotionCue = null;
+      state.onboardingStep = 'pwa';
+      return;
+    }
+    state.onboardingPwaDone = true;
+    if (!state.onboardingGrantSeen) {
+      state.onboardingStep = 'grant';
+      return;
+    }
+    state.onboardingStep = null;
+  }
+
+  function playerQuestion(node) {
+    const stored = String(node?.question || node?.question_prompt_ko || '').trim();
+    if (stored) return stored;
+    const company = companyById(node?.companyId);
+    return `${company.name || '협력사'} 라인 사진의 표시가 근무 라벨과 같나요?`;
+  }
+
   function isUnsupportedAction(error) {
     return /지원하지 않는/.test(String(error?.message || error || ''));
   }
@@ -184,8 +529,12 @@
       last_login_ip: row.last_login_ip != null ? String(row.last_login_ip) : '',
       referral_count: Number(row.referral_count || 0),
       wallet: {
+        support: Number(row.support_grant_krw || 0),
+        work: Number(row.work_balance_krw || 0),
+        task: Number(row.task_reward_krw || 0),
+        referral: 0,
         available: Number(row.available_krw || 0),
-        held: 0
+        held: Number(row.work_held_krw || row.available_held_krw || 0)
       }
     };
   }
@@ -222,6 +571,10 @@
       last_login_at: firstText(next.last_login_at, prev.last_login_at),
       last_login_ip: firstText(next.last_login_ip, prev.last_login_ip),
       wallet: {
+        support: Number(next.wallet?.support ?? prev.wallet?.support ?? 0),
+        work: Number(next.wallet?.work ?? prev.wallet?.work ?? next.wallet?.task ?? prev.wallet?.task ?? 0),
+        task: Number(next.wallet?.work ?? next.wallet?.task ?? prev.wallet?.work ?? prev.wallet?.task ?? 0),
+        referral: Number(next.wallet?.referral ?? prev.wallet?.referral ?? 0),
         available: Number(next.wallet?.available ?? prev.wallet?.available ?? 0),
         held: Number(next.wallet?.held ?? prev.wallet?.held ?? 0)
       }
@@ -235,6 +588,8 @@
       const priv = payload.private_profile || {};
       const auth = payload.auth || {};
       const wallets = Array.isArray(payload.wallets) ? payload.wallets : [];
+      const summary = payload.wallet_summary || {};
+      const buckets = Object.fromEntries(wallets.map((item) => [item.bucket, item]));
       const available = wallets.find((item) => item.bucket === 'available') || {};
       const held = wallets.find((item) => item.bucket === 'held') || {};
       return {
@@ -253,8 +608,12 @@
         last_login_ip: priv.last_login_ip != null ? String(priv.last_login_ip) : '',
         referral_count: Array.isArray(payload.referrals) ? payload.referrals.length : 0,
         wallet: {
-          available: Number(available.available_amount || 0),
-          held: Number(held.held_amount || 0)
+          support: Number(summary.support ?? buckets.support_grant?.available_amount ?? 0),
+          work: Number(summary.work ?? buckets.work_balance?.available_amount ?? 0),
+          task: Number(summary.task ?? buckets.task_reward?.available_amount ?? 0),
+          referral: Number(summary.referral ?? buckets.referral_reward?.available_amount ?? 0),
+          available: Number(summary.available ?? available.available_amount ?? 0),
+          held: Number((summary.available_held ?? buckets.available?.held_amount ?? 0) + (summary.work_held ?? buckets.work_balance?.held_amount ?? 0) + (summary.held ?? held.held_amount ?? 0))
         }
       };
     }
@@ -281,7 +640,8 @@
       approved: '승인',
       rejected: '반려',
       cancelled: '취소',
-      sent: '송금 완료',
+      sent: '완료',
+      completed: '완료',
       processing: '처리 중'
     })[status] || '처리 중';
   }
@@ -306,6 +666,12 @@
   }
 
   const MEMBER_TIERS = ['일반 파트너', '인증 파트너', '우수 파트너', '글로벌 디렉터'];
+  const MEMBER_BANDS = [
+    { raw: '일반 파트너', label: '라인', ladder: '소액 3·5·7·10만 칸', perks: ['기본 라인 근무', '다음 한 칸씩 완료 해금', '잠금 잔액이 있으면 그 금액 칸부터 출근'] },
+    { raw: '인증 파트너', label: '크루', ladder: '중간 30·50·100만 칸', perks: ['주간 근무 자리', '중간 금액 칸 안내', '기본 라인 근무 유지'] },
+    { raw: '우수 파트너', label: '선임', ladder: '고액 300·500·1000만 칸', perks: ['우선 집기', '고액 사전 공지', '주간 근무 자리'] },
+    { raw: '글로벌 디렉터', label: '전담', ladder: '초고액은 운영자 배정', perks: ['전담 라인', '우선 집기', '고액 사전 공지', '주간 근무 자리'] }
+  ];
 
   function normalizePhone(value) {
     const digits = String(value || '').replace(/\D/g, '');
@@ -326,17 +692,20 @@
     if (isAdmin || !supabaseClient || !authState.session) return;
     const brandSelectWithPhoto = 'id,slug,display_name_ko,category,description_ko,verification_status,logo_usage_status,logo_asset_path,photo_asset_path,published';
     const brandSelect = 'id,slug,display_name_ko,category,description_ko,verification_status,logo_usage_status,logo_asset_path,published';
+    const nodeSelectWithStake = 'id,public_id,partner_brand_id,title_ko,description_ko,node_family,difficulty,estimated_seconds,reward_min,reward_max,stake_krw,stipend_krw,is_trial,tier_band,requires_assign,question_prompt_ko,question_image_path,choice_a_ko,choice_b_ko,daily_cap,daily_capacity,motion_profile,motion_version,enabled,catalog_status';
+    const nodeSelect = 'id,public_id,partner_brand_id,title_ko,description_ko,node_family,difficulty,estimated_seconds,reward_min,reward_max,daily_capacity,motion_profile,motion_version,enabled,catalog_status';
     let brandQuery = supabaseClient.from('partner_brands').select(brandSelectWithPhoto).order('display_name_ko', { ascending: true });
-    const [brandFirst, nodeResult] = await Promise.all([
+    const [brandFirst, nodeFirst] = await Promise.all([
       brandQuery,
-      supabaseClient
-        .from('nodes')
-        .select('id,public_id,partner_brand_id,title_ko,description_ko,node_family,difficulty,estimated_seconds,reward_min,reward_max,daily_capacity,motion_profile,motion_version,enabled,catalog_status')
-        .order('created_at', { ascending: false })
+      supabaseClient.from('nodes').select(nodeSelectWithStake).order('created_at', { ascending: false })
     ]);
     let brandResult = brandFirst;
+    let nodeResult = nodeFirst;
     if (brandResult.error && /photo_asset_path/i.test(String(brandResult.error.message || brandResult.error))) {
       brandResult = await supabaseClient.from('partner_brands').select(brandSelect).order('display_name_ko', { ascending: true });
+    }
+    if (nodeResult.error && /stake_krw|stipend_krw|is_trial|tier_band|requires_assign|question_prompt_ko/i.test(String(nodeResult.error.message || nodeResult.error))) {
+      nodeResult = await supabaseClient.from('nodes').select(nodeSelect).order('created_at', { ascending: false });
     }
     if (brandResult.error || nodeResult.error) {
       authState.error = brandResult.error || nodeResult.error;
@@ -371,16 +740,25 @@
       copy: row.description_ko,
       time: Number(row.estimated_seconds || 60),
       minutes: formatDuration(Number(row.estimated_seconds || 60)),
-      reward: Number(row.reward_max ?? row.reward_min ?? 0),
+      reward: Number(row.stipend_krw ?? row.reward_max ?? row.reward_min ?? 0),
       rewardMin: Number(row.reward_min ?? 0),
       rewardMax: Number(row.reward_max ?? row.reward_min ?? 0),
+      stake: Number(row.stake_krw || 0),
+      stipend: Number(row.stipend_krw ?? row.reward_min ?? 0),
       level: row.difficulty || '일반 처리',
       icon: 'scan-line',
       color: companyColors[row.partner_brand_id] || '#0d9f76',
-      available: Number(row.daily_capacity || 0),
+      available: Number(row.daily_cap || row.daily_capacity || 0),
       motion: row.motion_profile || 'default',
       motionVersion: row.motion_version || '1.0.0',
-      enabled: row.enabled === true && row.catalog_status === 'published'
+      enabled: row.enabled === true && row.catalog_status === 'published',
+      isTrial: row.is_trial === true || row.tier_band === '체험',
+      tierBand: row.tier_band || '',
+      requiresAssign: row.requires_assign === true || row.tier_band === '초고액',
+      question: row.question_prompt_ko || '',
+      questionImage: row.question_image_path || '',
+      choiceA: row.choice_a_ko || '맞아요',
+      choiceB: row.choice_b_ko || '달라요'
     }));
     state.companies = companies;
     state.nodeEnabled = Object.fromEntries(nodes.map((node) => [node.id, node.enabled !== false]));
@@ -400,13 +778,13 @@
 
   function motionSceneCopy(node, progress) {
     const profile = motionProfileOf(node);
-    if (progress < 0.25) return { label: '데이터센터·회선 연결', copy: '📡 서울 노드와 연결 중이에요.' };
+    if (progress < 0.25) return { label: '데이터센터·회선 연결', copy: '서울 노드와 연결 중이에요.', icon: 'radio-tower' };
     if (progress < 0.58) {
-      if (profile.includes('ocean') || profile === 'ocean_vessel') return { label: '해상 항로 이동', copy: '🚢 컨테이너 상태를 대조하고 있어요.' };
-      if (profile.includes('air') || profile === 'air_cargo' || profile === 'document') return { label: '항공 운송 비교', copy: '✈️ 항공 운송 데이터를 비교하고 있어요.' };
-      if (profile.includes('catalog') || profile === 'commerce_catalog') return { label: '상품 속성 정리', copy: '📦 상품 속성 정보를 정리하고 있어요.' };
-      if (profile.includes('warehouse')) return { label: '창고 격자 확인', copy: '📦 재고 위치를 한 칸씩 맞추고 있어요.' };
-      return { label: '배송 경로 분석', copy: '🚚 배송 데이터 경로를 분석하고 있어요.' };
+      if (profile.includes('ocean') || profile === 'ocean_vessel') return { label: '해상 항로 이동', copy: '컨테이너 상태를 대조하고 있어요.', icon: 'ship' };
+      if (profile.includes('air') || profile === 'air_cargo' || profile === 'document') return { label: '항공 운송 비교', copy: '항공 운송 데이터를 비교하고 있어요.', icon: 'plane' };
+      if (profile.includes('catalog') || profile === 'commerce_catalog') return { label: '상품 속성 정리', copy: '상품 속성 정보를 정리하고 있어요.', icon: 'package' };
+      if (profile.includes('warehouse')) return { label: '창고 격자 확인', copy: '재고 위치를 한 칸씩 맞추고 있어요.', icon: 'warehouse' };
+      return { label: '배송 경로 분석', copy: '배송 데이터 경로를 분석하고 있어요.', icon: 'truck' };
     }
     if (progress < 0.83) return { label: '비교·품질검사', copy: '오류 항목을 분리하고 있어요.' };
     return { label: '검수 대기·동기화', copy: '보상은 운영자 검수 후 확정돼요.' };
@@ -422,10 +800,11 @@
       authState.loading = false;
       activeStorageKey = storageKey;
       state = loadState(storageKey);
+      await hydrateCrewPulse({ force: true });
       return;
     }
     switchToUserState(session.user.id);
-    state.wallet = { support: 0, task: 0, referral: 0, available: 0, held: 0 };
+    state.wallet = { support: 0, work: 0, task: 0, referral: 0, available: 0, held: 0 };
     state.history = [];
     state.notifications = [];
     state.referrals = [];
@@ -436,12 +815,13 @@
     try {
       const profileResult = await supabaseClient
         .from('profiles')
-        .select('public_id,display_name,member_tier,status,referral_code')
+        .select('public_id,display_name,member_tier,status,referral_code,trial_consumed_at')
         .eq('id', session.user.id)
         .maybeSingle();
       if (profileResult.error) throw profileResult.error;
       authState.profile = profileResult.data || null;
       await hydratePublishedCatalog();
+      await hydrateCrewPulse({ force: true });
 
       const walletResult = await supabaseClient
         .from('wallet_accounts')
@@ -449,12 +829,7 @@
         .eq('user_id', session.user.id)
         .eq('currency', 'KRW');
       if (!walletResult.error && Array.isArray(walletResult.data) && walletResult.data.length) {
-        const buckets = Object.fromEntries(walletResult.data.map((row) => [row.bucket, row]));
-        state.wallet.support = Number(buckets.support_grant?.available_amount || 0);
-        state.wallet.task = Number(buckets.task_reward?.available_amount || 0);
-        state.wallet.referral = Number(buckets.referral_reward?.available_amount || 0);
-        state.wallet.available = Number(buckets.available?.available_amount || 0);
-        state.wallet.held = Number(buckets.held?.held_amount || 0);
+        applyWalletRows(walletResult.data);
       }
 
       const runResult = await supabaseClient
@@ -476,16 +851,27 @@
         }));
         const newlyApproved = runResult.data.find((row) => row.status === 'approved' && ['검수 대기', '제출 완료'].includes(previousHistoryMap.get(row.public_id)) && state.lastReviewToastId !== row.public_id);
         if (newlyApproved) {
+          const approvedNode = nodeById(newlyApproved.node_id);
           state.lastReviewToastId = newlyApproved.public_id;
-          state.toast = { text: `🎉 ${newlyApproved.public_id} 업무가 검수 완료됐어요. 지갑에 보상이 반영됐습니다.`, kind: 'success' };
+          const trialDone = approvedNode?.isTrial === true || approvedNode?.tierBand === '체험';
+          state.toast = {
+            text: trialDone
+              ? '🎉 검수가 끝났어요. 지원금은 쓰였고, 수당은 출금 가능에 들어왔어요.'
+              : '🎉 검수가 끝났어요. 원금은 업무잔액, 수당은 출금가능에 같이 반영됐어요.',
+            kind: 'success'
+          };
+          openResultScene(approvedNode, {
+            cut: 'approve',
+            principal: nodeStake(approvedNode),
+            stipend: Number(newlyApproved.reward_amount || nodePay(approvedNode))
+          });
         }
-      }
-
-
+        if (state.history[0]?.nodeId) rememberCrewPartner(nodeById(state.history[0].nodeId).companyId);
         if (config.enableWorkApi === true) {
           const active = runResult.data.find((row) => ['reserved', 'in_progress', 'checkpointed'].includes(row.status));
           if (active) {
             const activeNode = nodeById(active.node_id);
+            rememberCrewPartner(activeNode.companyId);
             const startedAt = Date.parse(active.started_at || '') || Date.now();
             const expectedAt = Date.parse(active.expected_completed_at || '') || (startedAt + activeNode.time * 1000);
             const duration = Math.max(1000, expectedAt - startedAt);
@@ -497,18 +883,32 @@
               expectedCompletedAt: expectedAt,
               duration,
               progress: Math.min(1, Math.max(0, (Date.now() - startedAt) / duration)),
-              overlayOpen: Boolean(state.run?.overlayOpen),
+              overlayOpen: true,
               logs: state.run?.logs || ['[복원] 서버에 저장된 업무 상태를 다시 연결했어요.'],
               serverBacked: true,
               rewardAmount: Number(active.reward_amount || 0),
               motionVariant: active.motion_variant || 'a',
               motionSeed: active.motion_seed || '',
+              choice: state.player?.choice || state.run?.choice || null,
               _submitted: false
             };
+            if (!state.player) {
+              const photo = activeNode.questionImage
+                ? brandAssetSrc(activeNode.questionImage, companyById(activeNode.companyId).slug, 'photo')
+                : null;
+              state.player = {
+                nodeId: active.node_id,
+                choice: state.run.choice || null,
+                question: playerQuestion(activeNode),
+                photo
+              };
+            }
           } else if (state.run?.serverBacked) {
             state.run = null;
           }
         }
+      }
+
       const noticeResult = await supabaseClient
         .from('notifications')
         .select('id,title,body,notification_type,created_at,read_at')
@@ -613,6 +1013,26 @@
       throw new Error('로그인이 필요해요.');
     }
     const response = await fetch(adminFunctionUrl, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${authState.session.access_token}`,
+        apikey: config.supabasePublishableKey || '',
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ action, ...payload })
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok || result.ok !== true) {
+      throw new Error(result.error || '요청을 처리하지 못했어요.');
+    }
+    return result;
+  }
+
+  async function memberFinanceRequest(action, payload = {}) {
+    if (!authState.session || !memberFinanceUrl) {
+      throw new Error('로그인이 필요해요.');
+    }
+    const response = await fetch(memberFinanceUrl, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${authState.session.access_token}`,
@@ -828,6 +1248,9 @@
     if (state.adminPage === 'overview' || state.adminPage === 'members') jobs.push(loadAdminMembers({ silent: true }));
     if (state.adminPage === 'overview' || state.adminPage === 'finance') jobs.push(loadAdminFinance({ silent: true }));
     if (state.adminPage === 'settings') jobs.push(loadAdminCampaigns({ silent: true }));
+    if (window.PUTDUK_ADMIN && typeof window.PUTDUK_ADMIN.refreshPage === 'function') {
+      jobs.push(window.PUTDUK_ADMIN.refreshPage());
+    }
     await Promise.all(jobs);
     if (!silent) render();
   }
@@ -847,8 +1270,10 @@
     try {
       const { data, error } = await supabaseClient.auth.getSession();
       if (error) throw error;
+      await hydrateCrewPulse({ force: true });
       await hydrateSession(data.session);
       if (authState.session) await recordOwnSession();
+      if (authState.session && !isAdmin) queueOnboarding();
       if (isAdmin) {
         await hydrateAdminAuthorization();
         if (authState.adminAuthorized) {
@@ -919,6 +1344,17 @@
     return `<i data-lucide="${name}" width="${size}" height="${size}" aria-hidden="true"></i>`;
   }
 
+  function uiLead(name, label, size = 15) {
+    return `<span class="ui-lead">${icon(name, size)}<span>${label}</span></span>`;
+  }
+
+  function settleNote(tag = 'p', trial = false) {
+    const copy = trial
+      ? '🎁 지원금은 근무에 다 쓰이고 돌려주지 않아요. 수당만 나와요'
+      : '✅ 일이 끝나면 원금과 수당이 잔액에 같이 반영돼요';
+    return `<${tag} class="settle-note"><span>${copy}</span></${tag}>`;
+  }
+
   function refreshIcons() {
     if (window.lucide && typeof window.lucide.createIcons === 'function') window.lucide.createIcons({ attrs: { 'stroke-width': 1.8 } });
   }
@@ -931,6 +1367,29 @@
       color: '#0d9f76',
       category: '데이터 업무'
     };
+  }
+
+  function motionPartner(node) {
+    const company = companyById(node?.companyId);
+    return {
+      company: company.name,
+      partner_name: company.name,
+      slug: company.slug || company.mark || 'putduk',
+      name: company.name,
+      title: node?.title || company.name,
+      motion: node?.motion,
+      motion_profile: node?.motion || node?.motion_profile,
+      color: node?.color || company.color,
+      motion_seed: node?.motion_seed || state.run?.motionSeed
+    };
+  }
+
+  function playMemberWorkPhase(canvas, partner, phase, extras = {}) {
+    if (isAdmin || !canvas || !window.PutdukMotion || typeof window.PutdukMotion.playWorkPhase !== 'function') {
+      return false;
+    }
+    window.PutdukMotion.playWorkPhase(canvas, partner, phase, extras);
+    return true;
   }
   function nodeById(id) {
     return nodes.find((node) => node.id === id) || {
@@ -949,6 +1408,244 @@
     };
   }
 
+  function defaultMotionSettings() {
+    return { bot_enabled: true, crowd_min: 8, crowd_max: 24, burn_per_minute: 2 };
+  }
+
+  function normalizeMotionSettings(value) {
+    const source = value && typeof value === 'object' ? value : {};
+    const minRaw = Number(source.crowd_min ?? 8);
+    const maxRaw = Number(source.crowd_max ?? 24);
+    const burnRaw = Number(source.burn_per_minute ?? source.burnPerMinute ?? 2);
+    const min = Number.isFinite(minRaw) ? Math.min(Math.max(0, Math.round(minRaw)), 10000) : 8;
+    const max = Number.isFinite(maxRaw) ? Math.min(Math.max(min, Math.round(maxRaw)), 10000) : Math.max(min, 24);
+    return {
+      bot_enabled: source.bot_enabled !== false && source.bot_on !== false,
+      crowd_min: min,
+      crowd_max: max,
+      burn_per_minute: Number.isFinite(burnRaw) ? Math.min(Math.max(0, Math.round(burnRaw)), 100000) : 2
+    };
+  }
+
+  let crewPulseFetchedAt = 0;
+  async function hydrateCrewPulse({ force = false } = {}) {
+    if (isAdmin || !supabaseClient) return;
+    if (!force && crewPulseFetchedAt && Date.now() - crewPulseFetchedAt < 12000) return;
+    crewPulseFetchedAt = Date.now();
+    try {
+      const result = await supabaseClient
+        .from('crew_pulse')
+        .select('live,crowd_min,crowd_max,burn_per_minute')
+        .eq('id', 1)
+        .maybeSingle();
+      if (result.error || !result.data) return;
+      state.crewPulse = {
+        stored: 'api',
+        live: result.data.live !== false,
+        crowd_min: result.data.crowd_min,
+        crowd_max: result.data.crowd_max,
+        burn_per_minute: result.data.burn_per_minute
+      };
+    } catch (_) {}
+  }
+
+  function readMotionSettings() {
+    const pulse = state.crewPulse && state.crewPulse.stored === 'api' ? state.crewPulse : null;
+    if (!pulse) return defaultMotionSettings();
+    return normalizeMotionSettings({
+      bot_enabled: pulse.live !== false,
+      crowd_min: pulse.crowd_min,
+      crowd_max: pulse.crowd_max,
+      burn_per_minute: pulse.burn_per_minute
+    });
+  }
+
+  function fomoSeed(value) {
+    const text = String(value || '');
+    let hash = 0;
+    for (let i = 0; i < text.length; i += 1) hash = (hash * 33 + text.charCodeAt(i)) >>> 0;
+    return hash;
+  }
+
+  function fomoRng(seed) {
+    let t = seed >>> 0;
+    return function next() {
+      t = (Math.imul(t ^ (t >>> 15), t | 1) >>> 0);
+      t ^= t + (Math.imul(t ^ (t >>> 7), t | 61) >>> 0);
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+
+  function fomoShuffle(list, rng) {
+    const arr = list.slice();
+    for (let i = arr.length - 1; i > 0; i -= 1) {
+      const j = Math.floor(rng() * (i + 1));
+      const hold = arr[i];
+      arr[i] = arr[j];
+      arr[j] = hold;
+    }
+    return arr;
+  }
+
+  function fomoPartnerList() {
+    const partners = (companies.length ? companies : [{ name: 'DHL' }, { name: 'CJ대한통운' }, { name: 'FedEx' }, { name: 'UPS' }, { name: 'GXO' }])
+      .map((item) => String(item.name || item.display_name_ko || item.title || item.slug || '').trim())
+      .filter(Boolean);
+    return partners.length ? partners : ['DHL', 'CJ대한통운', 'FedEx', 'UPS', 'GXO'];
+  }
+
+  function pickFomoNames(count, rng) {
+    const recent = new Set(fomoNameCooldown);
+    const shuffled = fomoShuffle(FOMO_NAME_POOL, rng);
+    const picked = [];
+    const surnames = new Set();
+    const take = (allowRecent, allowSameSurname) => {
+      for (let i = 0; i < shuffled.length && picked.length < count; i += 1) {
+        const name = shuffled[i];
+        if (picked.includes(name)) continue;
+        if (!allowRecent && recent.has(name)) continue;
+        const surname = name.charAt(0);
+        if (!allowSameSurname && surnames.has(surname)) continue;
+        picked.push(name);
+        surnames.add(surname);
+      }
+    };
+    take(false, false);
+    if (picked.length < count) take(false, true);
+    if (picked.length < count) take(true, true);
+    fomoNameCooldown = fomoNameCooldown.concat(picked).slice(-FOMO_NAME_COOLDOWN);
+    return picked;
+  }
+
+  function pickFomoPartners(count, rng) {
+    const list = fomoPartnerList();
+    const shuffled = fomoShuffle(list, rng);
+    const out = [];
+    for (let i = 0; i < count; i += 1) {
+      const avoidPrev = out[i - 1];
+      const unused = shuffled.filter((name) => !out.includes(name));
+      const noAdj = shuffled.filter((name) => name !== avoidPrev);
+      const source = unused.length ? unused : (noAdj.length ? noAdj : shuffled);
+      out.push(source[0] || shuffled[i % shuffled.length] || 'DHL');
+    }
+    return out;
+  }
+
+  function buildFomoFeed(bucket, settings) {
+    const rng = fomoRng(fomoSeed(`${bucket}-${settings.crowd_max}-${settings.burn_per_minute}-${FOMO_NAME_POOL.length}`));
+    const names = pickFomoNames(FOMO_FEED_SLOTS, rng);
+    const partners = pickFomoPartners(FOMO_FEED_SLOTS, rng);
+    return Array.from({ length: FOMO_FEED_SLOTS }, (_, index) => {
+      const roll = fomoSeed(`${bucket}-${index}-${names[index]}-${partners[index]}`);
+      const action = FOMO_ACTIONS[Math.floor(rng() * FOMO_ACTIONS.length)] || '방금 출근했어요';
+      const ago = roll % 4 === 0 ? '방금' : `${(roll % 7) + 1}분 전`;
+      return { name: names[index] || FOMO_NAME_POOL[index], action, partner: partners[index] || 'DHL', ago };
+    });
+  }
+
+  function currentFomoFeed(settings) {
+    const bucket = Math.floor(Date.now() / 8000);
+    if (fomoFeedCache.bucket === bucket && fomoFeedCache.items.length === FOMO_FEED_SLOTS) {
+      return fomoFeedCache.items;
+    }
+    const items = buildFomoFeed(bucket, settings);
+    fomoFeedCache = { bucket, items };
+    return items;
+  }
+
+  function fomoPulse() {
+    const settings = readMotionSettings();
+    if (!settings.bot_enabled) {
+      return { on: false, crowd: 0, burn: 0, feed: [], settings };
+    }
+    const span = Math.max(0, settings.crowd_max - settings.crowd_min);
+    const wave = 0.5 + 0.5 * Math.sin(Date.now() / 9000);
+    const crowd = Math.round(settings.crowd_min + span * wave);
+    return { on: true, crowd, burn: settings.burn_per_minute, feed: currentFomoFeed(settings), settings };
+  }
+
+  function fomoSlotsLeft(node) {
+    const cap = Math.max(0, Number(node?.available || 0));
+    const pulse = fomoPulse();
+    if (!pulse.on || !cap) return cap;
+    const minutes = Math.floor((Date.now() / 60000) % 180);
+    const burned = Math.min(cap, (minutes * pulse.burn + (fomoSeed(node.id) % 7)) % (cap + 1));
+    return Math.max(0, cap - burned);
+  }
+
+  function renderFomoMetricValue(value) {
+    return `<span class="fomo-metric-num">${Number(value || 0).toLocaleString('ko-KR')}</span>`;
+  }
+
+  function renderFomoFeedItems(pulse) {
+    const items = (pulse.feed || []).slice(0, FOMO_FEED_SLOTS);
+    while (items.length < FOMO_FEED_SLOTS) {
+      items.push({ name: '\u00a0', action: '\u00a0', partner: '\u00a0', ago: '\u00a0' });
+    }
+    return items.map((item) => `<li><span class="fomo-feed-copy"><strong>${esc(item.name)}</strong> 님이 ${esc(item.partner)} 라인에서 ${esc(item.action)}</span><span class="fomo-feed-ago">${esc(item.ago)}</span></li>`).join('');
+  }
+
+  function fomoKickerLabel(kind) {
+    return kind === 'nodes' ? '방금 라인' : '방금 들어온 크루';
+  }
+
+  function renderFomoBoard(kind) {
+    const pulse = fomoPulse();
+    const title = kind === 'nodes' ? '지금 라인' : '지금 작업실';
+    if (!pulse.on) {
+      return `<section class="fomo-board is-off" aria-label="${title}"><p class="fomo-off-copy">${icon('users', 16)}<span>지금은 방금 들어온 크루 안내를 잠시 쉬고 있어요.</span></p></section>`;
+    }
+    return `<section class="fomo-board" aria-label="${title}">
+      <div class="fomo-metrics">
+        <div><div class="metric-label">지금 활동</div><div class="metric-value" id="fomoCrowd">${renderFomoMetricValue(pulse.crowd)}<small>명</small></div></div>
+        <div><div class="metric-label">자리 소진</div><div class="metric-value" id="fomoBurn">${renderFomoMetricValue(pulse.burn)}<small>칸/분</small></div></div>
+      </div>
+      <p class="fomo-kicker">${icon('radio', 14)}<span>${fomoKickerLabel(kind)}</span></p>
+      <ul class="fomo-feed" id="fomoFeed">${renderFomoFeedItems(pulse)}</ul>
+    </section>`;
+  }
+
+  function patchFomoDom() {
+    if (isAdmin) return;
+    const pulse = fomoPulse();
+    const board = document.querySelector('.fomo-board');
+    if (!board) return;
+    if (!pulse.on) {
+      if (!board.classList.contains('is-off')) {
+        board.classList.add('is-off');
+        board.innerHTML = `<p class="fomo-off-copy">${icon('users', 16)}<span>지금은 방금 들어온 크루 안내를 잠시 쉬고 있어요.</span></p>`;
+        refreshIcons();
+      }
+      return;
+    }
+    if (board.classList.contains('is-off')) {
+      const wrap = document.createElement('div');
+      wrap.innerHTML = renderFomoBoard(state.memberPage === 'nodes' ? 'nodes' : 'dashboard');
+      if (wrap.firstElementChild) board.replaceWith(wrap.firstElementChild);
+      refreshIcons();
+      return;
+    }
+    const crowd = document.getElementById('fomoCrowd');
+    if (crowd) crowd.innerHTML = `${renderFomoMetricValue(pulse.crowd)}<small>명</small>`;
+    const burn = document.getElementById('fomoBurn');
+    if (burn) burn.innerHTML = `${renderFomoMetricValue(pulse.burn)}<small>칸/분</small>`;
+    const feed = document.getElementById('fomoFeed');
+    if (feed) feed.innerHTML = renderFomoFeedItems(pulse);
+    document.querySelectorAll('[data-fomo-slot]').forEach((el) => {
+      const node = nodeById(el.getAttribute('data-fomo-slot'));
+      el.textContent = `${fomoSlotsLeft(node).toLocaleString('ko-KR')}자리 남음`;
+    });
+  }
+
+  function bindFomoClock() {
+    if (isAdmin || fomoClockBound) return;
+    fomoClockBound = true;
+    fomoTimer = setInterval(() => {
+      hydrateCrewPulse().then(() => patchFomoDom()).catch(() => patchFomoDom());
+    }, 4000);
+  }
+
+
   function navItems() {
     const financeCount = (state.adminFinance.deposits?.length || 0) + (state.adminFinance.withdrawals?.length || 0);
     return isAdmin ? [
@@ -958,15 +1655,17 @@
       { id: 'nodes', label: '업무 카드 관리', icon: 'waypoints', count: state.adminCatalogLoaded ? state.adminCatalog.nodes.length : undefined },
       { id: 'reviews', label: '업무 검수', icon: 'clipboard-check', count: state.adminReviewPendingCount || undefined },
       { id: 'finance', label: '입출금 처리', icon: 'wallet-cards', count: state.adminFinanceContract ? financeCount : undefined },
+      { id: 'motion', label: '연출', icon: 'clapperboard' },
       { id: 'notifications', label: '공지·알림', icon: 'bell' },
       { id: 'settings', label: '운영 설정', icon: 'sliders-horizontal' }
     ] : [
-      { id: 'dashboard', label: '내 작업실', icon: 'layout-dashboard' },
-      { id: 'nodes', label: '업무 노드 찾기', icon: 'waypoints' },
-      { id: 'history', label: '내 작업내역', icon: 'clipboard-list' },
-      { id: 'wallet', label: '지갑·입출금', icon: 'wallet-cards' },
-      { id: 'membership', label: '멤버십 카드', icon: 'badge-check' },
-      { id: 'referrals', label: '추천인 혜택', icon: 'user-plus' },
+      { id: 'dashboard', label: '근무', icon: 'briefcase' },
+      { id: 'nodes', label: '라인 찾기', icon: 'waypoints' },
+      { id: 'history', label: '내역', icon: 'clipboard-list' },
+      { id: 'wallet', label: '지갑', icon: 'wallet-cards' },
+      { id: 'membership', label: '사원증', icon: 'id-card' },
+      { id: 'benefits', label: '등급·혜택', icon: 'award' },
+      { id: 'referrals', label: '추천', icon: 'user-plus' },
       { id: 'support', label: '도움말', icon: 'circle-help' }
     ];
   }
@@ -978,14 +1677,14 @@
       <aside class="sidebar" id="sidebar">
         <div class="brand-mark">
           <div class="brand-symbol">${icon('orbit', 21)}</div>
-          <div><div class="brand-name">퍼뜩</div><div class="brand-kicker">${isAdmin ? '운영자 관리센터' : '데이터 노드 플랫폼'}</div></div>
+          <div><div class="brand-name">퍼뜩</div><div class="brand-kicker">${isAdmin ? '운영자 관리센터' : '협력사 라인 근무'}</div></div>
         </div>
         <div class="nav-label">${isAdmin ? '운영 메뉴' : '내 서비스'}</div>
         <nav aria-label="주요 메뉴">
           ${items.map((item) => `<button class="nav-item ${current === item.id ? 'active' : ''}" data-nav="${item.id}">${icon(item.icon, 17)}<span>${item.label}</span>${item.count ? `<span class="nav-count">${item.count > 99 ? '99+' : item.count}</span>` : ''}</button>`).join('')}
         </nav>
         <div class="side-footer">
-          ${isAdmin ? `<div class="mode-card"><div class="eyebrow">${icon('shield-check', 14)} 안전한 운영</div><p style="margin:8px 0 0;color:var(--muted);font-size:11px;line-height:1.5">모든 회원·금액 변경은 관리자 기록에 남습니다.</p></div>` : `<div class="mode-card"><div style="display:flex;align-items:center;gap:8px;font-size:12px;font-weight:800">${icon('headphones',15)} 퍼뜩 안내센터</div><p style="margin:7px 0 0;color:var(--muted);font-size:11px;line-height:1.5">처음이라도 업무 단계부터 차근차근 안내해요.</p><button class="text-link" data-nav="support" style="padding:6px 0 0">도움말 보기</button></div>`}
+          ${isAdmin ? `<div class="mode-card"><div class="eyebrow">${icon('shield-check', 14)} 안전한 운영</div><p style="margin:8px 0 0;color:var(--muted);font-size:11px;line-height:1.5">모든 회원·금액 변경은 관리자 기록에 남습니다.</p></div>` : `<div class="mode-card"><div style="display:flex;align-items:center;gap:8px;font-size:12px;font-weight:800">${icon('id-card',15)} 근무 안내</div><p style="margin:7px 0 0;color:var(--muted);font-size:11px;line-height:1.5">오늘 라인 근무와 등급·혜택을 쉽게 안내해요.</p><button class="text-link" data-nav="support" style="padding:6px 0 0">도움말 보기</button></div>`}
         </div>
       </aside>
       <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
@@ -993,7 +1692,7 @@
   }
 
   function renderTopbar() {
-    const title = isAdmin ? ({ overview: '전체 현황', members: '회원 관리', companies: '기업 관리', nodes: '업무 카드 관리', reviews: '업무 검수', finance: '입출금 처리', notifications: '공지·알림', settings: '운영 설정' }[state.adminPage] || '전체 현황') : ({ dashboard: '내 작업실', nodes: '업무 노드 찾기', history: '내 작업내역', wallet: '지갑·입출금', membership: '멤버십 카드', referrals: '추천인 혜택', support: '도움말' }[state.memberPage] || '내 작업실');
+    const title = isAdmin ? ({ overview: '전체 현황', members: '회원 관리', companies: '기업 관리', nodes: '업무 카드 관리', reviews: '업무 검수', finance: '입출금 처리', motion: '연출', notifications: '공지·알림', settings: '운영 설정' }[state.adminPage] || '전체 현황') : ({ dashboard: '작업실', nodes: '라인 찾기', history: '내역', wallet: '지갑', membership: '사원증', benefits: '등급·혜택', referrals: '추천', support: '도움말' }[state.memberPage] || '작업실');
     const memberIdentity = authState.session
       ? `<div class="profile-chip"><span class="avatar">${esc(profileInitial())}</span><span>${esc(profileName())}</span><button class="profile-logout" data-action="logout">로그아웃</button></div>`
       : `<button class="small-button" data-action="open-login">로그인</button>`;
@@ -1001,9 +1700,15 @@
       ? `<div class="profile-chip"><span class="avatar">관</span><span>운영자 계정</span><button class="profile-logout" data-action="logout">로그아웃</button></div>`
       : `<button class="small-button" data-action="open-login">운영자 로그인</button>`;
     const installButton = !isAdmin ? `<button class="icon-button" data-action="install-app" aria-label="퍼뜩 앱 설치">${icon('download', 17)}</button>` : '';
+    const alertButton = `<button class="icon-button" data-notification aria-label="알림">${icon('bell', 17)}</button>`;
+    const mobileMenu = isAdmin
+      ? `<button class="icon-button" data-menu="open" aria-label="메뉴 열기">${icon('menu', 19)}</button>`
+      : '';
+    const brandSrc = isAdmin ? '../favicon.svg' : './favicon.svg';
+    const crumbTitle = (!isAdmin && state.memberPage === 'membership') ? '' : ` <strong>${title}</strong>`;
     return `
-      <div class="mobile-topbar"><button class="icon-button" data-menu="open" aria-label="메뉴 열기">${icon('menu', 19)}</button><div class="brand-name">퍼뜩</div><div style="display:flex;gap:6px">${installButton}<button class="icon-button" data-theme-toggle aria-label="테마 전환">${icon(state.theme === 'dark' ? 'sun' : 'moon', 17)}</button></div></div>
-      <div class="topbar"><div class="breadcrumb">퍼뜩 ${isAdmin ? '운영자 관리센터' : '데이터 노드'} <strong>${title}</strong></div><div class="top-actions">${installButton}<button class="icon-button" data-theme-toggle aria-label="테마 전환">${icon(state.theme === 'dark' ? 'sun' : 'moon', 17)}</button><button class="icon-button" data-notification aria-label="알림">${icon('bell', 17)}</button>${isAdmin ? adminIdentity : memberIdentity}</div></div>
+      <div class="mobile-topbar">${mobileMenu}<button type="button" class="mobile-brand" data-nav="${isAdmin ? 'overview' : 'dashboard'}" aria-label="퍼뜩 홈"><img class="mobile-brand-logo" src="${brandSrc}" alt="" width="28" height="28" /><span class="brand-name">퍼뜩</span></button><div class="mobile-topbar-actions">${installButton}${alertButton}<button class="icon-button" data-theme-toggle aria-label="테마 전환">${icon(state.theme === 'dark' ? 'sun' : 'moon', 17)}</button></div></div>
+      <div class="topbar"><div class="breadcrumb">퍼뜩 ${isAdmin ? '운영자 관리센터' : '라인 근무'}${crumbTitle}</div><div class="top-actions">${installButton}<button class="icon-button" data-theme-toggle aria-label="테마 전환">${icon(state.theme === 'dark' ? 'sun' : 'moon', 17)}</button>${alertButton}${isAdmin ? adminIdentity : memberIdentity}</div></div>
     `;
   }
 
@@ -1018,7 +1723,60 @@
         return `<span class="partner-pill">${mark}${esc(company.name)}</span>`;
       }).join('')
       : `<span class="partner-pill"><span class="dot"></span>공개된 협력사 없음</span>`;
-    return `<div class="trust-strip"><div class="trust-title">${icon('badge-check', 15)} 연결 출처</div>${pills}<span style="margin-left:auto;color:var(--muted);font-size:11px">${modeText} · 공개 상태는 운영자 확인 후 반영</span></div>`;
+    return `<div class="trust-strip"><div class="trust-title">${icon('badge-check', 15)} 연결 출처</div><div class="trust-pills">${pills}</div><span class="trust-mode">${modeText} · 공개 상태는 운영자 확인 후 반영</span></div>`;
+  }
+
+  function renderCrewChip() {
+    const band = tierBand();
+    return `<button type="button" class="crew-chip" data-nav="membership" aria-label="사원증 보기"><span class="avatar">${esc(profileInitial())}</span><div><strong>내 카드 보기</strong><small>${esc(displayPublicId())} · ${esc(band.label)} 등급</small></div></button>`;
+  }
+
+  function renderCrewIdCard() {
+    const band = tierBand();
+    const signedIn = Boolean(authState.session);
+    const company = signedIn ? crewPartnerCompany() : null;
+    const partnerName = company?.name || (signedIn ? '라인 배정 전' : '로그인 후 배정');
+    const markSrc = company ? (company.logoUrl || brandAssetSrc(company.logo_asset_path, company.slug, 'logo')) : '';
+    const mark = markSrc
+      ? `<div class="id-badge has-image"><img src="${esc(markSrc)}" alt="${esc(partnerName)} 마크" /></div>`
+      : `<div class="id-badge">${esc(company?.mark || 'PD')}</div>`;
+    const flipped = Boolean(state.idCardFlipped);
+    const attendance = crewAttendance(company);
+    const publicId = displayPublicId();
+    const displayName = signedIn ? profileName() : '퍼뜩 회원';
+    const lineCopy = company
+      ? `오늘 ${partnerName} 라인 근무예요`
+      : (signedIn ? '라인이 열리면 배지가 이 카드에 보여요' : '로그인하면 오늘 라인이 이 카드에 보여요');
+    return `<div class="id-stage"><button type="button" class="id-flip${flipped ? ' is-flipped' : ''}" data-action="flip-idcard" aria-pressed="${flipped ? 'true' : 'false'}" aria-label="${flipped ? '사원증 앞면 보기' : '사원증 뒷면 보기'}">
+      <div class="id-flip-inner">
+        <div class="id-face id-front"${flipped ? ' hidden' : ''}>
+          <div class="id-face-head">
+            <span class="id-chip" aria-hidden="true"></span>
+            ${mark}
+          </div>
+          <div class="id-face-body">
+            <div class="id-portrait" aria-hidden="true"><span>${esc(profileInitial())}</span></div>
+            <div class="id-identity">
+              <div class="id-card-title">${esc(displayName)}</div>
+              <div class="id-band">${esc(band.label)} 등급</div>
+              <div class="id-number" title="${esc(publicId)}">${esc(publicId)}</div>
+            </div>
+          </div>
+          <div class="id-face-foot">
+            <div class="id-status">
+              <span class="id-role">${esc(attendance.label)}</span>
+            </div>
+          </div>
+        </div>
+        <div class="id-face id-back"${flipped ? '' : ' hidden'}>
+          <div class="id-face-body id-face-body-back">
+            <p class="id-back-meta"><span class="id-number" title="${esc(publicId)}">사원번호 ${esc(publicId)}</span><span class="id-back-sep" aria-hidden="true">|</span><span>${esc(band.label)} 등급</span></p>
+            <p class="id-back-copy">${esc(lineCopy)}</p>
+            <p class="id-legal">퍼뜩 멤버십 운영이며, 근로계약·4대보험·협력사 인사 채용은 아니에요.</p>
+          </div>
+        </div>
+      </div>
+    </button></div>`;
   }
 
   function renderMemberDashboard() {
@@ -1026,38 +1784,49 @@
     const accountButton = authState.session
       ? `<button class="secondary-button" data-action="logout">로그아웃</button>`
       : `<button class="secondary-button" data-action="open-signup">회원가입·로그인</button>`;
+    const partner = crewPartnerCompany();
+    const attendance = crewAttendance(partner);
+    const heroLine = partner ? `오늘 ${esc(partner.name)} 라인 근무` : (authState.session ? '오늘 라인 근무' : '로그인하면 오늘 라인에 출근해요');
     return `
       ${renderTrustStrip()}
+      ${renderFomoBoard('dashboard')}
       <section class="grid-hero">
         <div class="hero-card">
-          <div class="eyebrow"><span class="pulse-dot"></span> 지금 처리 가능한 데이터 노드</div>
-          <h1 class="hero-title">오늘의 데이터 업무를<br><span style="color:var(--emerald-strong)">내 속도로 시작해요.</span></h1>
-          <p class="hero-copy">기업별로 다른 데이터 업무를 선택하고, 실제 처리 단계와 검수 결과를 확인할 수 있어요. 처음이라면 빠른 확인 노드부터 시작해 보세요.</p>
-          <div class="hero-actions"><button class="primary-button" data-nav="nodes">${icon('play-circle', 18)} 업무 노드 둘러보기</button>${accountButton}</div>
-          <div class="hero-metrics"><div><div class="metric-label">오늘 처리 가능</div><div class="metric-value">${nodes.length}<small>개 노드</small></div></div><div><div class="metric-label">내 검수 완료</div><div class="metric-value">${state.history.filter((item) => item.status === '검수 완료').length}<small>건</small></div></div><div><div class="metric-label">현재 상태</div><div class="metric-value" style="font-size:18px;color:var(--emerald-strong)">${authState.session ? '계정 연결' : '안내 화면'}</div></div></div>
+          <div class="eyebrow"><span class="pulse-dot"></span> ${heroLine}</div>
+          <h1 class="hero-title">작업실에 출근하고<br><span style="color:var(--emerald-strong)">한 칸만 확인해요.</span></h1>
+          <p class="hero-copy">오늘 배정된 라인을 사진 한 장으로 확인하고 제출하면 돼요. 일이 끝나면 원금과 수당이 잔액에 같이 반영돼요.</p>
+          <div class="hero-actions"><button class="primary-button" data-nav="nodes">${icon('waypoints', 18)} 라인 찾기</button>${accountButton}</div>
+          <div class="hero-metrics"><div><div class="metric-label">오늘 라인</div><div class="metric-value">${memberCatalogNodes().length}<small>칸</small></div></div><div><div class="metric-label">검수 완료</div><div class="metric-value">${state.history.filter((item) => item.status === '검수 완료').length}<small>건</small></div></div><div><div class="metric-label">근무 상태</div><div class="metric-value" style="font-size:18px;color:var(--emerald-strong)">${esc(attendance.label)}</div></div></div>
         </div>
-        <div class="id-card"><div class="id-card-top"><div><div class="id-card-kicker">퍼뜩 멤버십 카드</div><div class="id-card-title">우수 파트너</div></div><div class="id-chip"></div></div><div class="id-number">${esc(publicId())}</div><div class="id-footer"><span>${esc(profileName())}</span><span>${authState.session ? '인증 계정' : '가입 전 카드'}</span></div><div style="display:flex;align-items:center;gap:7px;margin-top:17px;color:#b9e8d2;font-size:11px">${icon('sparkles', 14)} 활동으로 등급이 올라가요</div></div>
+        <div class="panel panel-pad crew-side">
+          ${renderCrewIdCard()}
+          <p class="page-copy" style="margin-top:12px">탭하면 뒷면이 보여요.</p>
+        </div>
       </section>
-      ${inProgress ? `<div class="notice" style="margin-bottom:18px"><span style="color:var(--emerald)">${icon('activity',17)}</span><div style="flex:1"><strong>${esc(inProgress.title)}</strong>을(를) 처리하고 있어요.<br><span style="color:var(--muted)">화면을 닫아도 서버에서 진행됩니다.</span></div><button class="small-button primary" data-action="open-run">진행 화면 열기</button></div>` : ''}
+      ${inProgress ? `<div class="notice" style="margin-bottom:18px"><span style="color:var(--emerald)">${icon('activity',17)}</span><div style="flex:1"><strong>${esc(inProgress.title)}</strong> 근무를 이어가고 있어요.<br><span style="color:var(--muted)">화면을 닫아도 서버 기준으로 이어져요.</span></div><button class="small-button primary" data-action="open-run">근무 화면 열기</button></div>` : ''}
       <section class="dashboard-grid">
-        <div class="panel"><div class="panel-head"><div><div class="panel-title">처리 흐름</div><div class="panel-subtitle">검수 완료된 내 작업 보상만 표시해요</div></div><span class="status-badge">${icon('trending-up', 13)} 서버 기록 기준</span></div><div class="chart-wrap"><canvas id="earningsChart" aria-label="최근 7일 보상 흐름"></canvas></div></div>
-        <div class="wallet-card"><div class="eyebrow" style="color:#a8f3d2">${icon('wallet', 14)} 내 지갑</div><div class="wallet-balance">${money(state.wallet.available)}</div><div class="wallet-row"><span class="muted">업무 지원금</span><strong>${money(state.wallet.support)}</strong></div><div class="wallet-row"><span class="muted">작업 보상</span><strong>${money(state.wallet.task)}</strong></div><div class="wallet-row"><span class="muted">추천 보상</span><strong>${money(state.wallet.referral)}</strong></div><div style="display:flex;gap:8px;margin-top:17px"><button class="secondary-button" data-nav="wallet" style="flex:1;color:#fff;border-color:rgba(255,255,255,.2);background:rgba(255,255,255,.1)">지갑 보기</button><button class="gold-button" data-action="deposit-info" style="flex:1">충전 안내</button></div></div>
+        <div class="panel"><div class="panel-head"><div><div class="panel-title">최근 수당 흐름</div><div class="panel-subtitle">검수 완료된 수당만 표시해요</div></div><span class="status-badge">${icon('trending-up', 13)} 서버 기록</span></div><div class="chart-wrap"><canvas id="earningsChart" aria-label="최근 7일 수당 흐름"></canvas></div></div>
+        <div class="wallet-card"><div class="eyebrow" style="color:#a8f3d2">${icon('layout-grid', 14)} 내 지갑 세 칸</div>${renderWalletSlots()}<div class="wallet-cta"><button class="secondary-button" data-nav="wallet">지갑 보기</button><button class="gold-button" data-action="deposit-info">${icon('credit-card', 16)} 입금하기</button></div></div>
       </section>
       ${renderPartnerGallery()}
-      <div class="section-heading"><div><h2>오늘 추천 노드</h2><p>업무별 예상시간과 보상을 먼저 확인하세요.</p></div><button class="text-link" data-nav="nodes">전체 노드 보기 ${icon('arrow-right', 14)}</button></div>
-      <section class="node-grid">${nodes.slice(0, 3).map(renderNodeCard).join('') || `<div class="empty-state compact" style="grid-column:1/-1"><div class="empty-icon">${icon('waypoints', 22)}</div><strong>공개된 업무가 아직 없어요.</strong><p>로그인 후 운영자가 승인한 협력사·업무만 표시됩니다.</p></div>`}</section>
-      <section class="dashboard-grid" style="margin-top:18px"><div class="panel"><div class="panel-head"><div><div class="panel-title">최근 작업 흐름</div><div class="panel-subtitle">실제 작업 단계가 여기에 기록돼요.</div></div><button class="text-link" data-nav="history">전체보기</button></div>${renderTimeline()}</div><div class="panel panel-pad"><div class="panel-title">처음 시작하는 분께</div><div class="notice" style="margin-top:14px"><span style="color:var(--gold)">${icon('lightbulb',17)}</span><div>빠른 확인 노드는 1분 안에 끝나고, 화면에 표시된 조건과 검수 결과에 따라 보상이 확정돼요.</div></div><button class="secondary-button" data-nav="support" style="width:100%;margin-top:13px">업무 과정 알아보기</button></div></section>
+      <div class="section-heading"><div><h2>오늘 추천 근무</h2><p>잠금 금액과 끝나면 받을 수당을 먼저 봐요.</p></div><button class="text-link" data-nav="nodes">라인 더 보기 ${icon('arrow-right', 14)}</button></div>
+      <section class="node-grid">${memberCatalogNodes().slice(0, 3).map(renderNodeCard).join('') || `<div class="empty-state compact" style="grid-column:1/-1"><div class="empty-icon">${icon('waypoints', 22)}</div><strong>오늘 공개된 라인이 아직 없어요.</strong><p>로그인 후 운영자가 연 협력사 근무만 보여요.</p></div>`}</section>
+      <section class="dashboard-grid" style="margin-top:18px"><div class="panel"><div class="panel-head"><div><div class="panel-title">최근 근무</div><div class="panel-subtitle">제출·검수 상태가 여기에 쌓여요.</div></div><button class="text-link" data-nav="history">전체보기</button></div>${renderTimeline()}</div><div class="panel panel-pad"><div class="panel-title">처음 출근하는 분께</div><div class="notice" style="margin-top:14px"><span style="color:var(--gold)">${icon('lightbulb',17)}</span><div>한 화면에서 사진과 질문만 확인하고 제출하면 돼요. ${settleNote('span')}</div></div><button class="secondary-button" data-nav="support" style="width:100%;margin-top:13px">도움말 보기</button></div></section>
     `;
   }
 
   function renderNodeCard(node) {
     const company = companyById(node.companyId);
     const enabled = state.nodeEnabled[node.id] !== false;
+    const ready = enabled && canStartNode(node);
     const markSrc = company.logoUrl || brandAssetSrc(company.logo_asset_path, company.slug, 'logo');
     const mark = markSrc
       ? `<div class="company-mark has-image"><img src="${esc(markSrc)}" alt="${esc(company.name)} 로고" /></div>`
       : `<div class="company-mark">${esc(company.mark)}</div>`;
-    return `<article class="node-card" style="--node-color:${node.color};opacity:${enabled ? 1 : .55}"><div class="node-accent"></div><div class="node-top">${mark}<span class="status-badge ${node.level === '전문 검수' ? 'gold' : ''}">${enabled ? '모집 중' : '일시 중지'}</span></div><div class="node-company">${esc(company.name)} · ${esc(company.category)}</div><div class="node-title">${esc(node.title)}</div><div class="node-copy">${esc(node.copy)}</div><div class="node-bottom"><div class="node-meta"><span>${icon('clock-3', 12)} ${esc(node.minutes)}</span><strong>${money(node.reward)}</strong><span>${node.available}건 남음</span></div><button class="small-button ${enabled ? 'primary' : ''}" data-start-node="${node.id}" ${enabled ? '' : 'disabled'}>${enabled ? '시작하기' : '대기 중'}</button></div></article>`;
+    const badge = !enabled ? '잠시 쉼' : ready ? '자리 있음' : (node.isTrial ? '지원금으로 출근' : '입금 후 출근');
+    const cta = !enabled ? '대기 중' : ready ? '출근하기' : '입금 안내';
+    const slotsLeft = fomoSlotsLeft(node);
+    return `<article class="node-card" data-level="${esc(node.level || '')}" style="--node-color:${node.color};opacity:${enabled ? 1 : .55}"><div class="node-accent"></div><div class="node-top">${mark}<span class="status-badge ${node.level === '전문 검수' ? 'gold' : ''}">${badge}</span></div><div class="node-company">${esc(company.name)} · ${esc(company.category)}</div><div class="node-title">${esc(node.title)}</div>${cardMoneyLines(node).html}<div class="node-bottom"><div class="node-meta"><span>${icon('clock-3', 12)} ${esc(node.minutes)}</span><span data-fomo-slot="${esc(node.id)}">${slotsLeft.toLocaleString('ko-KR')}자리 남음</span></div><button class="small-button ${ready ? 'primary' : ''}" data-start-node="${node.id}" ${enabled ? '' : 'disabled'}>${cta}</button></div></article>`;
   }
 
   function renderTimeline() {
@@ -1083,20 +1852,31 @@
   }
 
   function renderNodesPage() {
-    const grid = nodes.map(renderNodeCard).join('') || `<div class="empty-state compact" style="grid-column:1/-1"><div class="empty-icon">${icon('waypoints',22)}</div><strong>지금 공개된 업무가 없어요.</strong><p>운영자가 협력사와 업무 카드를 승인한 뒤에만 이곳에 나타납니다.</p></div>`;
-    return `<div class="section-heading" style="margin-top:0"><div><h1 class="page-title">업무 노드 찾기</h1><p class="page-copy">기업별 데이터 업무를 비교하고, 내게 맞는 작업부터 시작하세요.</p></div><button class="secondary-button" data-action="deposit-info">${icon('wallet', 16)} 이용 조건 안내</button></div><div class="filter-row"><button class="filter-button active" data-filter="all">전체</button><button class="filter-button" data-filter="빠른 확인">1~3분 업무</button><button class="filter-button" data-filter="일반 처리">일반 처리</button><button class="filter-button" data-filter="집중 처리">집중 처리</button><button class="filter-button" data-filter="전문 검수">전문 검수</button></div><section class="node-grid" id="nodeGrid">${grid}</section><div class="notice" style="margin-top:18px"><span style="color:var(--emerald)">${icon('info',17)}</span><div><strong>보상 안내</strong><br>카드의 보상은 검수 완료 후 확정됩니다. 업무 시작 전에 예상시간과 조건을 꼭 확인하세요.</div></div>`;
+    const grid = memberCatalogNodes().map(renderNodeCard).join('') || `<div class="empty-state compact" style="grid-column:1/-1"><div class="empty-icon">${icon('waypoints',22)}</div><strong>지금 공개된 업무가 없어요.</strong><p>운영자가 협력사와 업무 카드를 승인한 뒤에만 이곳에 나타납니다.</p></div>`;
+    return `<div class="section-heading" style="margin-top:0"><div><h1 class="page-title">라인 찾기</h1><p class="page-copy">오늘 배정된 라인이에요. 잠금 금액과 수당을 보고 출근하세요.</p></div><button class="secondary-button" data-action="deposit-info">${icon('wallet', 16)} 입금 안내</button></div>${renderFomoBoard('nodes')}<div class="filter-row"><button class="filter-button active" data-filter="all">전체</button><button class="filter-button" data-filter="빠른 확인">빠른 확인</button><button class="filter-button" data-filter="일반 처리">일반 처리</button><button class="filter-button" data-filter="집중 처리">집중 처리</button><button class="filter-button" data-filter="전문 검수">전문 검수</button></div><section class="node-grid" id="nodeGrid">${grid}</section><div class="notice" style="margin-top:18px"><span style="color:var(--emerald)">${icon('info',17)}</span><div><strong>정산 안내</strong><br>${settleNote('span')} 화면에서 금액을 더하거나 빼지 않아요.</div></div>`;
   }
 
   function renderHistoryPage() {
     const completed = state.history.filter((item) => item.status === '검수 완료').length;
-    const body = state.history.length
+    const empty = `<div class="empty-state compact record-empty"><strong>아직 제출한 근무가 없어요.</strong><p>근무를 시작하면 검수와 수당이 여기에 쌓여요.</p></div>`;
+    const cards = state.history.length
       ? state.history.map((item) => {
         const node = nodeById(item.nodeId);
-        const company = companyById(node.companyId);
-        return `<tr><td><strong>${esc(item.id)}</strong></td><td>${esc(company.name)} · ${esc(node.title)}</td><td>${esc(item.duration)}</td><td><span class="pill ${item.status === '검수 완료' ? 'ok' : 'wait'}">${esc(item.status)}</span></td><td><strong>${money(item.reward)}</strong></td><td>${esc(item.date)}</td></tr>`;
+        const companyName = lineNameForNode(node);
+        return `<article class="record-card"><div class="record-card-top"><strong>${esc(companyName)} · ${esc(node.title)}</strong><span class="pill ${item.status === '검수 완료' ? 'ok' : 'wait'}">${esc(item.status)}</span></div><div class="record-card-meta"><span>수당 ${money(item.reward)}</span></div><p class="record-card-id">실행번호 ${esc(item.id)} · ${esc(item.date)}</p></article>`;
       }).join('')
-      : `<tr><td colspan="6"><div class="empty-state compact"><strong>아직 제출한 업무가 없어요.</strong><p>업무를 시작하면 실행번호와 검수 상태가 여기에 쌓입니다.</p></div></td></tr>`;
-    return `<div class="section-heading" style="margin-top:0"><div><h1 class="page-title">내 작업내역</h1><p class="page-copy">내가 처리한 업무와 검수·보상 상태를 한눈에 확인해요.</p></div><button class="secondary-button" data-action="export-history">${icon('download',16)} 내역 내려받기</button></div><div class="stat-grid" style="max-width:680px;margin-bottom:18px"><div class="mini-stat"><div class="metric-label">누적 완료</div><div class="num">${completed}건</div><div class="change">검수 완료만 집계</div></div><div class="mini-stat"><div class="metric-label">작업 보상</div><div class="num">${money(state.wallet.task)}</div><div class="change">지갑 서버 잔액</div></div></div><div class="panel"><div class="panel-pad"><div class="table-wrap"><table><thead><tr><th>실행번호</th><th>업무</th><th>처리시간</th><th>상태</th><th>보상</th><th>일시</th></tr></thead><tbody>${body}</tbody></table></div></div></div>`;
+      : '';
+    const rows = state.history.length
+      ? state.history.map((item) => {
+        const node = nodeById(item.nodeId);
+        const companyName = lineNameForNode(node);
+        return `<tr><td><strong>${esc(companyName)} · ${esc(node.title)}</strong><div class="cell-sub">실행번호 ${esc(item.id)}</div></td><td><span class="pill ${item.status === '검수 완료' ? 'ok' : 'wait'}">${esc(item.status)}</span></td><td><strong>${money(item.reward)}</strong></td><td>${esc(item.date)}</td></tr>`;
+      }).join('')
+      : '';
+    const body = state.history.length
+      ? `<div class="record-list">${cards}</div><div class="record-table-wrap"><table class="record-table"><thead><tr><th>근무</th><th>상태</th><th>수당</th><th>일시</th></tr></thead><tbody>${rows}</tbody></table></div>`
+      : empty;
+    return `<div class="section-heading" style="margin-top:0"><div><h1 class="page-title">내 근무 내역</h1><p class="page-copy">제출한 근무와 검수·수당 상태를 한눈에 봐요.</p></div><button class="secondary-button" data-action="export-history">${icon('download',16)} 내역 내려받기</button></div><div class="stat-grid" style="max-width:680px;margin-bottom:18px"><div class="mini-stat"><div class="metric-label">누적 완료</div><div class="num">${completed}건</div><div class="change">검수 완료만 집계</div></div><div class="mini-stat"><div class="metric-label">수당</div><div class="num">${money(state.wallet.task)}</div><div class="change">출금가능 칸에 보여요</div></div></div><div class="panel"><div class="panel-pad record-panel">${body}</div></div>`;
   }
 
   function walletRows() {
@@ -1134,22 +1914,64 @@
     return rows.sort((a, b) => Date.parse(b.at || 0) - Date.parse(a.at || 0)).slice(0, 12);
   }
 
-  function renderWalletPage() {
+  function visibleWalletRows() {
+    const tab = state.walletLedgerTab || 'all';
     const rows = walletRows();
+    if (tab === 'in') return rows.filter((row) => row.kind === '입금');
+    if (tab === 'out') return rows.filter((row) => row.kind === '출금');
+    return rows;
+  }
+
+  function renderWalletPage() {
+    const allRows = walletRows();
+    const rows = visibleWalletRows();
+    const pendingOut = (state.withdrawals || []).filter((row) => ['submitted', 'checking', 'pending', 'queued'].includes(String(row.status || ''))).length;
+    const tab = state.walletLedgerTab || 'all';
+    const tabs = [
+      { id: 'all', label: '전체' },
+      { id: 'in', label: '입금' },
+      { id: 'out', label: '출금' }
+    ];
+    const emptyCopy = allRows.length
+      ? { title: '이 구분에는 아직 기록이 없어요.', body: '다른 칸을 눌러 입금·출금을 확인해 보세요.' }
+      : { title: '아직 기록된 입출금이 없어요.', body: '잔액은 서버가 정하고, 화면에서 더하거나 빼지 않아요.' };
+    const empty = `<div class="empty-state compact record-empty"><strong>${esc(emptyCopy.title)}</strong><p>${esc(emptyCopy.body)}</p></div>`;
+    const cards = rows.map((row) => `<article class="record-card"><div class="record-card-top"><strong>${esc(row.kind)}</strong><span class="pill ${row.ok ? 'ok' : 'wait'}">${esc(row.status)}</span></div><div class="record-card-meta"><span>${esc(row.copy)}</span><span>${esc(row.amount)}</span></div><p class="record-card-id">${row.at ? new Date(row.at).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '-'}</p></article>`).join('');
+    const tableRows = rows.map((row) => `<tr><td>${esc(row.kind)}</td><td>${esc(row.copy)}</td><td><strong>${esc(row.amount)}</strong></td><td><span class="pill ${row.ok ? 'ok' : 'wait'}">${esc(row.status)}</span></td><td>${row.at ? new Date(row.at).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '-'}</td></tr>`).join('');
     const body = rows.length
-      ? rows.map((row) => `<tr><td>${esc(row.kind)}</td><td>${esc(row.copy)}</td><td><strong>${esc(row.amount)}</strong></td><td><span class="pill ${row.ok ? 'ok' : 'wait'}">${esc(row.status)}</span></td><td>${row.at ? new Date(row.at).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '-'}</td></tr>`).join('')
-      : `<tr><td colspan="5"><div class="empty-state compact"><strong>아직 기록된 입출금이 없어요.</strong><p>잔액은 서버 원장 기준으로만 바뀌며, 화면에서 직접 더하거나 빼지 않습니다.</p></div></td></tr>`;
-    return `<div class="section-heading" style="margin-top:0"><div><h1 class="page-title">지갑·입출금</h1><p class="page-copy">지원금, 작업 보상, 추천 보상을 분리해서 확인할 수 있어요.</p></div><div class="action-row"><button class="secondary-button" data-action="open-kyc">본인확인</button><button class="secondary-button" data-action="deposit-info">입금 신청</button><button class="primary-button" data-action="withdraw-info">출금 신청</button></div></div><div class="dashboard-grid"><div class="wallet-card"><div class="eyebrow" style="color:#a8f3d2">${icon('wallet',14)} 출금 가능 잔액</div><div class="wallet-balance">${money(state.wallet.available)}</div><div class="wallet-row"><span class="muted">현재 보류 중</span><strong>${money(state.wallet.held)}</strong></div><div class="wallet-row"><span class="muted">입금 대기</span><strong>${state.deposits.filter((row) => ['submitted', 'checking'].includes(row.status)).length}건</strong></div><div style="margin-top:18px;color:#b7d0c2;font-size:11px;line-height:1.5">출금은 본인확인과 6자리 출금 비밀번호 확인 후 운영자가 수동 처리합니다. 화면에서 잔액을 바꾸지 않아요.</div></div><div class="panel panel-pad"><div class="panel-title">잔액 구성</div><div class="stat-grid" style="margin-top:14px"><div class="mini-stat"><div class="metric-label">업무 지원금</div><div class="num" style="font-size:20px">${money(state.wallet.support)}</div><div class="metric-label" style="margin-top:5px">업무 조건에 따라 사용</div></div><div class="mini-stat"><div class="metric-label">작업 보상</div><div class="num" style="font-size:20px">${money(state.wallet.task)}</div><div class="metric-label" style="margin-top:5px">검수 완료 반영</div></div><div class="mini-stat"><div class="metric-label">추천 보상</div><div class="num" style="font-size:20px">${money(state.wallet.referral)}</div><div class="metric-label" style="margin-top:5px">조건 충족 후 확정</div></div><div class="mini-stat"><div class="metric-label">출금 보류</div><div class="num" style="font-size:20px">${money(state.wallet.held)}</div><div class="metric-label" style="margin-top:5px">확인 중인 금액</div></div></div></div></div><div class="section-heading"><div><h2>최근 지갑 내역</h2><p>입금·출금 신청과 검수 완료 보상만 표시합니다.</p></div></div><div class="panel"><div class="panel-pad"><div class="table-wrap"><table><thead><tr><th>구분</th><th>내용</th><th>금액</th><th>상태</th><th>일시</th></tr></thead><tbody>${body}</tbody></table></div></div></div>`;
+      ? `<div class="record-list">${cards}</div><div class="record-table-wrap"><table class="record-table"><thead><tr><th>구분</th><th>내용</th><th>금액</th><th>상태</th><th>일시</th></tr></thead><tbody>${tableRows}</tbody></table></div>`
+      : empty;
+    return `<div class="section-heading" style="margin-top:0"><div><h1 class="page-title">지갑</h1><p class="page-copy">지원금·업무잔액·출금가능 세 칸을 섞지 않아요.</p></div><div class="wallet-toolbar"><button class="secondary-button" data-action="open-kyc">${icon('shield-check', 16)} 본인확인</button><button class="secondary-button" data-action="deposit-info">${icon('credit-card', 16)} 입금하기</button></div></div>
+      <div class="wallet-card" style="margin-bottom:18px"><div class="eyebrow" style="color:#a8f3d2">${icon('layout-grid',14)} 세 칸 잔액</div>${renderWalletSlots()}</div>
+      ${pendingOut ? `<div class="notice" style="margin-bottom:18px"><span style="color:var(--gold)">${icon('hourglass',17)}</span><div><strong>출금 ${pendingOut}건이 처리 중이에요.</strong><br>운영자가 같은 날 바로 처리해요. 화면에서 금액을 숨기지 않아요.</div></div>` : ''}
+      <div class="withdraw-actions"><button class="primary-button" data-action="withdraw-allowance">${icon('banknote', 16)} 수당만 출금</button><button class="secondary-button" data-action="withdraw-principal">${icon('landmark', 16)} 보증금까지 출금</button></div>
+      <div class="notice" style="margin-bottom:18px"><span style="color:var(--emerald)">${icon('info',17)}</span><div>기본 출금은 수당만이에요. 원금은 업무잔액에 남아 보여요. 보증금까지 신청하면 대기 없이 바로 지급하고, 등급·라인은 내려가요.</div></div>
+      <div class="section-heading"><div><h2>최근 지갑 내역</h2><p>입금·출금 신청과 검수 완료 수당만 표시합니다.</p></div></div>
+      <div class="ledger-tabs">${tabs.map((item) => `<button type="button" class="filter-button ${tab === item.id ? 'active' : ''}" data-ledger-tab="${item.id}">${item.label}</button>`).join('')}</div>
+      <div class="panel"><div class="panel-pad record-panel">${body}</div></div>`;
   }
 
   function renderMembershipPage() {
-    const tiers = [
-      ['일반 파트너', '가입 완료', '기본 노드 이용', '#7b8790'],
-      ['인증 파트너', '본인확인 완료', '일반 노드와 작업내역', '#2d8f70'],
-      ['우수 파트너', '검수 통과율 95% 이상', '고급 노드와 우선 검수', '#b8862c'],
-      ['글로벌 디렉터', '장기 활동·전문 검수', '전문 노드와 전용 배정', '#694b9f']
-    ];
-    return `<div class="section-heading" style="margin-top:0"><div><h1 class="page-title">멤버십 카드</h1><p class="page-copy">입금액이 아니라 실제 활동과 작업 품질로 등급이 올라갑니다.</p></div><span class="status-badge gold">${icon('sparkles',13)} ${esc(authState.profile?.member_tier || '일반 파트너')}</span></div><div class="id-card" style="max-width:620px;margin-bottom:22px"><div class="id-card-top"><div><div class="id-card-kicker">퍼뜩 멤버십 카드</div><div class="id-card-title">${esc(authState.profile?.member_tier || '우수 파트너')}</div></div><div class="id-chip"></div></div><div class="id-number">${esc(publicId())}</div><div class="id-footer"><span>${esc(profileName())}</span><span>${authState.session ? '인증 계정' : '가입 전 카드'}</span></div></div><section class="node-grid">${tiers.map((tier, index) => `<article class="node-card" style="--node-color:${tier[3]};min-height:190px"><div class="node-top"><div class="company-mark" style="background:${tier[3]}">${index + 1}</div><span class="status-badge ${index === 2 ? 'gold' : ''}">${index < 3 ? '현재·달성' : '다음 단계'}</span></div><div class="node-company">멤버십 등급</div><div class="node-title">${tier[0]}</div><div class="node-copy">${tier[1]}</div><div class="node-bottom"><div class="node-meta"><strong style="font-size:12px">${tier[2]}</strong></div></div></article>`).join('')}</section>`;
+    const band = tierBand();
+    return `<div class="membership-page"><div class="section-heading" style="margin-top:0"><div><h1 class="page-title">사원증</h1><p class="page-copy">이름·사진·사원번호·협력사 배지가 한 장에 있어요.</p></div><span class="status-badge gold">${icon('sparkles',13)} ${esc(band.label)} 등급</span></div><div class="membership-stage">${renderCrewIdCard()}<p class="page-copy membership-hint">탭하면 앞·뒷면을 바꿔 봐요.</p><div class="membership-links"><button type="button" class="text-link" data-nav="benefits">${icon('award', 16)} 등급·혜택 보기</button><button type="button" class="text-link" data-nav="referrals">${icon('gift', 16)} 추천 코드 보기</button></div></div></div>`;
+  }
+
+  function renderBenefitsPage() {
+    const current = tierBand();
+    const cards = MEMBER_BANDS.map((band) => {
+        const mine = band.label === current.label || band.raw === current.raw;
+      return `<article class="benefit-card${mine ? ' is-current' : ''}"><div class="benefit-card-head"><h3>${esc(band.label)}</h3>${mine ? '<span class="status-badge gold">지금 등급</span>' : ''}</div><p class="benefit-ladder">${esc(band.ladder)}</p><ul class="benefit-list">${band.perks.map((perk) => `<li>${icon('check', 14)}<span>${esc(perk)}</span></li>`).join('')}</ul></article>`;
+    }).join('');
+    return `<div class="section-heading" style="margin-top:0"><div><h1 class="page-title">등급·혜택</h1><p class="page-copy">지금 등급은 ${esc(current.label)}이에요. 이율이나 이자는 없어요.</p></div></div>
+      <div class="benefit-grid">${cards}</div>
+      <div class="panel panel-pad benefit-note">
+        <h2>보증금까지 출금하면</h2>
+        <p class="help-line">${icon('banknote', 16)}<span>돈은 같은 날 바로 드려요. 며칠 뒤에 묶지 않아요.</span></p>
+        <p class="help-line">${icon('trending-down', 16)}<span>등급은 내려가요. 예: 선임은 라인으로.</span></p>
+        <p class="help-line">${icon('door-closed', 16)}<span>근무 잔액이 0이면 그 라인은 바로 닫혀요.</span></p>
+        <p class="help-line">${icon('waypoints', 16)}<span>우선 집기·주간 자리·전담 라인은 빠지고, 같은 고액 칸은 다시 입금해야 열려요.</span></p>
+        <p class="page-copy">다음 칸은 다시 잔액·완료 사다리를 타요. 출금만으로 그 칸·그 등급을 유지하지 않아요.</p>
+      </div>`;
   }
 
   function renderReferralsPage() {
@@ -1163,7 +1985,22 @@
   }
 
   function renderSupportPage() {
-    return `<div class="section-heading" style="margin-top:0"><div><h1 class="page-title">도움말</h1><p class="page-copy">처음 접속한 분도 업무 과정을 쉽게 이해할 수 있도록 안내해요.</p></div></div><div class="dashboard-grid"><div class="panel panel-pad"><div class="panel-title">퍼뜩 업무는 이렇게 진행돼요</div><div class="timeline" style="padding:20px 0 0"><div class="timeline-item"><div class="timeline-dot"></div><div class="timeline-content"><strong>1. 노드 선택</strong><p>기업과 업무 내용을 보고 원하는 노드를 선택해요.</p></div></div><div class="timeline-item"><div class="timeline-dot"></div><div class="timeline-content"><strong>2. 데이터 확인</strong><p>화면에 표시된 데이터 조각을 직접 비교하고 분류해요.</p></div></div><div class="timeline-item"><div class="timeline-dot"></div><div class="timeline-content"><strong>3. 제출과 검수</strong><p>제출한 내용은 자동검사와 운영 검수를 거쳐요.</p></div></div><div class="timeline-item"><div class="timeline-dot pending"></div><div class="timeline-content"><strong>4. 보상 확정</strong><p>검수 완료 후 작업 보상이 잔액에 반영돼요.</p></div></div></div></div><div class="panel panel-pad"><div class="panel-title">자주 묻는 질문</div><div style="display:flex;flex-direction:column;gap:10px;margin-top:15px"><button class="secondary-button" style="justify-content:space-between;width:100%" data-action="faq">화면을 닫으면 작업이 멈추나요? ${icon('chevron-down',15)}</button><button class="secondary-button" style="justify-content:space-between;width:100%" data-action="faq">보상은 언제 확정되나요? ${icon('chevron-down',15)}</button><button class="secondary-button" style="justify-content:space-between;width:100%" data-action="faq">출금은 어떻게 신청하나요? ${icon('chevron-down',15)}</button></div></div></div>`;
+    const tab = state.helpTab || 'work';
+    const tabs = [
+      { id: 'work', label: '오늘 근무' },
+      { id: 'badge', label: '사원증' },
+      { id: 'pay', label: '정산·지갑' },
+      { id: 'out', label: '출금' }
+    ];
+    const bodies = {
+      work: `<h3>오늘 라인 근무</h3><p class="help-line">${icon('briefcase', 16)}<span>작업실에서 한 칸만 골라 출근해요. 사진과 질문 한 줄을 보고, 버튼 둘 중 하나를 고른 뒤 제출하면 돼요.</span></p><p class="help-line">${icon('monitor', 16)}<span>컴퓨터 화면에서도 근무할 수 있어요. 홈 화면 아이콘은 있으면 편하고, 없어도 출근할 수 있어요.</span></p><p>화면을 닫아도 서버 시각으로 이어져요. 하루 30~60분이면 충분해요.</p>`,
+      badge: `<h3>사원으로서 확인</h3><p class="help-line">${icon('id-card', 16)}<span>카드 한 장에 이름·사진·사원번호·협력사 배지가 있어요. PDK- 번호가 사원번호예요.</span></p><p class="help-line">${icon('building-2', 16)}<span>지금 출근하는 라인의 협력사가 카드에 보여요. 다른 협력사 칸으로 일하면 배지도 그 라인으로 바뀌어요.</span></p><p class="membership-links"><button type="button" class="text-link" data-nav="benefits">${icon('award', 16)} 등급·혜택 보기</button></p><p class="help-legal">퍼뜩 멤버십 운영이며, 근로계약·4대보험·협력사 인사 채용은 아니에요.</p>`,
+      pay: `<h3>원금과 수당</h3><p class="help-line">${icon('layout-grid', 16)}<span>지갑은 지원금·업무잔액·출금가능 세 칸이에요. 섞지 않아요.</span></p><p class="help-line">${icon('lock', 16)}<span>근무 보증은 잠금 금액이에요. 승인되면 원금은 업무잔액, 수당은 출금가능 칸에 보여요.</span></p>${settleNote('p')}<p>화면에서 숫자를 바꾸지 않아요. 서버가 정해요.</p>`,
+      out: `<h3>출금은 이렇게</h3><p class="help-line">${icon('banknote', 16)}<span>큰 버튼은 수당만 출금이에요. 원금은 업무잔액에 남아 보여요.</span></p><p class="help-line">${icon('landmark', 16)}<span>보증금까지 신청하면 대기 일수 없이 바로 지급하고, 등급과 라인은 내려가요.</span></p><p>체험 첫 출금 3천 원은 운영 경로로만 처리돼요.</p><p class="membership-links"><button type="button" class="text-link" data-nav="benefits">${icon('award', 16)} 강등·혜택 안내</button></p>`
+    };
+    return `<div class="section-heading" style="margin-top:0"><div><h1 class="page-title">도움말</h1><p class="page-copy">오늘 근무부터 정산까지, 사원 안내를 나눠 두었어요.</p></div></div>
+      <div class="help-tabs">${tabs.map((item) => `<button type="button" class="filter-button ${tab === item.id ? 'active' : ''}" data-help-tab="${item.id}">${item.label}</button>`).join('')}</div>
+      <div class="panel panel-pad help-body">${bodies[tab] || bodies.work}</div>`;
   }
 
   function renderMemberPage() {
@@ -1171,6 +2008,7 @@
     if (state.memberPage === 'history') return renderHistoryPage();
     if (state.memberPage === 'wallet') return renderWalletPage();
     if (state.memberPage === 'membership') return renderMembershipPage();
+    if (state.memberPage === 'benefits') return renderBenefitsPage();
     if (state.memberPage === 'referrals') return renderReferralsPage();
     if (state.memberPage === 'support') return renderSupportPage();
     return renderMemberDashboard();
@@ -1366,6 +2204,10 @@
   }
 
   function renderAdminPage() {
+    if (window.PUTDUK_ADMIN && typeof window.PUTDUK_ADMIN.renderPage === 'function') {
+      const override = window.PUTDUK_ADMIN.renderPage(state.adminPage);
+      if (typeof override === 'string') return override;
+    }
     if (state.adminPage === 'members') return renderAdminMembers();
     if (state.adminPage === 'companies') return renderAdminCompanies();
     if (state.adminPage === 'nodes') return renderAdminNodes();
@@ -1377,12 +2219,77 @@
   }
 
   function renderRunOverlay() {
-    if (!state.run || !state.run.overlayOpen) return '';
-    const node = nodeById(state.run.nodeId);
+    if (!state.player || !state.run?.overlayOpen) return '';
+    const node = nodeById(state.player.nodeId || state.run.nodeId);
     const company = companyById(node.companyId);
-    const progress = Math.min(1, Math.max(0, state.run.progress || 0));
-    const scene = motionSceneCopy(node, progress);
-    return `<div class="modal-backdrop"><div class="modal motion-modal"><div class="motion-stage"><canvas id="motionCanvas"></canvas><div class="motion-vignette"></div><div class="motion-ui"><div class="motion-top"><div><div class="motion-kicker">${esc(company.name)} · ${esc(node.level)}</div><div class="motion-title">${esc(node.title)}</div></div><div class="motion-live"><span class="pulse-dot" style="background:#80efc1"></span> 노드 실행 중</div></div><div class="motion-center"><div class="motion-core"><div class="motion-percent" id="motionPercent">${Math.round(progress * 100)}%<small>처리 진행률</small></div></div></div><div class="motion-bottom"><div><div class="motion-stage-label" id="motionStageLabel">${esc(scene.label)}</div><div class="motion-stage-copy" id="motionStageCopy">${esc(scene.copy)}</div><div class="progress-track"><div class="progress-fill" id="motionProgress" style="width:${progress * 100}%"></div></div></div><div class="motion-log" id="motionLog">${(state.run.logs || []).slice(-5).map((log) => `<div>${esc(log)}</div>`).join('')}</div></div><div style="display:flex;justify-content:flex-end;gap:9px;margin-top:16px"><button class="secondary-button" data-action="close-run" style="color:#effff8;border-color:rgba(255,255,255,.2);background:rgba(255,255,255,.08)">${progress > .98 ? '닫기' : '화면 닫기'}</button></div></div></div></div></div>`;
+    const photo = state.player.photo || node.questionImage
+      ? brandAssetSrc(state.player.photo || node.questionImage, company.slug, 'photo')
+      : (company.photoUrl || brandAssetSrc(company.photo_asset_path, company.slug, 'photo'));
+    const choice = state.player.choice;
+    return `<div class="modal-backdrop player-backdrop"><div class="player-sheet">
+      <div class="player-stage"><canvas id="motionCanvas" aria-hidden="true"></canvas></div>
+      <div class="player-card">
+        <div class="player-toolbar">
+          <div class="player-kicker">${esc(company.name)} · 한 장 확인</div>
+          <button type="button" class="icon-button" data-action="close-run" aria-label="닫기">${icon('x', 18)}</button>
+        </div>
+        <div class="player-photo">${photo ? `<img src="${esc(photo)}" alt="${esc(company.name)} 근무 사진" />` : `<div class="player-photo-fallback">${esc(company.mark || '라인')}</div>`}</div>
+        <p class="player-q">${esc(state.player.question || playerQuestion(node))}</p>
+        <div class="player-choices">
+          <button type="button" class="secondary-button ${choice === 'yes' ? 'is-picked' : ''}" data-choice="yes">${esc(node.choiceA || '맞아요')}</button>
+          <button type="button" class="secondary-button ${choice === 'no' ? 'is-picked' : ''}" data-choice="no">${esc(node.choiceB || '달라요')}</button>
+        </div>
+        <div class="player-actions">
+          <button type="button" class="primary-button" data-action="submit-player" ${choice ? '' : 'disabled'}>제출하기</button>
+        </div>
+      </div>
+    </div></div>`;
+  }
+
+  function renderStartConfirm() {
+    if (!state.startNodeId) return '';
+    const node = nodeById(state.startNodeId);
+    const company = companyById(node.companyId);
+    const lines = cardMoneyLines(node);
+    const outcome = lines.trial
+      ? `<ul class="outcome-list"><li>✅ 승인되면 지원금은 다 쓰이고 돌려주지 않아요. 수당만 나와요.</li><li>↩️ 반려돼도 지원금은 돌아가지 않아요.</li></ul>`
+      : `<ul class="outcome-list"><li>✅ 승인되면 원금과 수당이 잔액에 같이 반영돼요.</li><li>↩️ 반려되면 원금만 돌아와요.</li></ul>`;
+    return `<div class="modal-backdrop" data-modal="start-confirm"><div class="modal cinematic-modal"><div class="cinematic-stage"><canvas id="startMotionCanvas" aria-hidden="true"></canvas></div><div class="modal-head"><div><h2>출근 확인할까요?</h2><p>${esc(company.name)} · ${esc(node.title)}</p></div><button class="icon-button" data-action="close-start" aria-label="닫기">${icon('x',18)}</button></div><div class="modal-body">${lines.html}${outcome}<p class="page-copy" style="margin-top:12px">한 화면에서 사진과 질문만 보고 제출해요.</p><div class="modal-actions"><button class="secondary-button" type="button" data-action="close-start">다음에</button><button class="primary-button" type="button" data-action="confirm-start">출근하기</button></div></div></div></div>`;
+  }
+
+  function renderResultOverlay() {
+    if (!state.resultScene) return '';
+    const scene = state.resultScene;
+    const next = scene.nextStake;
+    const ultra = next && next >= 30000000;
+    const copy = ultra
+      ? `${icon('shield-check', 16)} 이 금액 구간은 운영자 확인 후 열립니다`
+      : next
+        ? `다음 근무는 ${money(next)} 라인이에요. 넣으면 수당 ${money(payForStake(next))}이에요.`
+        : '오늘 라인 근무를 잘 마쳤어요.';
+    return `<div class="modal-backdrop" data-modal="result-scene"><div class="modal result-modal"><div class="result-stage"><canvas id="resultMotionCanvas" aria-hidden="true"></canvas></div><div class="modal-body"><h2>다음 한 칸만 안내할게요</h2><p class="page-copy">${copy}</p><div class="modal-actions"><button class="primary-button" data-action="close-result">작업실로</button></div></div></div></div>`;
+  }
+
+  function renderOnboarding() {
+    if (isAdmin || !state.onboardingStep) return '';
+    if (state.onboardingStep === 'pwa') {
+      return `<div class="modal-backdrop" data-modal="onboard-pwa"><div class="modal"><div class="result-stage compact"><canvas id="onboardMotionCanvas" aria-hidden="true"></canvas></div><div class="modal-body"><h2 class="modal-title-row">${icon('smartphone', 20)} 홈 화면에 사원증 두기</h2><p class="page-copy">아이콘으로 바로 출근하고, 자리 남음 알림도 받기 쉬워요. PC·브라우저에서도 근무할 수 있어요. 설치는 선택이고 건너뛰어도 작업실에 들어가요.</p><div class="modal-actions"><button class="secondary-button" type="button" data-action="skip-pwa">건너뛰기</button><button class="primary-button" type="button" data-action="onboard-install">사원증 두기</button></div></div></div></div>`;
+    }
+    const grant = Number(state.wallet.support || state.supportGrant || 10000);
+    return `<div class="modal-backdrop" data-modal="onboard-grant"><div class="modal"><div class="modal-head"><div><h2 class="modal-title-row">${icon('gift', 20)} 지원금은 딱 한 번이에요</h2><p>같은 지원금은 다시 나오지 않아요.</p></div></div><div class="modal-body"><p class="page-copy">업무 지원금 ${money(grant)}은 근무에 쓰고, 체험 수당 3천 원은 운영 경로로만 출금돼요.</p><div class="modal-actions"><button class="primary-button" type="button" data-action="ack-grant">확인했어요</button></div></div></div></div>`;
+  }
+
+  function renderMemberTabbar() {
+    if (isAdmin) return '';
+    const current = state.memberPage;
+    const tabs = [
+      { id: 'dashboard', label: '근무', icon: 'briefcase', match: ['dashboard', 'nodes'] },
+      { id: 'membership', label: '사원증', icon: 'id-card', match: ['membership', 'benefits'] },
+      { id: 'wallet', label: '지갑', icon: 'wallet', match: ['wallet'] },
+      { id: 'history', label: '내역', icon: 'clipboard-list', match: ['history'] },
+      { id: 'support', label: '도움말', icon: 'circle-help', match: ['support'] }
+    ];
+    return `<nav class="member-tabbar" aria-label="하단 메뉴">${tabs.map((tab) => `<button type="button" class="member-tab ${tab.match.includes(current) ? 'active' : ''}" data-nav="${tab.id}"><span class="member-tab-icon">${icon(tab.icon, 20)}</span><span class="member-tab-label">${tab.label}</span></button>`).join('')}</nav>`;
   }
 
   function renderAuthModal() {
@@ -1404,12 +2311,41 @@
   }
 
   function renderInfoModal(kind) {
-    if (kind === 'deposit') return `<div class="modal-backdrop" data-modal="info"><div class="modal"><div class="modal-head"><div><h2>입금 확인 요청</h2><p>운영자가 입금 내역을 확인한 뒤에만 잔액이 반영됩니다.</p></div><button class="icon-button" data-action="close-modal">${icon('x',18)}</button></div><div class="modal-body"><form id="depositForm"><div class="notice"><span style="color:var(--emerald)">${icon('wallet',17)}</span><div>원화 계좌 또는 USDT 주소로 보낸 뒤 금액과 증빙을 남겨 주세요. 화면에서 잔액을 올리지 않습니다.</div></div><div class="form-grid" style="margin-top:16px"><div class="field"><label for="depositAmount">입금 금액</label><input id="depositAmount" name="amount" type="number" min="1" step="1" required placeholder="입금한 금액" /></div><div class="field"><label for="depositCurrency">통화</label><select id="depositCurrency" name="currency"><option value="KRW">원화</option><option value="USDT">USDT</option></select></div><div class="field"><label for="depositBank">은행명 / 네트워크</label><input id="depositBank" name="bank" placeholder="예: 국민은행 또는 TRC20" /></div><div class="field"><label for="depositHolder">예금주 / 보낸 주소</label><input id="depositHolder" name="holder" placeholder="예금주 또는 지갑 주소" /></div><div class="field full"><label for="depositProof">증빙 파일 경로 또는 URL</label><input id="depositProof" name="proof" placeholder="운영자가 확인할 증빙 위치" /></div><div class="field full"><label for="depositNote">안내 메모</label><textarea id="depositNote" name="note" rows="2" placeholder="입금 시각, 거래번호 등"></textarea></div></div><div class="modal-actions"><button class="secondary-button" type="button" data-action="close-modal">취소</button><button class="primary-button" type="submit">입금 확인 요청</button></div></form></div></div></div>`;
-    return `<div class="modal-backdrop" data-modal="info"><div class="modal"><div class="modal-head"><div><h2>출금 신청</h2><p>본인확인과 6자리 출금 비밀번호를 확인한 뒤 운영자가 처리합니다.</p></div><button class="icon-button" data-action="close-modal">${icon('x',18)}</button></div><div class="modal-body"><form id="withdrawForm"><div class="notice"><span style="color:var(--gold)">${icon('shield-check',17)}</span><div>출금 가능 잔액 ${money(state.wallet.available)}. 비밀번호는 화면에 남기지 않고 서버 확인용으로만 보냅니다.</div></div><div class="form-grid" style="margin-top:16px"><div class="field"><label for="withdrawAmount">출금 금액</label><input id="withdrawAmount" name="amount" type="number" min="1" step="1" required placeholder="출금할 금액" /></div><div class="field"><label for="withdrawMethod">출금 방식</label><select id="withdrawMethod" name="destination_type"><option value="bank">원화 계좌</option><option value="usdt">USDT 지갑</option></select></div><div class="field full"><label for="withdrawDest">은행계좌 또는 USDT 주소</label><input id="withdrawDest" name="destination" required placeholder="계좌번호 또는 지갑 주소" /></div><div class="field full"><label for="withdrawPin">출금 비밀번호 6자리</label><input id="withdrawPin" name="pin" type="password" inputmode="numeric" maxlength="6" pattern="[0-9]{6}" required placeholder="••••••" /></div></div><div class="modal-actions"><button class="secondary-button" type="button" data-action="close-modal">취소</button><button class="primary-button" type="submit">출금 요청 만들기</button></div></form></div></div></div>`;
+    if (kind === 'deposit') return `<div class="modal-backdrop" data-modal="info"><div class="modal"><div class="modal-head"><div><h2 class="modal-title-row">${icon('credit-card', 20)} 입금하기</h2><p>원하는 금액을 직접 적어요. 최소 칸만 받는 창이 아니에요.</p></div><button class="icon-button" data-action="close-modal" aria-label="닫기">${icon('x',18)}</button></div><div class="modal-body"><form id="depositForm"><div class="notice"><span style="color:var(--emerald)">${icon('wallet',17)}</span><div>보낸 뒤 운영자가 확인해요. 화면에서 잔액을 올리지 않아요.</div></div><div class="form-grid" style="margin-top:16px"><div class="field"><label for="depositAmount">입금 금액</label><input id="depositAmount" name="amount" type="number" min="1" step="1" required placeholder="보낼 금액을 직접 입력" /></div><div class="field"><label for="depositCurrency">통화</label><select id="depositCurrency" name="currency"><option value="KRW">원화</option><option value="USDT">USDT</option></select></div><div class="field"><label for="depositBank">은행명 / 네트워크</label><input id="depositBank" name="bank" placeholder="예: 국민은행 또는 TRC20" /></div><div class="field"><label for="depositHolder">예금주 / 보낸 주소</label><input id="depositHolder" name="holder" placeholder="예금주 또는 지갑 주소" /></div></div><div class="modal-actions"><button class="secondary-button" type="button" data-action="close-modal">취소</button><button class="primary-button" type="submit">입금 확인 요청</button></div></form></div></div></div>`;
+    const principal = state.withdrawIntent === 'principal';
+    const notice = principal
+      ? '보증금까지 신청하면 대기 없이 바로 지급해요. 등급은 내려가고, 근무 잔액 0이면 그 라인은 바로 닫혀요.'
+      : `수당만 출금해요. 원금은 업무잔액에 남아 보여요. 출금가능 ${money(state.wallet.available)}.`;
+    return `<div class="modal-backdrop" data-modal="info"><div class="modal"><div class="modal-head"><div><h2 class="modal-title-row">${principal ? `${icon('landmark', 20)} 보증금까지 출금` : `${icon('banknote', 20)} 수당만 출금`}</h2><p>신청 후 처리 중으로 보여요. 화면에서 잔액을 빼지 않아요.</p></div><button class="icon-button" data-action="close-modal" aria-label="닫기">${icon('x',18)}</button></div><div class="modal-body"><form id="withdrawForm"><div class="notice"><span style="color:var(--gold)">${icon('shield-check',17)}</span><div>${notice}</div></div><input type="hidden" name="withdraw_kind" value="${principal ? 'principal' : 'allowance'}" /><div class="form-grid" style="margin-top:16px"><div class="field"><label for="withdrawAmount">출금 금액</label><input id="withdrawAmount" name="amount" type="number" min="1000" step="1" required placeholder="출금할 금액" /></div><div class="field"><label for="withdrawMethod">출금 방식</label><select id="withdrawMethod" name="destination_type"><option value="bank">원화 계좌</option><option value="usdt">USDT 지갑</option></select></div><div class="field"><label for="withdrawBank">은행명</label><input id="withdrawBank" name="bank_name" placeholder="예: 국민은행" /></div><div class="field"><label for="withdrawHolder">예금주</label><input id="withdrawHolder" name="account_holder" placeholder="예금주 이름" /></div><div class="field full"><label for="withdrawDest">계좌번호 또는 USDT 주소</label><input id="withdrawDest" name="destination" required placeholder="계좌번호 또는 지갑 주소" /></div><div class="field full"><label for="withdrawNetwork">USDT 네트워크</label><input id="withdrawNetwork" name="usdt_network" placeholder="예: TRC20" /></div><div class="field full"><label for="withdrawPin">출금 비밀번호 6자리</label><input id="withdrawPin" name="pin" type="password" inputmode="numeric" maxlength="6" pattern="[0-9]{6}" required placeholder="••••••" /></div></div><div class="modal-actions"><button class="secondary-button" type="button" data-action="close-modal">취소</button><button class="primary-button" type="submit">신청하고 처리 중으로</button></div></form></div></div></div>`;
+  }
+
+  function renderPrincipalConfirm() {
+    const band = tierBand();
+    const next = demoteBandLabel(band.label);
+    const w = walletThree();
+    const work = Number(w.work || 0);
+    const stipend = Number(w.withdrawable || 0);
+    const total = work + stipend;
+    const gradeCopy = band.label === next
+      ? `사원증 등급이 내려가요. 지금은 ${esc(band.label)}${ieya(band.label)}.`
+      : `사원증 등급이 ${esc(band.label)}에서 ${esc(next)}${eulo(next)} 내려가요.`;
+    return `<div class="modal-backdrop" data-modal="withdraw-principal"><div class="modal penalty-sheet cinematic-modal"><div class="result-stage compact"><canvas id="demoteMotionCanvas" aria-hidden="true"></canvas></div><div class="modal-head"><div><h2 class="modal-title-row">${icon('landmark', 20)} 보증금까지 출금할까요?</h2><p>대기 기간 없이 바로 지급하고, 지위는 내려가요.</p></div><button class="icon-button" data-action="close-modal" aria-label="닫기">${icon('x',18)}</button></div><div class="modal-body"><div class="penalty-figures"><div><span>지금 업무잔액(원금)</span><strong>${money(work)}</strong></div><div><span>지금 출금가능(수당)</span><strong>${money(stipend)}</strong></div><div><span>신청하면 바로 이 합까지</span><strong>${money(total)}</strong></div></div><div class="notice penalty-list"><div class="penalty-row">${icon('banknote', 16)}<span>같은 날 ${money(total)}까지 즉시 지급해요. 며칠 뒤에 돈을 묶지 않아요.</span></div><div class="penalty-row">${icon('trending-down', 16)}<span>${gradeCopy}</span></div><div class="penalty-row">${icon('door-closed', 16)}<span>근무 잔액이 0원이 되면 그 라인은 바로 닫혀요.</span></div><p>우선 집기·주간 근무 자리·전담 라인은 빠지고, 같은 고액 칸은 다시 입금해야 열려요.</p></div><div class="modal-actions"><button class="secondary-button" type="button" data-action="close-modal">취소</button><button class="gold-button" type="button" data-action="confirm-principal">이해하고 신청</button></div></div></div></div>`;
   }
 
   function renderKycModal() {
-    return `<div class="modal-backdrop" data-modal="kyc"><div class="modal"><div class="modal-head"><div><h2>본인확인 자료 제출</h2><p>신분증 앞면·뒷면·셀카를 올리면 운영자가 검수합니다.</p></div><button class="icon-button" data-action="close-modal">${icon('x',18)}</button></div><div class="modal-body"><form id="kycForm"><div class="notice"><span style="color:var(--gold)">${icon('file-lock-2',17)}</span><div>원본 파일 주소는 회원 화면에 공개하지 않습니다. 짧은 확인 주소만 운영자가 봅니다.</div></div><div class="kyc-slots" style="margin-top:16px"><label class="kyc-slot">신분증 앞면<input type="file" id="kycFront" accept="image/*" /></label><label class="kyc-slot">신분증 뒷면<input type="file" id="kycBack" accept="image/*" /></label><label class="kyc-slot">셀카<input type="file" id="kycSelfie" accept="image/*" /></label></div><div class="modal-actions"><button class="secondary-button" type="button" data-action="close-modal">나중에</button><button class="primary-button" type="submit">검수 요청</button></div></form></div></div></div>`;
+    const slot = (id, title) => `<label class="kyc-slot"><span class="kyc-slot-title">${title}</span><span class="kyc-file-btn">사진 고르기</span><input class="kyc-file-input" type="file" id="${id}" accept="image/*" /><small class="kyc-file-name">아직 고르지 않았어요</small></label>`;
+    return `<div class="modal-backdrop" data-modal="kyc"><div class="modal"><div class="modal-head"><div><h2>본인확인 자료 제출</h2><p>신분증 앞면·뒷면·셀카를 올리면 운영자가 검수합니다.</p></div><button class="icon-button" data-action="close-modal">${icon('x',18)}</button></div><div class="modal-body"><form id="kycForm"><div class="notice"><span style="color:var(--gold)">${icon('file-lock-2',17)}</span><div>원본 파일 주소는 회원 화면에 공개하지 않습니다. 짧은 확인 주소만 운영자가 봅니다.</div></div><div class="kyc-slots" style="margin-top:16px">${slot('kycFront', '신분증 앞면')}${slot('kycBack', '신분증 뒷면')}${slot('kycSelfie', '셀카')}</div><div class="modal-actions"><button class="secondary-button" type="button" data-action="close-modal">나중에</button><button class="primary-button" type="submit">검수 요청</button></div></form></div></div></div>`;
+  }
+
+  function renderDepositJumpConfirm() {
+    const jump = state.depositJump || {};
+    const amount = Number(jump.amount || 0);
+    const pay = stipendGuess(amount);
+    const ultra = amount >= 30000000;
+    const ultraCopy = ultra
+      ? `<p class="page-copy">${icon('shield-check', 16)} 이 금액 구간은 운영자 확인 후 열립니다</p>`
+      : '';
+    return `<div class="modal-backdrop" data-modal="deposit-jump"><div class="modal cinematic-modal penalty-sheet"><div class="cinematic-stage"><canvas id="depositJumpMotionCanvas" aria-hidden="true"></canvas></div><div class="modal-head"><div><h2 class="modal-title-row">${icon('shield-alert', 20)} 고액 입금, 한 번 더 확인할까요?</h2><p>실수로 큰 금액이 들어가지 않게 막아요.</p></div><button class="icon-button" data-action="back-deposit" aria-label="닫기">${icon('x',18)}</button></div><div class="modal-body"><form id="depositJumpForm"><div class="penalty-figures"><div><span>잠금 금액</span><strong>${money(amount)}</strong></div><div><span>끝나면 원금+수당</span><strong>${money(amount + pay)}</strong></div><div><span>끝나면 수당</span><strong>${money(pay)}</strong></div></div><ul class="outcome-list"><li>✅ 일이 끝나면 원금과 수당이 잔액에 같이 반영돼요.</li><li>↩️ 반려되면 원금만 돌아와요.</li></ul>${ultraCopy}<div class="field" style="margin-top:14px"><label for="depositJumpRepeat">같은 금액을 다시 적어 주세요</label><input id="depositJumpRepeat" name="repeat_amount" inputmode="numeric" autocomplete="off" placeholder="숫자만 다시 입력" /></div><div class="slide-confirm"><label for="depositJumpSlide">밀어 확정</label><input id="depositJumpSlide" type="range" min="0" max="100" value="0" /><span class="slide-hint">금액을 다시 적거나, 오른쪽 끝까지 밀면 확정돼요.</span></div><div class="modal-actions"><button class="secondary-button" type="button" data-action="back-deposit">돌아가기</button><button class="primary-button" id="depositJumpSubmit" type="submit" disabled>이 금액으로 요청</button></div></form></div></div></div>`;
   }
 
   function renderNotificationsModal() {
@@ -1450,7 +2386,7 @@
   function renderMemberDetailModal() {
     const member = state.modalPayload || state.adminMemberDetail || {};
     const wallet = member.wallet || {};
-    return `<div class="modal-backdrop" data-modal="member-detail"><div class="modal"><div class="modal-head"><div><h2>회원 상세</h2><p>${esc(member.public_id || '회원번호 확인 중')}</p></div><button class="icon-button" data-action="close-modal">${icon('x',18)}</button></div><div class="modal-body"><div class="detail-list"><div><span>이름</span><strong>${esc(displayText(member.display_name))}</strong></div><div><span>이메일</span><strong>${esc(displayText(member.email))}</strong></div><div><span>휴대폰</span><strong>${esc(displayText(member.phone || member.phone_e164))}</strong></div><div><span>등급</span><strong>${esc(displayText(member.member_tier))}</strong></div><div><span>상태</span><strong>${esc(memberStatusLabel(member.status || 'pending'))}</strong></div><div><span>가입일</span><strong>${esc(displayTime(member.created_at))}</strong></div><div><span>최근 접속</span><strong>${esc(displayTime(member.last_login_at))}</strong></div><div><span>IP</span><strong>${esc(displayText(member.last_login_ip))}</strong></div><div><span>본인확인</span><strong>${esc(kycStatusLabel(member.kyc_status))}</strong></div><div><span>추천 수</span><strong>${Number(member.referral_count || 0)}</strong></div><div><span>출금 가능</span><strong>${money(wallet.available)}</strong></div><div><span>보류</span><strong>${money(wallet.held)}</strong></div></div><div class="action-row" style="margin-top:16px"><button class="small-button primary" data-action="member-credit" data-member-id="${esc(member.id || member.user_id || '')}">잔액 입금</button><button class="small-button" data-action="member-debit" data-member-id="${esc(member.id || member.user_id || '')}">잔액 차감</button><button class="small-button" data-action="member-block" data-member-id="${esc(member.id || member.user_id || '')}" data-member-status="blocked">차단</button><button class="small-button" data-action="member-block" data-member-id="${esc(member.id || member.user_id || '')}" data-member-status="active">차단 해제</button><button class="small-button" data-action="member-tier" data-member-id="${esc(member.id || member.user_id || '')}">등급 변경</button><button class="small-button" data-action="member-reset" data-member-id="${esc(member.id || member.user_id || '')}">비밀번호 재설정</button><button class="small-button primary" data-action="assign-task" data-member-id="${esc(member.id || member.user_id || '')}">업무 배정</button><button class="small-button" data-action="target-notice" data-member-id="${esc(member.id || member.user_id || '')}">알림</button></div></div></div></div>`;
+    return `<div class="modal-backdrop" data-modal="member-detail"><div class="modal"><div class="modal-head"><div><h2>회원 상세</h2><p>${esc(member.public_id || '회원번호 확인 중')}</p></div><button class="icon-button" data-action="close-modal">${icon('x',18)}</button></div><div class="modal-body"><div class="detail-list"><div><span>이름</span><strong>${esc(displayText(member.display_name))}</strong></div><div><span>이메일</span><strong>${esc(displayText(member.email))}</strong></div><div><span>휴대폰</span><strong>${esc(displayText(member.phone || member.phone_e164))}</strong></div><div><span>등급</span><strong>${esc(displayText(member.member_tier))}</strong></div><div><span>상태</span><strong>${esc(memberStatusLabel(member.status || 'pending'))}</strong></div><div><span>가입일</span><strong>${esc(displayTime(member.created_at))}</strong></div><div><span>최근 접속</span><strong>${esc(displayTime(member.last_login_at))}</strong></div><div><span>IP</span><strong>${esc(displayText(member.last_login_ip))}</strong></div><div><span>본인확인</span><strong>${esc(kycStatusLabel(member.kyc_status))}</strong></div><div><span>추천 수</span><strong>${Number(member.referral_count || 0)}</strong></div><div><span>지원금</span><strong>${money(wallet.support)}</strong></div><div><span>근무 잔액</span><strong>${money(wallet.work ?? wallet.task)}</strong></div><div><span>출금 가능</span><strong>${money(wallet.available)}</strong></div><div><span>보류액</span><strong>${money(wallet.held)}</strong></div></div><div class="action-row" style="margin-top:16px"><button class="small-button primary" data-action="member-credit" data-member-id="${esc(member.id || member.user_id || '')}">잔액 입금</button><button class="small-button" data-action="member-debit" data-member-id="${esc(member.id || member.user_id || '')}">잔액 차감</button><button class="small-button" data-action="member-block" data-member-id="${esc(member.id || member.user_id || '')}" data-member-status="blocked">차단</button><button class="small-button" data-action="member-block" data-member-id="${esc(member.id || member.user_id || '')}" data-member-status="active">차단 해제</button><button class="small-button" data-action="member-tier" data-member-id="${esc(member.id || member.user_id || '')}">등급 변경</button><button class="small-button" data-action="member-reset" data-member-id="${esc(member.id || member.user_id || '')}">비밀번호 재설정</button><button class="small-button primary" data-action="assign-task" data-member-id="${esc(member.id || member.user_id || '')}">업무 배정</button><button class="small-button" data-action="target-notice" data-member-id="${esc(member.id || member.user_id || '')}">알림</button></div></div></div></div>`;
   }
 
   function renderMemberTierForm() {
@@ -1485,11 +2421,17 @@
   }
 
   function renderModal() {
+    if (isAdmin && window.PUTDUK_ADMIN && typeof window.PUTDUK_ADMIN.renderModal === 'function') {
+      const override = window.PUTDUK_ADMIN.renderModal(state.modal);
+      if (typeof override === 'string') return override;
+    }
     if (state.modal === 'auth') return renderAuthModalLive();
     if (state.modal === 'terms') return renderLegalModal('terms');
     if (state.modal === 'privacy') return renderLegalModal('privacy');
     if (state.modal === 'deposit') return renderInfoModal('deposit');
+    if (state.modal === 'deposit-jump') return renderDepositJumpConfirm();
     if (state.modal === 'withdraw') return renderInfoModal('withdraw');
+    if (state.modal === 'withdraw-principal') return renderPrincipalConfirm();
     if (state.modal === 'kyc') return renderKycModal();
     if (state.modal === 'notifications') return renderNotificationsModal();
     if (state.modal === 'company-form') return renderCompanyForm();
@@ -1507,7 +2449,7 @@
   function renderAppShell() {
     const page = isAdmin && !authState.adminAuthorized ? renderAdminGate() : isAdmin ? renderAdminPage() : renderMemberPage();
     const sidebar = isAdmin && !authState.adminAuthorized ? '' : renderSidebar();
-    return `<div class="app-shell">${sidebar}<main class="main"><div>${renderTopbar()}${page}</div></main></div>`;
+    return `<div class="app-shell">${sidebar}<main class="main"><div>${renderTopbar()}${page}</div></main></div>${isAdmin ? '' : renderMemberTabbar()}`;
   }
 
   function patchMemberDetailModal(member) {
@@ -1528,8 +2470,10 @@
       'IP': displayText(member.last_login_ip),
       '본인확인': kycStatusLabel(member.kyc_status),
       '추천 수': String(Number(member.referral_count || 0)),
+      '지원금': money(wallet.support),
+      '근무 잔액': money(wallet.work ?? wallet.task),
       '출금 가능': money(wallet.available),
-      '보류': money(wallet.held)
+      '보류액': money(wallet.held)
     };
     root.querySelectorAll('.detail-list > div').forEach((row) => {
       const key = row.querySelector('span')?.textContent;
@@ -1556,6 +2500,7 @@
       }
       patchMemberDetailModal(state.modalPayload || state.adminMemberDetail);
       refreshIcons();
+      if (isAdmin && window.PUTDUK_ADMIN && typeof window.PUTDUK_ADMIN.afterRender === 'function') window.PUTDUK_ADMIN.afterRender();
       if (!isAdmin && state.memberPage === 'dashboard') drawMemberChart();
       if (isAdmin && state.adminPage === 'overview') drawAdminChart();
       if (state.toast) {
@@ -1565,11 +2510,18 @@
       }
       return;
     }
-    app.innerHTML = `${renderAppShell()}<div class="toast-stack" id="toastStack" aria-live="polite" aria-relevant="additions" role="status"></div>${renderRunOverlay()}${renderModal()}`;
+    app.innerHTML = `${renderAppShell()}<div class="toast-stack" id="toastStack" aria-live="polite" aria-relevant="additions" role="status"></div>${renderOnboarding()}${renderStartConfirm()}${renderRunOverlay()}${renderResultOverlay()}${renderModal()}`;
     refreshIcons();
+    if (isAdmin && window.PUTDUK_ADMIN && typeof window.PUTDUK_ADMIN.afterRender === 'function') window.PUTDUK_ADMIN.afterRender();
     if (!isAdmin && state.memberPage === 'dashboard') drawMemberChart();
     if (isAdmin && state.adminPage === 'overview') drawAdminChart();
     if (state.run && state.run.overlayOpen) requestAnimationFrame(() => { drawMotionCanvas(); if (!runFrame) runFrame = requestAnimationFrame(tickRun); });
+    bindAuxMotion();
+    bindFomoClock();
+    patchFomoDom();
+    bindDepositJumpUi();
+    bindKycFilePickers();
+    restoreDepositForm();
     if (state.toast) {
       const pendingToast = state.toast;
       state.toast = null;
@@ -1600,7 +2552,7 @@
     if (!canvas || !window.Chart) return;
     if (chartInstance) chartInstance.destroy();
     const week = weekEarnings();
-    chartInstance = new Chart(canvas, { type: 'line', data: { labels: week.labels, datasets: [{ data: week.data, borderColor: '#0d9f76', backgroundColor: 'rgba(13,159,118,.12)', fill: true, tension: .42, pointRadius: 3, pointBackgroundColor: '#0d9f76', pointBorderWidth: 0 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display:false }, tooltip: { displayColors:false, callbacks:{ label:(ctx)=>` ${Number(ctx.parsed.y).toLocaleString('ko-KR')}원` } } }, scales:{ x:{ grid:{display:false}, ticks:{color:'#7d8c86',font:{size:11}} }, y:{ grid:{color:'rgba(120,140,130,.12)'}, ticks:{color:'#7d8c86',font:{size:10},callback:(value)=>`${Math.round(value/1000)}k`} } } } });
+    chartInstance = new Chart(canvas, { type: 'line', data: { labels: week.labels, datasets: [{ data: week.data, borderColor: '#0d9f76', backgroundColor: 'rgba(13,159,118,.12)', fill: true, tension: .42, pointRadius: 3, pointBackgroundColor: '#0d9f76', pointBorderWidth: 0 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display:false }, tooltip: { displayColors:false, callbacks:{ label:(ctx)=>` ${Number(ctx.parsed.y).toLocaleString('ko-KR')}원` } } }, scales:{ x:{ grid:{display:false}, ticks:{color:'#7d8c86',font:{size:11}} }, y:{ min:0, grid:{color:'rgba(120,140,130,.12)'}, ticks:{color:'#7d8c86',font:{size:10},callback:(value)=> Number.isInteger(Number(value)) ? formatChartTick(value) : '' } } } } });
   }
 
   function drawAdminChart() {
@@ -1650,24 +2602,40 @@
     if (raw.includes('공개 중인') || raw.includes('공개')) return '운영자가 공개한 업무가 아니거나 잠시 중지됐어요.';
     if (raw.includes('소진')) return '오늘 준비된 업무 수량이 모두 소진됐어요.';
     if (raw.includes('진행 중')) return '진행 중인 업무를 먼저 마무리해 주세요.';
+    if (raw.includes('지원금')) return '체험 지원금이 없어요. 체험 카드로 출근해 주세요.';
+    if (raw.includes('근무 잔액') || raw.includes('잠금 금액')) return '근무 잔액이 이 라인 잠금보다 부족해요. 입금 후 출근해 주세요.';
+    if (raw.includes('한 번만')) return '체험 근무는 한 번만 할 수 있어요.';
+    if (raw.includes('task_events') || raw.includes('23503')) return '출근 기록을 저장하지 못했어요. 잠시 후 다시 시도해 주세요.';
     return '업무를 시작하거나 제출하지 못했어요. 잠시 후 다시 시도해 주세요.';
   }
 
   async function startNode(nodeId) {
-    if (state.run) { state.run.overlayOpen = true; render(); return; }
-    const node = nodeById(nodeId);
-
+    if (state.player && state.run) { state.run.overlayOpen = true; render(); return; }
     if (!authState.session) {
       openModal('auth');
-      showToast('로그인하면 공개된 업무를 시작할 수 있어요.', 'info');
+      showToast('👋 로그인하면 오늘 라인에 출근할 수 있어요.', 'info');
       return;
     }
+    const node = nodeById(nodeId);
+    if (node && !canStartNode(node)) {
+      state.withdrawIntent = 'allowance';
+      openModal('deposit');
+      showToast(node.isTrial ? '🎁 체험은 지원금이 있는 카드로 출근해요.' : '💳 이 라인은 근무 잔액이 잠금보다 커야 출근할 수 있어요.', 'info');
+      return;
+    }
+    state.startNodeId = nodeId;
+    render();
+  }
 
-    if (authState.session && config.enableWorkApi === true) {
-      if (!supabaseClient) {
-        showToast('업무 서버가 준비되지 않아 시작할 수 없어요.', 'info');
-        return;
-      }
+  async function confirmStartWork() {
+    const nodeId = state.startNodeId;
+    if (!nodeId) return;
+    const node = nodeById(nodeId);
+    const company = companyById(node.companyId);
+    const photo = node.questionImage
+      ? brandAssetSrc(node.questionImage, company.slug, 'photo')
+      : (company.photoUrl || brandAssetSrc(company.photo_asset_path, company.slug, 'photo'));
+    if (workEnabled() && authState.session && supabaseClient) {
       const { data, error } = await supabaseClient
         .from('task_runs')
         .insert({ node_id: nodeId, user_id: authState.session.user.id })
@@ -1677,7 +2645,9 @@
         showToast(taskApiErrorMessage(error), 'info');
         return;
       }
-
+      releaseNamedCanvas('startMotionCanvas');
+      state.startNodeId = null;
+      rememberCrewPartner(node.companyId);
       const startedAt = Date.parse(data.started_at || '') || Date.now();
       const expectedAt = Date.parse(data.expected_completed_at || '') || (startedAt + node.time * 1000);
       const duration = Math.max(1000, expectedAt - startedAt);
@@ -1688,30 +2658,100 @@
         startedAt,
         expectedCompletedAt: expectedAt,
         duration,
-        progress: Math.min(1, Math.max(0, (Date.now() - startedAt) / duration)),
+        progress: 0.4,
         overlayOpen: true,
-        logs: [
-          `[서버] ${node.title} 실행을 승인했어요.`,
-          '[연결] 운영자 공개 원본을 준비하고 있어요.'
-        ],
+        logs: [`[서버] ${node.title} 출근을 승인했어요.`],
         serverBacked: true,
         rewardAmount: Number(data.reward_amount || 0),
         motionVariant: data.motion_variant || 'a',
         motionSeed: data.motion_seed || '',
+        choice: null,
         _submitted: false
       };
-      state.notifications.unshift({ text: `${node.title} 업무가 시작됐어요.`, time: '방금 전', type: 'work' });
+      state.player = { nodeId: state.run.nodeId, choice: null, question: playerQuestion(node), photo };
+      try {
+        await memberFinanceRequest('lock_stake', { task_run_id: data.id });
+      } catch (error) {
+        if (!isUnsupportedAction(error) && !/지원하지 않는|찾을 수/.test(String(error?.message || ''))) {
+          showToast(friendlyAdminError(error), 'warning');
+        }
+      }
+      await refreshMemberWallet();
+      state._workLockCue = true;
       saveState();
       render();
-      showToast('🟢 데이터 업무를 시작했어요.', 'success');
+      showToast('🟢 출근했어요. 사진과 질문만 확인하고 제출해 주세요.', 'success');
       runFrame = requestAnimationFrame(tickRun);
       return;
     }
 
-    showToast('🔒 실제 작업 제출이 열리기 전에는 회원 계정으로 업무를 시작하지 않아요.', 'warning');
+    releaseNamedCanvas('startMotionCanvas');
+    state.startNodeId = null;
+    rememberCrewPartner(node.companyId);
+    state.player = { nodeId, choice: null, question: playerQuestion(node), photo };
+    state.run = {
+      nodeId,
+      startedAt: Date.now(),
+      duration: 8000,
+      progress: 0.4,
+      overlayOpen: true,
+      logs: ['[안내] 한 장만 확인하고 제출해요.'],
+      serverBacked: false
+    };
+    state._workLockCue = true;
+    saveState();
+    render();
+    showToast('👀 근무 화면을 열었어요. 실제 제출·정산은 아직 잠겨 있을 수 있어요.', 'info');
+    runFrame = requestAnimationFrame(tickRun);
+  }
+
+  function openResultScene(node, extra = {}) {
+    const stake = nodeStake(node);
+    state.resultScene = {
+      nodeId: node.id,
+      nextStake: nextStakeSlot(stake),
+      cut: extra.cut || null,
+      principal: extra.principal ?? stake,
+      stipend: extra.stipend ?? nodePay(node)
+    };
+    if (extra.cut) state._playedMotionCue = null;
+  }
+
+  async function submitPlayer() {
+    if (!state.player?.choice) {
+      showToast('🙂 맞아요 / 달라요 중 하나를 골라 주세요.', 'info');
+      return;
+    }
+    const node = nodeById(state.player.nodeId);
+    const partner = motionPartner(node);
+    const canvas = document.getElementById('motionCanvas');
+    const afterSubmitCut = async () => {
+      if (state.run?.serverBacked && workEnabled() && authState.session) {
+        await finishRun(node);
+        openResultScene(node, { cut: 'approve', principal: nodeStake(node), stipend: nodePay(node) });
+        render();
+        return;
+      }
+      state.player = null;
+      state.run = null;
+      releaseMotionCanvas();
+      openResultScene(node, { cut: 'approve', principal: nodeStake(node), stipend: nodePay(node) });
+      saveState();
+      render();
+      lockToast('work');
+    };
+    const played = playMemberWorkPhase(canvas, partner, 'submit', { onDone: () => { afterSubmitCut(); } });
+    if (!played) await afterSubmitCut();
   }
   function tickRun() {
     if (!state.run) { runFrame = null; return; }
+    if (state.player) {
+      const t = (Date.now() / 5000) % 1;
+      state.run.progress = 0.28 + t * 0.42;
+      if (!document.hidden) drawMotionCanvas();
+      runFrame = requestAnimationFrame(tickRun);
+      return;
+    }
     const now = Date.now();
     const elapsed = now - state.run.startedAt;
     state.run.progress = Math.min(1, elapsed / state.run.duration);
@@ -1737,7 +2777,8 @@
     if (percent) percent.innerHTML = `${Math.round(state.run.progress * 100)}%<small>처리 진행률</small>`;
     if (bar) bar.style.width = `${state.run.progress * 100}%`;
     if (label && scene?.label) label.textContent = scene.label;
-    if (copy && scene?.copy) copy.textContent = scene.copy;
+    if (copy && scene?.copy) copy.innerHTML = scene.icon ? `${icon(scene.icon, 14)} <span>${esc(scene.copy)}</span>` : esc(scene.copy);
+    if (copy && scene?.icon) refreshIcons();
     if (log) log.innerHTML = (state.run.logs || []).slice(-5).map((item) => `<div>${esc(item)}</div>`).join('');
   }
 
@@ -1748,27 +2789,48 @@
 
     if (run.serverBacked && authState.session && config.enableWorkApi === true) {
       if (run._submitting) return;
+      const choice = String(state.player?.choice || run.choice || '').trim();
+      if (!choice) {
+        run.overlayOpen = true;
+        saveState();
+        render();
+        showToast('🙂 맞아요 / 달라요 중 하나를 골라 주세요.', 'info');
+        return;
+      }
       run._submitting = true;
-      const { data, error } = await supabaseClient
-        .from('task_runs')
-        .update({ status: 'submitted' })
-        .eq('id', run.dbId)
-        .eq('user_id', authState.session.user.id)
-        .select('public_id,reward_amount,completed_at')
-        .single();
-
-      if (error || !data) {
+      run.choice = choice;
+      let data = null;
+      try {
+        const result = await memberFinanceRequest('submit_work', {
+          task_run_id: run.dbId,
+          choice_id: choice,
+          choice_label: choice === 'yes' || choice === 'a' || choice === '1'
+            ? (node.choiceA || '맞아요')
+            : (node.choiceB || '달라요')
+        });
+        data = result.run || result.task_run || null;
+      } catch (error) {
         run._submitting = false;
         run.overlayOpen = true;
         saveState();
         render();
         const message = String(error?.message || '');
-        showToast(message.includes('예상 처리 시간이') ? '서버 시각을 맞추는 중이에요. 곧 자동으로 다시 제출할게요.' : taskApiErrorMessage(error), 'info');
+        showToast(message.includes('예상 처리 시간이') ? '⏱ 조금만 기다리면 제출돼요. 자동으로 다시 넣을게요.' : (message.includes('골라') ? message : taskApiErrorMessage(error)), 'info');
         if (message.includes('예상 처리 시간이')) {
+          const waitMs = Math.max(1200, (Number(run.expectedCompletedAt) || Date.now()) - Date.now() + 400);
           window.setTimeout(() => {
-            if (state.run === run) runFrame = requestAnimationFrame(tickRun);
-          }, 1100);
+            if (state.run === run && !run._submitting) finishRun(node);
+          }, waitMs);
         }
+        return;
+      }
+
+      if (!data) {
+        run._submitting = false;
+        run.overlayOpen = true;
+        saveState();
+        render();
+        showToast(taskApiErrorMessage(null), 'info');
         return;
       }
 
@@ -1784,10 +2846,11 @@
       });
       state.notifications.unshift({ text: `${node.title} 제출 완료 · 운영 검수 대기`, time: '방금 전', type: 'work' });
       state.run = null;
+      state.player = null;
       saveState();
       releaseMotionCanvas();
       render();
-      showToast('✅ 업무 제출이 완료됐어요. 운영 검수 후 보상이 확정됩니다.', 'success');
+      showToast('✅ 근무 제출이 완료됐어요. 운영 검수 후 수당이 확정돼요.', 'success');
       return;
     }
 
@@ -1798,11 +2861,134 @@
     showToast('작업 제출 연결이 필요해 연출을 종료했어요. 잔액은 변경되지 않았습니다.', 'warning');
   }
 
-  function releaseMotionCanvas() {
-    const canvas = document.getElementById('motionCanvas');
+  function bindAuxMotion() {
+    if (isAdmin) return;
+    flushMotionCue();
+    const result = document.getElementById('resultMotionCanvas');
+    if (result && state.resultScene && state.resultScene.cut !== 'approve' && window.PutdukMotion && typeof window.PutdukMotion.tick === 'function') {
+      const node = nodeById(state.resultScene.nodeId);
+      window.PutdukMotion.tick(result, {
+        progress: 0.72,
+        motion: node.motion || 'next_lane',
+        motion_profile: node.motion || 'next_lane',
+        title: node.title,
+        company: companyById(node.companyId).name
+      });
+    }
+  }
+
+  function playCueOnCanvas(canvas, token, run) {
+    if (!canvas || typeof run !== 'function') return;
+    if (state._playedMotionCue === token && state._motionCanvas === canvas) return;
+    state._playedMotionCue = token;
+    state._motionCanvas = canvas;
+    requestAnimationFrame(() => {
+      if (!canvas.isConnected) return;
+      run();
+    });
+  }
+
+  function flushMotionCue() {
+    const motion = window.PutdukMotion;
+    if (!motion || typeof motion.playWorkPhase !== 'function') return;
+
+    if (state.startNodeId && !state.player) {
+      const canvas = document.getElementById('startMotionCanvas');
+      const token = `lock:${state.startNodeId}`;
+      const node = nodeById(state.startNodeId);
+      const partner = motionPartner(node);
+      const extras = { principal: nodeStake(node) };
+      playCueOnCanvas(canvas, token, () => {
+        const replay = () => {
+          if (!canvas.isConnected || !state.startNodeId) return;
+          motion.playWorkPhase(canvas, partner, 'lock', { ...extras, onDone: replay });
+        };
+        replay();
+      });
+      return;
+    }
+
+    if (state._workLockCue && state.player) {
+      const canvas = document.getElementById('motionCanvas');
+      if (canvas) {
+        state._workLockCue = false;
+        const node = nodeById(state.player.nodeId);
+        requestAnimationFrame(() => {
+          if (!canvas.isConnected) return;
+          motion.playWorkPhase(canvas, motionPartner(node), 'lock', { principal: nodeStake(node) });
+        });
+      }
+      return;
+    }
+
+    if (state.onboardingStep === 'pwa') {
+      const canvas = document.getElementById('onboardMotionCanvas');
+      const token = 'pwa_home';
+      playCueOnCanvas(canvas, token, () => {
+        const replay = () => {
+          if (!canvas.isConnected || state.onboardingStep !== 'pwa') return;
+          motion.playWorkPhase(canvas, companies[0] || { name: '퍼뜩', slug: 'putduk' }, 'pwa_home', { onDone: replay });
+        };
+        replay();
+      });
+      return;
+    }
+
+    if (state.modal === 'withdraw-principal') {
+      const canvas = document.getElementById('demoteMotionCanvas');
+      const token = 'demote';
+      playCueOnCanvas(canvas, token, () => {
+        const replay = () => {
+          if (!canvas.isConnected || state.modal !== 'withdraw-principal') return;
+          motion.playWorkPhase(canvas, companies[0] || { name: '퍼뜩', slug: 'putduk' }, 'demote', { onDone: replay });
+        };
+        replay();
+      });
+      return;
+    }
+
+    if (state.modal === 'deposit-jump') {
+      const canvas = document.getElementById('depositJumpMotionCanvas');
+      const token = `lock-jump:${Number(state.depositJump?.amount || 0)}`;
+      const amount = Number(state.depositJump?.amount || 0);
+      const partner = companies[0] || { name: '퍼뜩', slug: 'putduk' };
+      playCueOnCanvas(canvas, token, () => {
+        const replay = () => {
+          if (!canvas.isConnected || state.modal !== 'deposit-jump') return;
+          motion.playWorkPhase(canvas, partner, 'lock', { principal: amount, onDone: replay });
+        };
+        replay();
+      });
+      return;
+    }
+
+    if (state.resultScene?.cut === 'approve') {
+      const canvas = document.getElementById('resultMotionCanvas');
+      const token = `approve:${state.resultScene.nodeId || ''}`;
+      const node = nodeById(state.resultScene.nodeId);
+      playCueOnCanvas(canvas, token, () => {
+        const extras = {
+          principal: state.resultScene.principal,
+          stipend: state.resultScene.stipend
+        };
+        const replay = () => {
+          if (!canvas.isConnected || state.resultScene?.cut !== 'approve') return;
+          motion.playWorkPhase(canvas, motionPartner(node), 'approve', { ...extras, onDone: replay });
+        };
+        replay();
+      });
+    }
+  }
+
+  function releaseNamedCanvas(id) {
+    const canvas = document.getElementById(id);
     if (canvas && window.PutdukMotion && typeof window.PutdukMotion.release === 'function') {
       window.PutdukMotion.release(canvas);
     }
+  }
+
+  function releaseMotionCanvas() {
+    releaseNamedCanvas('motionCanvas');
   }
 
   function drawMotionCanvas() {
@@ -1958,7 +3144,52 @@
     drawMarker(road[road.length - 1].x, road[road.length - 1].y, '#80efc1', 4);
   }
 
+  function restoreDepositForm() {
+    const jump = state.depositJump;
+    if (!jump || state.modal !== 'deposit') return;
+    const amount = document.getElementById('depositAmount');
+    const currency = document.getElementById('depositCurrency');
+    const bank = document.getElementById('depositBank');
+    const holder = document.getElementById('depositHolder');
+    if (amount && jump.amount != null) amount.value = jump.amount;
+    if (currency && jump.currency) currency.value = jump.currency;
+    if (bank && jump.bank) bank.value = jump.bank;
+    if (holder && jump.holder) holder.value = jump.holder;
+  }
+
+  function bindKycFilePickers() {
+    document.querySelectorAll('.kyc-file-input').forEach((input) => {
+      input.addEventListener('change', () => {
+        const name = input.closest('.kyc-slot')?.querySelector('.kyc-file-name');
+        if (!name) return;
+        const file = input.files && input.files[0];
+        name.textContent = file ? file.name : '아직 고르지 않았어요';
+      });
+    });
+  }
+
+  function bindDepositJumpUi() {
+    const form = document.getElementById('depositJumpForm');
+    if (!form) return;
+    const repeat = document.getElementById('depositJumpRepeat');
+    const slide = document.getElementById('depositJumpSlide');
+    const submit = document.getElementById('depositJumpSubmit');
+    const expected = String(Number(state.depositJump?.amount || 0));
+    const sync = () => {
+      const typed = String(repeat?.value || '').replace(/\D/g, '');
+      const repeated = typed === expected && expected !== '0';
+      const slid = Number(slide?.value || 0) >= 100;
+      if (submit) submit.disabled = !(repeated || slid);
+    };
+    repeat?.addEventListener('input', sync);
+    slide?.addEventListener('input', sync);
+    sync();
+  }
+
   function closeModal() {
+    releaseNamedCanvas('demoteMotionCanvas');
+    releaseNamedCanvas('depositJumpMotionCanvas');
+    if (state.modal !== 'deposit-jump') state.depositJump = null;
     state.modal = null;
     state.modalPayload = null;
     render();
@@ -1977,7 +3208,10 @@
     });
     window.addEventListener('appinstalled', () => {
       deferredInstallPrompt = null;
-      showToast('📲 퍼뜩 앱이 설치됐어요. 다음부터 더 빠르게 열 수 있어요.', 'success');
+      state.onboardingPwaDone = true;
+      if (state.onboardingStep === 'pwa') queueOnboarding();
+      showToast('📲 사원증이 홈 화면에 생겼어요. 다음부터 바로 출근할 수 있어요.', 'success');
+      render();
     });
   }
 
@@ -2063,9 +3297,10 @@
       return;
     }
     if (data.session) await hydrateSession(data.session);
+    if (data.session && !isAdmin) queueOnboarding();
     state.modal = null;
     render();
-    showToast(data.session ? '🎉 가입이 완료됐어요. 내 노드 카드를 확인해 보세요.' : '📨 가입은 완료됐어요. 이메일 인증 후 로그인해 주세요.', 'success');
+    showToast(data.session ? '🎉 가입이 완료됐어요. 사원증을 확인해 보세요.' : '📨 가입은 완료됐어요. 이메일 인증 후 로그인해 주세요.', 'success');
   }
 
   async function submitLogin(event) {
@@ -2078,14 +3313,16 @@
     const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
     if (error) { showToast('로그인 정보를 확인해 주세요. 이메일 인증이 필요할 수도 있어요.', 'info'); return; }
     await hydrateSession(data.session);
+    if (!isAdmin) queueOnboarding();
     state.modal = null;
     render();
     showToast('👋 다시 만나서 반가워요. 작업실을 준비했어요.', 'success');
   }
 
   function handleClick(event) {
-    const target = event.target.closest('button, [data-nav], [data-start-node], [data-company-action], [data-toggle-node], [data-review-action], [data-brand-action], [data-catalog-node-action], [data-member-filter], [data-finance-action], [data-notification]');
+    const target = event.target.closest('button, [data-nav], [data-start-node], [data-company-action], [data-toggle-node], [data-review-action], [data-brand-action], [data-catalog-node-action], [data-member-filter], [data-finance-action], [data-notification], [data-action]');
     if (!target) return;
+    if (isAdmin && window.PUTDUK_ADMIN && typeof window.PUTDUK_ADMIN.handleClick === 'function' && window.PUTDUK_ADMIN.handleClick(event, target)) return;
     if (target.dataset.authMode) { state.authMode = target.dataset.authMode; render(); return; }
     if (target.dataset.nav) {
       if (isAdmin) state.adminPage = target.dataset.nav; else state.memberPage = target.dataset.nav;
@@ -2108,8 +3345,32 @@
       submitFinanceDecision(target.dataset.financeAction, target.dataset.financeId, target.dataset.financeDecision);
       return;
     }
+    if (target.dataset.helpTab) {
+      state.helpTab = target.dataset.helpTab;
+      saveState();
+      render();
+      return;
+    }
+    if (target.dataset.ledgerTab) {
+      state.walletLedgerTab = target.dataset.ledgerTab;
+      saveState();
+      render();
+      return;
+    }
+    if (target.dataset.choice && state.player) {
+      state.player.choice = target.dataset.choice;
+      if (state.run) state.run.choice = target.dataset.choice;
+      saveState();
+      render();
+      return;
+    }
     if (target.dataset.notification !== undefined) { openModal('notifications'); return; }
-    if (target.dataset.menu === 'open') { document.getElementById('sidebar')?.classList.add('open'); document.getElementById('sidebarBackdrop')?.classList.add('open'); return; }
+    if (target.dataset.menu === 'open') {
+      if (!isAdmin) return;
+      document.getElementById('sidebar')?.classList.add('open');
+      document.getElementById('sidebarBackdrop')?.classList.add('open');
+      return;
+    }
     if (target.dataset.themeToggle !== undefined || target.closest('[data-theme-toggle]')) { state.theme = state.theme === 'dark' ? 'light' : 'dark'; saveState(); render(); return; }
     const action = target.dataset.action;
     if (!action && target.form && target.type === 'submit') {
@@ -2135,17 +3396,41 @@
         openModal('auth');
         return;
       }
+      if (!isAdmin && state.modal === 'deposit-jump') {
+        releaseNamedCanvas('depositJumpMotionCanvas');
+        openModal('deposit');
+        return;
+      }
       closeModal();
+      return;
+    }
+    if (action === 'back-deposit') {
+      releaseNamedCanvas('depositJumpMotionCanvas');
+      openModal('deposit');
       return;
     }
     if (action === 'open-terms') { openModal('terms'); return; }
     if (action === 'open-privacy') { openModal('privacy'); return; }
     if (action === 'forgot-password') { sendPasswordReset(); return; }
-    if (action === 'deposit-info') { openModal('deposit'); return; }
-    if (action === 'withdraw-info') { openModal('withdraw'); return; }
+    if (action === 'deposit-info') { state.depositJump = null; openModal('deposit'); return; }
+    if (action === 'withdraw-info') { state.withdrawIntent = 'allowance'; openModal('withdraw'); return; }
+    if (action === 'withdraw-allowance') { state.withdrawIntent = 'allowance'; openModal('withdraw'); return; }
+    if (action === 'withdraw-principal') { state._playedMotionCue = null; openModal('withdraw-principal'); return; }
+    if (action === 'confirm-principal') { state.withdrawIntent = 'principal'; openModal('withdraw'); return; }
+    if (action === 'flip-idcard') { state.idCardFlipped = !state.idCardFlipped; render(); return; }
+    if (action === 'close-start') { releaseNamedCanvas('startMotionCanvas'); state.startNodeId = null; state._playedMotionCue = null; render(); return; }
+    if (action === 'confirm-start') { confirmStartWork(); return; }
+    if (action === 'submit-player') { submitPlayer(); return; }
+    if (action === 'close-result') { releaseNamedCanvas('resultMotionCanvas'); state.resultScene = null; render(); return; }
+    if (action === 'skip-pwa') { releaseNamedCanvas('onboardMotionCanvas'); state.onboardingPwaDone = true; queueOnboarding(); saveState(); render(); return; }
+    if (action === 'onboard-install') { installApp(); return; }
+    if (action === 'ack-grant') { state.onboardingGrantSeen = true; state.onboardingStep = null; saveState(); render(); showToast('🎁 지원금은 딱 한 번이에요. 근무에 써 주세요.', 'success'); return; }
     if (action === 'open-kyc') { openModal('kyc'); return; }
     if (action === 'open-run') { if (state.run) { state.run.overlayOpen = true; render(); } return; }
-    if (action === 'close-run') { if (state.run) { state.run.overlayOpen = false; saveState(); render(); showToast('화면을 닫아도 작업은 서버 기준으로 계속 진행돼요.', 'info'); } return; }
+    if (action === 'close-run') {
+      if (state.run) { state.run.overlayOpen = false; saveState(); render(); showToast('👋 화면을 닫아도 근무는 서버 기준으로 이어져요.', 'info'); }
+      return;
+    }
     if (action === 'copy-referral') { navigator.clipboard?.writeText(referralCode()); showToast(`추천 코드 ${referralCode()}을 복사했어요.`, 'success'); return; }
     if (action === 'email-check') { const email = document.getElementById('signupEmail')?.value.trim() || ''; showToast(email && email.includes('@') ? '이메일 형식이 올바릅니다. 최종 중복 확인은 가입 단계에서 진행돼요.' : '이메일 주소를 올바르게 입력해 주세요.', email && email.includes('@') ? 'success' : 'info'); return; }
     if (action === 'export-history') { showToast('작업내역 내려받기는 서버 내보내기 계약이 열린 뒤에 제공돼요.', 'info'); return; }
@@ -2403,7 +3688,7 @@
       await adminRequest('create_review_run', {
         user_id: memberId,
         node_id: node.id,
-        reward_amount: 0,
+        reward_amount: Number(node.work_spec?.stipend ?? node.rewardMax ?? node.rewardMin ?? 0),
         reason: '운영 검증용 검수 대상'
       });
       await loadAdminReviews({ silent: false });
@@ -2532,39 +3817,101 @@
     }
   }
 
-  async function submitDepositForm(event) {
-    event.preventDefault();
-    if (!authState.session) { showToast('로그인 후 입금 확인을 요청할 수 있어요.', 'info'); return; }
+  async function sendDepositRequest(values) {
+    if (!authState.session) { showToast('👋 로그인 후 입금 확인을 요청할 수 있어요.', 'info'); return; }
     if (!financeEnabled()) {
-      showToast('입출금 연결이 열리기 전에는 요청을 만들지 않아요. 잔액은 변경되지 않습니다.', 'warning');
+      lockToast('finance');
       return;
     }
-    const values = formValues(event.target);
     try {
-      await edgeRequest('create_deposit', values);
+      await memberFinanceRequest('submit_deposit', {
+        amount: Number(values.amount),
+        currency: values.currency || 'KRW',
+        proof_path: '',
+        note: [values.bank, values.holder].filter(Boolean).join(' · ') || null
+      });
+      state.depositJump = null;
       closeModal();
-      showToast('💳 입금 확인 요청을 접수했어요.', 'success');
+      showToast('💳 입금 확인 요청을 접수했어요. 잔액은 운영자 확인 후 반영돼요.', 'success');
     } catch (error) {
       showToast(friendlyAdminError(error), isUnsupportedAction(error) ? 'warning' : 'error');
     }
   }
 
-  async function submitWithdrawForm(event) {
+  async function submitDepositForm(event) {
     event.preventDefault();
-    if (!authState.session) { showToast('로그인 후 출금 요청을 만들 수 있어요.', 'info'); return; }
-    if (!financeEnabled()) {
-      showToast('🔐 출금 전 본인확인과 출금 서버 연결이 필요해요. 잔액은 변경되지 않습니다.', 'warning');
+    const values = formValues(event.target);
+    if (isHighJumpAmount(values.amount)) {
+      state.depositJump = values;
+      state._playedMotionCue = null;
+      openModal('deposit-jump');
       return;
     }
+    await sendDepositRequest(values);
+  }
+
+  async function submitDepositJumpForm(event) {
+    event.preventDefault();
+    const jump = state.depositJump || {};
+    const expected = String(Number(jump.amount || 0));
+    const typed = String(document.getElementById('depositJumpRepeat')?.value || '').replace(/\D/g, '');
+    const slid = Number(document.getElementById('depositJumpSlide')?.value || 0) >= 100;
+    if (typed !== expected && !slid) {
+      showToast('🙂 같은 금액을 다시 적거나, 아래를 밀어 확정해요.', 'info');
+      return;
+    }
+    await sendDepositRequest(jump);
+  }
+
+  async function submitWithdrawForm(event) {
+    event.preventDefault();
+    if (!authState.session) { showToast('👋 로그인 후 출금 요청을 만들 수 있어요.', 'info'); return; }
     const values = formValues(event.target);
-    if (Number(values.amount) > Number(state.wallet.available || 0)) {
-      showToast('출금 가능 잔액보다 큰 금액은 신청할 수 없어요.', 'warning');
+    const kind = values.withdraw_kind || state.withdrawIntent || 'allowance';
+    const amount = Number(values.amount);
+    if (!financeEnabled() && !opsTrialWithdrawAllowed(amount, kind)) {
+      lockToast('finance');
+      return;
+    }
+    const destType = String(values.destination_type || 'bank');
+    const stipend = Number(state.wallet.available || 0);
+    const workAvail = Number(state.wallet.work || 0);
+    if (kind !== 'principal' && amount > stipend) {
+      showToast('🙂 출금가능(수당)보다 큰 금액은 수당 출금으로 신청할 수 없어요.', 'warning');
+      return;
+    }
+    if (kind === 'principal' && amount > stipend + workAvail) {
+      showToast('🙂 수당과 업무잔액을 합친 금액보다 클 수 없어요. 잠긴 원금은 빼요.', 'warning');
+      return;
+    }
+    if (destType === 'bank' && (!String(values.bank_name || '').trim() || !String(values.account_holder || '').trim() || !String(values.destination || '').trim())) {
+      showToast('🏦 은행명, 예금주, 계좌번호를 적어 주세요.', 'info');
+      return;
+    }
+    if (destType === 'usdt' && (!String(values.usdt_network || '').trim() || !String(values.destination || '').trim())) {
+      showToast('🔗 USDT 네트워크와 주소를 적어 주세요.', 'info');
       return;
     }
     try {
-      await edgeRequest('create_withdrawal', values);
+      if (opsTrialWithdrawAllowed(amount, kind) && values.pin) {
+        try { await memberFinanceRequest('set_withdrawal_pin', { pin: values.pin }); } catch (_) {}
+      }
+      await memberFinanceRequest('withdraw_request', {
+        amount,
+        currency: destType === 'usdt' ? 'USDT' : 'KRW',
+        pin: values.pin,
+        destination_type: destType,
+        include_principal: kind === 'principal',
+        bank_name: values.bank_name || null,
+        account_holder: values.account_holder || null,
+        account_number: destType === 'bank' ? values.destination : null,
+        usdt_network: values.usdt_network || null,
+        usdt_address: destType === 'usdt' ? values.destination : null
+      });
+      await refreshMemberWallet();
       closeModal();
-      showToast('출금 확인 요청을 접수했어요.', 'success');
+      showToast('⏳ 출금 신청이 접수됐어요. 지금은 처리 중이에요.', 'success');
+      if (kind === 'principal') showToast('⬇️ 등급과 라인이 내려가는 출금이에요. 돈은 바로 지급 처리돼요.', 'warning');
     } catch (error) {
       showToast(friendlyAdminError(error), isUnsupportedAction(error) ? 'warning' : 'error');
     }
@@ -2574,7 +3921,7 @@
     event.preventDefault();
     if (!authState.session) { showToast('로그인 후 본인확인 자료를 제출할 수 있어요.', 'info'); return; }
     if (!financeEnabled()) {
-      showToast('🔐 출금 전 본인확인이 필요해요. 업로드 계약이 열리면 제출됩니다.', 'warning');
+      lockToast('finance');
       return;
     }
     try {
@@ -2590,8 +3937,17 @@
     if (state.adminReviewBusyId) return;
     const item = state.adminReviews.find((row) => row.id === taskRunId);
     if (!item) { showToast('검수 대상 업무를 찾을 수 없어요.', 'info'); return; }
-    const labels = { approved: '검수 완료', rework: '재확인 요청', rejected: '반려' };
-    if (!window.confirm(`${labels[decision]} 처리할까요? 회원 화면과 보상 상태에 바로 반영됩니다.`)) return;
+    const labels = { approved: '승인', rework: '재확인 요청', rejected: '반려' };
+    const trial = item.is_trial === true || item.tier_band === '체험' || String(item.node_title || '').includes('체험')
+      || (Number(item.stake_amount || 0) === 10000 && Number(item.stipend_amount || item.reward_amount || 0) === 3000);
+    const confirmCopy = decision === 'approved'
+      ? (trial
+        ? '승인할까요? 체험은 지원금이 쓰이고 돌려주지 않아요. 수당만 출금 가능에 들어와요.'
+        : '승인할까요? 원금은 근무 잔액에, 수당은 출금 가능에 보여요.')
+      : decision === 'rejected'
+        ? (trial ? '반려할까요? 체험 지원금은 이미 쓰였고 돌려주지 않아요.' : '반려할까요? 원금만 돌려드려요.')
+        : `${labels[decision]} 처리할까요?`;
+    if (!window.confirm(confirmCopy)) return;
     let reason = null;
     if (decision !== 'approved') {
       reason = window.prompt('회원에게 전달할 운영자 메모를 입력해 주세요. (선택)');
@@ -2605,7 +3961,14 @@
       state.adminReviewBusyId = null;
       await loadAdminReviews({ silent: true });
       render();
-      showToast(decision === 'approved' ? '✅ 검수 완료와 보상 반영을 끝냈어요.' : `처리 결과를 회원에게 안내했어요: ${labels[decision]}`, 'success');
+      showToast(
+        decision === 'approved'
+          ? (trial ? '✅ 승인했어요. 지원금은 쓰였고, 수당만 출금 가능에 들어와요.' : '✅ 승인했어요. 원금은 근무 잔액에, 수당은 출금 가능에 보여요.')
+          : decision === 'rejected'
+            ? (trial ? '✅ 반려했어요. 체험 지원금은 돌려주지 않아요.' : '✅ 반려했어요. 원금만 돌려드렸어요.')
+            : `처리 결과를 회원에게 안내했어요: ${labels[decision]}`,
+        'success'
+      );
     } catch (error) {
       state.adminReviewBusyId = null;
       state.adminReviewError = error;
@@ -2709,6 +4072,7 @@
     if (event.target.id === 'memberTierForm') { submitMemberTierForm(event); return; }
     if (event.target.id === 'memberBlockForm') { submitMemberBlockForm(event); return; }
     if (event.target.id === 'depositForm') { submitDepositForm(event); return; }
+    if (event.target.id === 'depositJumpForm') { submitDepositJumpForm(event); return; }
     if (event.target.id === 'withdrawForm') { submitWithdrawForm(event); return; }
     if (event.target.id === 'kycForm') { submitKycForm(event); return; }
   });
@@ -2720,7 +4084,9 @@
     if (!filter) return;
     document.querySelectorAll('[data-filter]').forEach((button) => button.classList.toggle('active', button === filter));
     const value = filter.dataset.filter;
-    document.querySelectorAll('#nodeGrid .node-card').forEach((card, index) => { card.style.display = value === 'all' || nodes[index]?.level === value ? '' : 'none'; });
+    document.querySelectorAll('#nodeGrid .node-card').forEach((card) => {
+      card.style.display = value === 'all' || card.dataset.level === value ? '' : 'none';
+    });
   });
   document.addEventListener('visibilitychange', () => {
     if (state.run) {
@@ -2740,6 +4106,33 @@
     }
   });
   window.addEventListener('resize', () => { if (state.run) drawMotionCanvas(); });
+
+  if (isAdmin) {
+    window.PUTDUK_ADMIN_CORE = {
+      getState: () => state,
+      patchState(partial) { Object.assign(state, partial || {}); },
+      render,
+      adminRequest,
+      money,
+      esc,
+      icon,
+      adminBrandViews,
+      adminNodeViews,
+      adminBrandById,
+      showToast,
+      openModal,
+      closeModal,
+      formValues,
+      loadAdminFinance,
+      loadAdminCatalog,
+      loadAdminReviews,
+      loadAdminMembers,
+      refreshAdminPageData,
+      friendlyAdminError,
+      isUnsupportedAction,
+      MOTION_PROFILES
+    };
+  }
 
   initializePwa();
   initializeAuth().then(() => render());
