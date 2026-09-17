@@ -9,7 +9,8 @@ import {
   kstDayRange,
   isWithinKstDay,
   dailyQuotaSummary,
-  dailyQuotaLabel
+  dailyQuotaLabel,
+  demoteMemberTierOnce
 } from '../../src/work/tier-daily-limit.mjs';
 import { readRepo, readLaunchFiles } from '../helpers/repo.mjs';
 
@@ -86,6 +87,54 @@ test('DB 마이그레이션은 등급별 하루 한도 테이블·트리거 보�
   // 기존 동시 진행 1건 제한·노드별 daily_cap 로직은 그대로 남아 있어야 한다(대체 금지).
   assert.match(migration, /진행 중인 업무를 먼저 마무리해 주세요\./);
   assert.match(migration, /오늘 준비된 업무 수량이 모두 소진되었습니다\./);
+});
+
+test('원금 출금 강등은 전담→선임→크루→라인 순서이고 라인이 바닥이다', () => {
+  assert.deepEqual(demoteMemberTierOnce('전담'), { previousTier: '전담', newTier: '선임' });
+  assert.deepEqual(demoteMemberTierOnce('선임'), { previousTier: '선임', newTier: '크루' });
+  assert.deepEqual(demoteMemberTierOnce('크루'), { previousTier: '크루', newTier: '라인' });
+  assert.deepEqual(demoteMemberTierOnce('라인'), { previousTier: '라인', newTier: '라인' });
+
+  // 구 표기가 저장돼 있어도 먼저 정규화한 뒤 강등한다.
+  assert.deepEqual(demoteMemberTierOnce('글로벌 디렉터'), { previousTier: '전담', newTier: '선임' });
+  assert.deepEqual(demoteMemberTierOnce('우수 파트너'), { previousTier: '선임', newTier: '크루' });
+  assert.deepEqual(demoteMemberTierOnce('인증 파트너'), { previousTier: '크루', newTier: '라인' });
+  assert.deepEqual(demoteMemberTierOnce('일반 파트너'), { previousTier: '라인', newTier: '라인' });
+
+  // 정의된 적 없는 '주임' 같은 값이나 빈 값이 들어와도 라인으로 안전하게 처리된다.
+  assert.deepEqual(demoteMemberTierOnce('주임'), { previousTier: '라인', newTier: '라인' });
+  assert.deepEqual(demoteMemberTierOnce(''), { previousTier: '라인', newTier: '라인' });
+});
+
+test('강등 마이그레이션은 기존 파일을 고치지 않고 정규화 함수로 분기한다', async () => {
+  const migration = await readRepo('supabase', 'migrations', '20260918130000_putduk_member_tier_normalize_penalties.sql');
+  assert.match(migration, /create or replace function private\.putduk_apply_principal_penalties/);
+  assert.match(migration, /v_tier_label := private\.putduk_normalize_member_tier\(v_tier\)/);
+  assert.match(migration, /case v_tier_label/);
+  assert.match(migration, /when '전담' then '선임'/);
+  assert.match(migration, /when '선임' then '크루'/);
+  assert.match(migration, /when '크루' then '라인'/);
+  // '주임' 분기(when '주임' then ...)는 더 이상 활성 코드에 없어야 한다.
+  assert.doesNotMatch(migration, /when '주임'/);
+  // 나머지 로직(자리·플래그 초기화)은 그대로 유지됐는지 확인.
+  assert.match(migration, /priority_pick = false/);
+  assert.match(migration, /principal_withdraw_count = principal_withdraw_count \+ 1/);
+
+  // 기존(문제가 있던) 마이그레이션 파일 자체는 이번 수정에서 건드리지 않는다.
+  const original = await readRepo('supabase', 'migrations', '20260917210000_putduk_three_bucket_ledger.sql');
+  assert.match(original, /when '주임' then '라인'/);
+});
+
+test('관리자 등급 변경 저장은 서버에서 배지 라벨로 정규화한다', async () => {
+  const adminOps = await readRepo('supabase', 'functions', '_shared', 'admin-ops.ts');
+  assert.match(adminOps, /function normalizeMemberTierLabel/);
+  assert.match(adminOps, /const tier = normalizeMemberTierLabel\(textValue\(payload\.member_tier/);
+  assert.doesNotMatch(adminOps, /주임/);
+
+  const adminJs = await readRepo('dist', 'admin', 'admin.js');
+  assert.doesNotMatch(adminJs, /주임/);
+  const { appJs } = await readLaunchFiles();
+  assert.doesNotMatch(appJs, /주임/);
 });
 
 test('회원 대시보드는 오늘 작업 가능 횟수를 실제 서버 값으로 보여준다', async () => {

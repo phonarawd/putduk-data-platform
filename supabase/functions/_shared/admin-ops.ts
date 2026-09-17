@@ -609,10 +609,28 @@ export async function setMemberStatus(admin: AdminClient, userId: string, payloa
   return data;
 }
 
+// private.putduk_normalize_member_tier(SQL)·src/work/tier-daily-limit.mjs와 같은 매핑.
+// 구 표기('일반 파트너' 등)와 배지 라벨('라인' 등)을 모두 4단계 배지 라벨로 정규화한다.
+const MEMBER_TIER_ALIASES: Record<string, string> = {
+  "일반 파트너": "라인",
+  "인증 파트너": "크루",
+  "우수 파트너": "선임",
+  "글로벌 디렉터": "전담",
+  "라인": "라인",
+  "크루": "크루",
+  "선임": "선임",
+  "전담": "전담"
+};
+
+function normalizeMemberTierLabel(value: unknown): string {
+  const key = String(value || "").trim();
+  return MEMBER_TIER_ALIASES[key] || "라인";
+}
+
 export async function changeMemberTier(admin: AdminClient, userId: string, payload: JsonRecord) {
   await requireRole(admin, userId, memberRoles);
   const memberId = assertUuid(payload.user_id || payload.member_id, "회원");
-  const tier = textValue(payload.member_tier, "회원 등급", 40);
+  const tier = normalizeMemberTierLabel(textValue(payload.member_tier, "회원 등급", 40));
   const before = await admin.from("profiles").select("*").eq("id", memberId).maybeSingle();
   if (!before.data) throw new HttpError(404, "회원 정보를 찾을 수 없습니다.");
 

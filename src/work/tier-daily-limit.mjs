@@ -82,3 +82,17 @@ export function dailyQuotaLabel(quota) {
   if (quota.unlimited) return '오늘 작업 횟수 제한이 없어요.';
   return `오늘 작업 가능 ${quota.remaining_today}/${quota.daily_limit}회 남음`;
 }
+
+// private.putduk_apply_principal_penalties()와 같은 강등 순서(전담→선임→크루→라인).
+// '라인'이 바닥이라 더 내려가지 않는다('체험'은 1회성 온보딩이라 강등 목적지가 아님).
+// 분기 전 항상 normalizeMemberTier로 정규화해서 구 표기·미정의 값을 흡수한다.
+export function demoteMemberTierOnce(rawTier) {
+  const tier = normalizeMemberTier(rawTier);
+  const next = ({
+    '전담': '선임',
+    '선임': '크루',
+    '크루': '라인',
+    '라인': '라인'
+  })[tier] || '라인';
+  return { previousTier: tier, newTier: next };
+}
