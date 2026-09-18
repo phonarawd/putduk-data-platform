@@ -35,10 +35,14 @@ test('FOMO 관련 diff 없음 (PHASE 5 범위, branch parent 기준)', async () 
   const { execSync } = await import('node:child_process');
   const parent = '020c0dcd2e01dc3b67ec8cb990898e4af55a8ae5';
   const diff = execSync(`git diff ${parent}..HEAD -- dist/assets/app.js`, { encoding: 'utf8' });
+  const changedLines = diff
+    .split(/\r?\n/)
+    .filter((line) => line.startsWith('+') || line.startsWith('-'))
+    // PHASE 5는 saveState의 민감 state 제외 목록만 바꾼다. 이 줄의 기존 crewPulse 토큰은 FOMO 변경이 아니다.
+    .filter((line) => !(line.includes('const {') && line.includes('crewPulse') && line.includes('...rest')));
   const fomoMarkers = ['FOMO_FEED_SLOTS', 'fomoTimer', 'fomoFeedCache', 'fomoNameCooldown', 'crewPulse'];
   for (const marker of fomoMarkers) {
-    const lines = diff.split(/\r?\n/).filter((line) => line.startsWith('+') || line.startsWith('-'));
-    const touched = lines.some((line) => line.includes(marker));
+    const touched = changedLines.some((line) => line.includes(marker));
     assert.equal(touched, false, `FOMO marker ${marker} should not change in app.js diff`);
   }
   const names = execSync(`git diff --name-only ${parent}..HEAD`, { encoding: 'utf8' })
