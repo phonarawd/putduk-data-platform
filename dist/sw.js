@@ -1,4 +1,4 @@
-const CACHE_NAME = 'putduk-shell-v18';
+const CACHE_NAME = 'putduk-shell-v19';
 const SHELL = [
   '/',
   '/admin/',
@@ -10,6 +10,7 @@ const SHELL = [
   '/assets/ui-icons.js?v=20260918-ui3',
   '/assets/motion-runtime.js?v=20260918-ux1',
   '/assets/channel-talk.js?v=20260918-ch1',
+  '/assets/phase4-finance-wiring.js?v=20260919-p4r1',
   '/assets/brand-runtime.js?v=20260919-logo1',
   '/assets/vendor/supabase.min.js?v=20260918-ui3',
   '/manifest.webmanifest',
@@ -28,16 +29,27 @@ self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
   const url = new URL(event.request.url);
   if (url.origin !== self.location.origin) return;
-  event.respondWith(staleWhileRevalidate(event.request, url));
+  const isDocument = event.request.mode === 'navigate' || url.pathname === '/' || url.pathname.endsWith('/') || url.pathname.endsWith('.html');
+  event.respondWith(isDocument ? networkFirstDocument(event.request) : staleWhileRevalidate(event.request));
 });
 
-async function staleWhileRevalidate(request, url) {
+async function networkFirstDocument(request) {
   const cache = await caches.open(CACHE_NAME);
-  const isDocument = request.mode === 'navigate' || url.pathname === '/' || url.pathname.endsWith('/') || url.pathname.endsWith('.html');
-  const cached = await cache.match(request, isDocument ? { ignoreSearch: true } : undefined);
+  try {
+    const response = await fetch(request);
+    if (response && response.ok) await cache.put(request, response.clone());
+    return response;
+  } catch (_) {
+    return (await cache.match(request, { ignoreSearch: true })) || (await cache.match('/')) || (await cache.match('/admin/'));
+  }
+}
+
+async function staleWhileRevalidate(request) {
+  const cache = await caches.open(CACHE_NAME);
+  const cached = await cache.match(request);
   const network = fetch(request).then((response) => {
     if (response && response.ok) cache.put(request, response.clone());
     return response;
-  }).catch(() => cached || cache.match('/') || cache.match('/admin/'));
+  }).catch(() => cached);
   return cached || network;
 }
