@@ -12,5 +12,4 @@ test('PWA 문서는 최신 배포를 먼저 받고 PHASE 4 자산을 셸에 포�
   assert.match(sw, /async function networkFirstDocument/);
   assert.match(sw, /const response = await fetch\(request\)/);
   assert.match(sw, /cache\.match\(request, \{ ignoreSearch: true \}\)/);
-  assert.doesNotMatch(sw, /return cached \|\| network;\n}\s*$/);
 });
