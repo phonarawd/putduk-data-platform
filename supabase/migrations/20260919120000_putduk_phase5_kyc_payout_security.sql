@@ -35,7 +35,13 @@ begin
   if v_front is null or v_back is null or v_selfie is null
      or not private.putduk_member_storage_path_ok(p_user_id, v_front)
      or not private.putduk_member_storage_path_ok(p_user_id, v_back)
-     or not private.putduk_member_storage_path_ok(p_user_id, v_selfie) then
+     or not private.putduk_member_storage_path_ok(p_user_id, v_selfie)
+     or split_part(v_front, '/', 3) <> 'identity_front'
+     or split_part(v_back, '/', 3) <> 'identity_back'
+     or split_part(v_selfie, '/', 3) <> 'selfie'
+     or split_part(v_front, '/', 4) = ''
+     or split_part(v_back, '/', 4) = ''
+     or split_part(v_selfie, '/', 4) = '' then
     raise exception using errcode = '22023', message = '신분증 앞면·뒷면·셀카 파일을 모두 본인 경로로 등록해 주세요.';
   end if;
 

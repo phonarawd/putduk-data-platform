@@ -34,6 +34,21 @@ export function isAmountInRange(value: unknown, min = 1000, max = 100_000_000): 
   return Number.isFinite(amount) && amount >= min && amount <= max;
 }
 
+export function previewTypeFromStoragePath(path: unknown): "image" | "pdf" {
+  const lower = String(path || "").trim().toLowerCase();
+  if (lower.endsWith(".pdf")) return "pdf";
+  return "image";
+}
+
+export function isKycPathForDocumentKind(userId: string, path: unknown, documentKind: unknown): boolean {
+  const candidate = String(path || "").trim();
+  const kind = String(documentKind || "").trim().toLowerCase();
+  if (!KYC_DOCUMENT_KINDS.has(kind) || !isOwnStoragePath(userId, candidate)) return false;
+  const parts = candidate.split("/").filter(Boolean);
+  if (parts[0] !== "kyc" || parts[1] !== userId) return false;
+  return parts[2] === kind && parts.length >= 4;
+}
+
 export function isOwnStoragePath(userId: string, path: unknown): boolean {
   const candidate = String(path || "").trim();
   if (!candidate || candidate.includes("..") || candidate.startsWith("/") || candidate.includes("\\") || candidate.length > 500) {

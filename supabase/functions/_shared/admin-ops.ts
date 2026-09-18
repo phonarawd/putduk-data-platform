@@ -1398,7 +1398,7 @@ export async function listKyc(admin: AdminClient, userId: string) {
   const { data: docs, error: docsError } = await admin
     .schema("private")
     .from("kyc_documents")
-    .select("user_id,document_kind,status,reviewed_at,updated_at")
+    .select("user_id,document_kind,status,reviewed_at,created_at")
     .in("user_id", memberIds)
     .in("document_kind", ["identity_front", "identity_back", "selfie"]);
   if (docsError) throw new HttpError(503, "본인확인 서류 목록을 불러오지 못했습니다.");
@@ -1412,7 +1412,7 @@ export async function listKyc(admin: AdminClient, userId: string) {
       kind: row.document_kind,
       status: row.status,
       reviewed_at: row.reviewed_at,
-      updated_at: row.updated_at
+      submitted_at: row.created_at
     });
     docsByUser.set(uid, list);
   }
@@ -1491,10 +1491,13 @@ export async function previewKycDocument(admin: AdminClient, userId: string, pay
     throw new HttpError(404, "본인확인 파일을 찾을 수 없습니다.");
   }
 
-  return previewPrivateFile(admin, userId, {
+  const preview = await previewPrivateFile(admin, userId, {
     path: doc.storage_path,
     purpose: "kyc"
   });
+  const storagePath = String(doc.storage_path || "");
+  const previewType = storagePath.toLowerCase().endsWith(".pdf") ? "pdf" : "image";
+  return { ...preview, preview_type: previewType };
 }
 
 export async function revealWithdrawalDestination(admin: AdminClient, userId: string, payload: JsonRecord) {

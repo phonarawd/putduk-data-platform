@@ -8,6 +8,7 @@ import {
   isAllowedKycUploadType,
   isAllowedUploadType,
   isAmountInRange,
+  isKycPathForDocumentKind,
   isOwnStoragePath,
   isSixDigitPin,
   isSupportedCurrency,
@@ -92,7 +93,9 @@ async function requestUpload(userId: string, payload: JsonRecord) {
 
   const safeName = String(fileName).replace(/[^a-zA-Z0-9._-]/g, "_");
   const folder = purpose === "kyc" ? "kyc" : "deposit-proof";
-  const path = `${folder}/${userId}/${crypto.randomUUID()}-${safeName}`;
+  const path = purpose === "kyc"
+    ? `${folder}/${userId}/${documentKind}/${crypto.randomUUID()}-${safeName}`
+    : `${folder}/${userId}/${crypto.randomUUID()}-${safeName}`;
   const { data, error } = await admin.storage.from(PRIVATE_BUCKET).createSignedUploadUrl(path);
   if (error || !data) {
     console.error("signed upload failed", error);
@@ -303,7 +306,7 @@ async function submitWithdrawal(userId: string, payload: JsonRecord) {
       accountHolderEnc = await encryptPayoutSecret(accountHolderPlain, secret);
       accountNumberEnc = await encryptPayoutSecret(accountNumberPlain, secret);
       maskedValue = maskAccount(String(bankName || ""), String(accountNumberPlain || ""));
-      destinationLabel = `${String(bankName || "").trim()} ${String(accountHolderPlain || "").trim()}`.trim().slice(0, 80);
+      destinationLabel = String(bankName || "").trim().slice(0, 80) || null;
     } else if (destinationType === "usdt") {
       usdtAddressEnc = await encryptPayoutSecret(usdtAddressPlain, secret);
       maskedValue = maskUsdt(String(usdtAddressPlain || ""));
@@ -342,7 +345,9 @@ async function submitKyc(userId: string, payload: JsonRecord) {
   const front = textValue(payload.front_path, "신분증 앞면", 500);
   const back = textValue(payload.back_path, "신분증 뒷면", 500);
   const selfie = textValue(payload.selfie_path, "셀카", 500);
-  if (![front, back, selfie].every((path) => isOwnStoragePath(userId, path))) {
+  if (!isKycPathForDocumentKind(userId, front, "identity_front")
+    || !isKycPathForDocumentKind(userId, back, "identity_back")
+    || !isKycPathForDocumentKind(userId, selfie, "selfie")) {
     throw new HttpError(400, "본인확인 파일 경로를 확인해 주세요.");
   }
   const { data, error } = await admin.rpc("putduk_member_submit_kyc", {

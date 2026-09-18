@@ -46,3 +46,39 @@ export function setKycFormBusy(form, busy, label = '검수 요청') {
   button.disabled = busy;
   button.textContent = busy ? '자료 올리는 중…' : button.dataset.kycLabel;
 }
+
+export function isKycPathForDocumentKind(userId, path, documentKind) {
+  const candidate = String(path || '').trim();
+  const kind = normalizeKycDocumentKind(documentKind);
+  if (!['identity_front', 'identity_back', 'selfie'].includes(kind)) return false;
+  if (!candidate || candidate.includes('..') || candidate.startsWith('/') || candidate.includes('\\')) return false;
+  const parts = candidate.split('/').filter(Boolean);
+  if (parts.length < 4 || parts[0] !== 'kyc' || parts[1] !== String(userId || '').trim()) return false;
+  return parts[2] === kind;
+}
+
+// submitKycForm busy guard·업로드 순서를 테스트·런타임에서 동일하게 재현한다.
+export async function runGuardedKycSubmit(form, { uploadKind, submitKyc }) {
+  if (isKycBusyForm(form)) return { ok: false, skipped: true, submitCalls: 0, uploadCalls: 0 };
+  setKycFormBusy(form, true);
+  let uploadCalls = 0;
+  let submitCalls = 0;
+  try {
+    const frontPath = await uploadKind('identity_front');
+    uploadCalls += 1;
+    const backPath = await uploadKind('identity_back');
+    uploadCalls += 1;
+    const selfiePath = await uploadKind('selfie');
+    uploadCalls += 1;
+    if (![frontPath, backPath, selfiePath].every((path) => String(path || '').trim())) {
+      throw new Error('본인확인 파일 경로를 확인해 주세요.');
+    }
+    await submitKyc({ front_path: frontPath, back_path: backPath, selfie_path: selfiePath });
+    submitCalls += 1;
+    return { ok: true, skipped: false, submitCalls, uploadCalls };
+  } catch (error) {
+    return { ok: false, skipped: false, submitCalls, uploadCalls, error };
+  } finally {
+    setKycFormBusy(form, false);
+  }
+}

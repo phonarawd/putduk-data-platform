@@ -407,7 +407,7 @@
     if (!api || !userId || !documentKind) return;
     try {
       const result = await api.adminRequest('preview_kyc_document', { user_id: userId, document_kind: documentKind });
-      api.patchState({ adminKycPreview: { user_id: userId, kind: documentKind, signed_url: result.signed_url || null, expires_in: result.expires_in || 60 } });
+      api.patchState({ adminKycPreview: { user_id: userId, kind: documentKind, signed_url: result.signed_url || null, expires_in: result.expires_in || 60, preview_type: result.preview_type || 'image' } });
       api.render();
     } catch (error) {
       api.showToast(api.friendlyAdminError(error), 'error');
@@ -694,7 +694,9 @@
     }).join('') || `<tr><td colspan="5"><div class="empty-state compact"><strong>검수할 본인확인이 없어요.</strong></div></td></tr>`;
     const kycPreview = state.adminKycPreview;
     const kycPreviewPanel = kycPreview?.signed_url
-      ? `<div class="admin-card" style="margin-top:16px"><div class="admin-card-head"><div><h3>${esc(kycDocLabel(kycPreview.kind))} 미리보기</h3><p>짧은 확인 주소만 화면에 잠깐 보여요.</p></div><button type="button" class="small-button" data-action="close-kyc-preview">닫기</button></div><div style="margin-top:12px"><img src="${esc(kycPreview.signed_url)}" alt="${esc(kycDocLabel(kycPreview.kind))}" style="max-width:100%;border-radius:12px" /></div></div>`
+      ? `<div class="admin-card" style="margin-top:16px"><div class="admin-card-head"><div><h3>${esc(kycDocLabel(kycPreview.kind))} 미리보기</h3><p>짧은 확인 주소만 화면에 잠깐 보여요.</p></div><button type="button" class="small-button" data-action="close-kyc-preview">닫기</button></div><div style="margin-top:12px">${kycPreview.preview_type === 'pdf'
+        ? `<a class="primary-button" href="${esc(kycPreview.signed_url)}" target="_blank" rel="noopener noreferrer">📄 PDF 열기</a>`
+        : `<img src="${esc(kycPreview.signed_url)}" alt="${esc(kycDocLabel(kycPreview.kind))}" style="max-width:100%;border-radius:12px" />`}</div></div>`
       : '';
     const reveal = state.adminWithdrawalReveal;
     const revealPanel = reveal

@@ -186,7 +186,7 @@
 
   function saveState() {
     try {
-      const { _workLockCue, _playedMotionCue, _motionCanvas, toast, modal, modalPayload, adminMemberDetail, depositJump, adminMotion, adminMotionError, crewPulse, depositReveal, depositRevealExpiresAt, depositRevealToken, ...rest } = state;
+      const { _workLockCue, _playedMotionCue, _motionCanvas, toast, modal, modalPayload, adminMemberDetail, adminKycPreview, adminWithdrawalReveal, depositJump, adminMotion, adminMotionError, crewPulse, depositReveal, depositRevealExpiresAt, depositRevealToken, ...rest } = state;
       const safe = { ...rest, run: state.run ? { ...state.run, overlayOpen: false } : null, toast: null, modal: null, modalPayload: null, adminMemberDetail: null, depositReveal: null, depositRevealExpiresAt: null, depositRevealToken: null };
       localStorage.setItem(activeStorageKey, JSON.stringify(safe));
     } catch (_) {}
@@ -4806,7 +4806,11 @@
     if (isAdmin && window.PUTDUK_ADMIN && typeof window.PUTDUK_ADMIN.handleClick === 'function' && window.PUTDUK_ADMIN.handleClick(event, target)) return;
     if (target.dataset.authMode) { state.authMode = target.dataset.authMode; render(); return; }
     if (target.dataset.nav) {
-      if (isAdmin) state.adminPage = target.dataset.nav; else state.memberPage = target.dataset.nav;
+      if (isAdmin) {
+        state.adminPage = target.dataset.nav;
+        state.adminKycPreview = null;
+        state.adminWithdrawalReveal = null;
+      } else state.memberPage = target.dataset.nav;
       document.getElementById('sidebar')?.classList.remove('open'); document.getElementById('sidebarBackdrop')?.classList.remove('open');
       state.modal = null; state.modalPayload = null; saveState(); render();
       if (isAdmin && authState.adminAuthorized) refreshAdminPageData({ silent: false });

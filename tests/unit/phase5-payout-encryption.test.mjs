@@ -21,6 +21,13 @@ test('Edge member-finance는 암호화 후 RPC에 ciphertext를 전달한다', a
   assert.doesNotMatch(edge, /plaintext fallback|평문 저장/i);
 });
 
+test('public destination_label에 accountHolderPlain이 들어가지 않는다', async () => {
+  const edge = await readRepo('supabase', 'functions', 'member-finance', 'index.ts');
+  const block = edge.slice(edge.indexOf('async function submitWithdrawal'), edge.indexOf('async function submitKyc'));
+  assert.doesNotMatch(block, /destinationLabel\s*=\s*`\$\{String\(bankName[^`]*accountHolderPlain/);
+  assert.match(block, /destinationLabel = String\(bankName/);
+});
+
 test('키 없으면 Edge encryptPayoutSecret은 503으로 fail closed', async () => {
   const edgeCrypto = await readRepo('supabase', 'functions', '_shared', 'payout-crypto.ts');
   const encryptBlock = edgeCrypto.slice(edgeCrypto.indexOf('export async function encryptPayoutSecret'), edgeCrypto.indexOf('export async function decryptPayoutSecret'));
