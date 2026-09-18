@@ -5,6 +5,7 @@
   const FEATURE_TO = '업무 매칭';
   const root = document.documentElement;
   root.dataset.uiuxFinal = '2026-09';
+  if (root.dataset.mode === 'admin') return;
 
   function normalizeText(value) {
     const text = String(value || '');
@@ -65,7 +66,7 @@
 
   function queue(node) {
     if (!node) return;
-    pending.add(node.nodeType === Node.TEXT_NODE ? node : node);
+    pending.add(node);
     if (queued) return;
     queued = true;
     queueMicrotask(flush);
