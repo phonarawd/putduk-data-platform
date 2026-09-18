@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readLaunchFiles } from '../helpers/repo.mjs';
 
-test('회원은 근무 API가 열려 있고 입출금은 잠긴다', async () => {
+test('회원은 근무 API가 열려 있고 자동 정산은 잠긴다', async () => {
   const { memberHtml } = await readLaunchFiles();
   assert.match(memberHtml, /enableWorkApi:\s*true/);
   assert.doesNotMatch(memberHtml, /enableWorkApi:\s*false/);

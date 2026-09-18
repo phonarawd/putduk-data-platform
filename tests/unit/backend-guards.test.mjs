@@ -29,6 +29,8 @@ test("백엔드 입력 계약: UUID·PIN·통화·경로", () => {
   assert.equal(isAmountInRange(1000), true);
   assert.equal(isAmountInRange(999), false);
   assert.equal(isOwnStoragePath(userId, `${userId}/kyc/front.jpg`), true);
+  assert.equal(isOwnStoragePath(userId, `kyc/${userId}/front.jpg`), true);
+  assert.equal(isOwnStoragePath(userId, `deposit-proof/${userId}/slip.png`), true);
   assert.equal(isOwnStoragePath(userId, `other/${userId}/kyc/front.jpg`), false);
   assert.equal(isOwnStoragePath(userId, `${userId}/../secret.jpg`), false);
   assert.equal(maskAccount("국민은행", "123456789012"), "국민은행 ****9012");

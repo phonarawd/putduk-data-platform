@@ -232,3 +232,18 @@ test('같은 오버레이는 다시 페이드하지 않고 부트는 한 번만 
   assert.match(motionEngine, /hints\.hidden \|\| !this\.visible/);
   assert.match(browserApi, /if \(document\.hidden\) stopWorkPhase/);
 });
+
+test('배포 헤더에 CSP가 있고 자동 정산 플래그는 꺼져 있다', async () => {
+  const headers = await readRepo('dist', '_headers');
+  const { memberHtml, adminHtml } = await readLaunchFiles();
+  assert.match(headers, /Content-Security-Policy:/);
+  assert.match(headers, /cdn\.tailwindcss\.com/);
+  assert.match(headers, /unpkg\.com/);
+  assert.match(headers, /cdn\.jsdelivr\.net/);
+  assert.match(headers, /gaugwamwceqdnqdqrxqg\.supabase\.co/);
+  assert.match(headers, /worker-src 'self' blob:/);
+  assert.match(memberHtml, /enableFinanceApi:\s*false/);
+  assert.doesNotMatch(memberHtml, /enableFinanceApi:\s*true/);
+  assert.match(adminHtml, /enableFinanceApi:\s*false/);
+  assert.equal(await existsRepo('supabase', 'migrations', '20260918172000_putduk_fk_indexes_ops_security.sql'), true);
+});

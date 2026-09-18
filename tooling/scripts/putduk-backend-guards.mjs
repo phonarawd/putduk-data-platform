@@ -32,8 +32,16 @@ export function isAmountInRange(value, min = 1000, max = 100_000_000) {
 
 export function isOwnStoragePath(userId, path) {
   const candidate = String(path || "").trim();
-  if (!candidate || candidate.includes("..") || candidate.startsWith("/")) return false;
-  return candidate.startsWith(`${userId}/`) && candidate.length <= 500;
+  if (!candidate || candidate.includes("..") || candidate.startsWith("/") || candidate.includes("\\") || candidate.length > 500) {
+    return false;
+  }
+  const parts = candidate.split("/").filter(Boolean);
+  if (parts.length < 2) return false;
+  if (parts[0] === userId) return parts.length >= 3 || Boolean(parts[1]);
+  if (parts[0] === "kyc" || parts[0] === "deposit-proof" || parts[0] === "deposit_proof") {
+    return parts[1] === userId && parts.length >= 3;
+  }
+  return false;
 }
 
 export function maskAccount(bankName, accountNumber) {

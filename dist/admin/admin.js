@@ -579,10 +579,15 @@
       return `<tr><td>${esc(item.member_public_id || item.member_name || '-')}</td><td>${money(item.amount)}</td><td>${esc(item.status === 'approved' ? '확인' : item.status === 'rejected' ? '반려' : '대기')}</td><td>${actions}</td></tr>`;
     }).join('') || `<tr><td colspan="4"><div class="empty-state compact"><strong>입금 확인 대기가 없어요.</strong></div></td></tr>`;
     const destinations = Array.isArray(finance.destinations) ? finance.destinations : [];
+    const destToggle = (item) => {
+      const shown = item.enabled !== false;
+      const label = shown ? '회원에게 숨기기' : '회원에게 보이기';
+      return `<span class="pill ${shown ? 'ok' : 'wait'}">${shown ? '회원 표시' : '숨김'}</span><div class="action-row"><button type="button" class="${shown ? 'small-button' : 'small-button primary'}" data-action="toggle-payout-destination" data-destination-id="${esc(item.id)}" data-enabled="${shown ? 'false' : 'true'}" aria-label="${label}">${label}</button><button type="button" class="small-button" data-action="delete-payout-destination" data-destination-id="${esc(item.id)}" aria-label="입금 안내 삭제">삭제</button><button type="button" class="small-button" data-action="edit-payout-destination" data-destination-id="${esc(item.id)}">수정</button></div>`;
+    };
     const destRows = destinations.map((item) => {
       const kind = String(item.destination_type || '') === 'usdt' ? 'USDT' : '원화 계좌';
       const line = [item.bank_name, item.account_holder, item.masked_value, item.usdt_network].filter(Boolean).join(' · ') || '확인 필요';
-      return `<tr><td>${esc(item.label || kind)}</td><td>${esc(kind)}</td><td>${esc(line)}<br><span style="color:var(--muted);font-size:11px">버전 ${Number(item.info_version || 1)} · ${item.address_mode === 'operator_fixed' || kind === 'USDT' ? '고정 주소' : '원화'}</span></td><td><span class="pill ${item.enabled === false ? 'wait' : 'ok'}">${item.enabled === false ? '숨김' : '회원 표시'}</span><div class="action-row"><button type="button" class="small-button" data-action="edit-payout-destination" data-destination-id="${esc(item.id)}">수정</button></div></td></tr>`;
+      return `<tr><td>${esc(item.label || kind)}</td><td>${esc(kind)}</td><td>${esc(line)}<br><span style="color:var(--muted);font-size:11px">버전 ${Number(item.info_version || 1)} · ${item.address_mode === 'operator_fixed' || kind === 'USDT' ? '고정 주소' : '원화'}</span></td><td>${destToggle(item)}</td></tr>`;
     }).join('') || `<tr><td colspan="4"><div class="empty-state compact"><strong>등록된 입금 계좌가 없어요.</strong><p>원문 계좌·USDT를 저장하면, 회원은 PIN 뒤에만 볼 수 있어요.</p></div></td></tr>`;
     const pinAudit = Array.isArray(finance.pin_audit) ? finance.pin_audit : [];
     const pinRows = pinAudit.map((item) => `<tr><td>${esc(pinEventLabel(item.event))}</td><td>${esc(pinScopeLabel(item.scope))}</td><td>${item.created_at ? new Date(item.created_at).toLocaleString('ko-KR') : '-'}</td></tr>`).join('')
@@ -590,11 +595,11 @@
     const destKind = (item) => String(item.destination_type || '') === 'usdt' ? 'usdt' : 'bank';
     const bankDestRows = destinations.filter((item) => destKind(item) === 'bank').map((item) => {
       const line = [item.bank_name, item.account_holder, item.masked_value].filter(Boolean).join(' · ') || '확인 필요';
-      return `<tr><td>${esc(item.label || '원화 계좌')}</td><td>${esc(line)}<br><span style="color:var(--muted);font-size:11px">버전 ${Number(item.info_version || 1)}</span></td><td><span class="pill ${item.enabled === false ? 'wait' : 'ok'}">${item.enabled === false ? '숨김' : '회원 표시'}</span><div class="action-row"><button type="button" class="small-button" data-action="edit-payout-destination" data-destination-id="${esc(item.id)}">수정</button></div></td></tr>`;
+      return `<tr><td>${esc(item.label || '원화 계좌')}</td><td>${esc(line)}<br><span style="color:var(--muted);font-size:11px">버전 ${Number(item.info_version || 1)}</span></td><td>${destToggle(item)}</td></tr>`;
     }).join('') || `<tr><td colspan="3"><div class="empty-state compact"><strong>등록된 원화 계좌가 없어요.</strong></div></td></tr>`;
     const usdtDestRows = destinations.filter((item) => destKind(item) === 'usdt').map((item) => {
       const line = [item.usdt_network, item.masked_value].filter(Boolean).join(' · ') || '확인 필요';
-      return `<tr><td>${esc(item.label || 'USDT')}</td><td>${esc(line)}<br><span style="color:var(--muted);font-size:11px">버전 ${Number(item.info_version || 1)} · 고정 주소</span></td><td><span class="pill ${item.enabled === false ? 'wait' : 'ok'}">${item.enabled === false ? '숨김' : '회원 표시'}</span><div class="action-row"><button type="button" class="small-button" data-action="edit-payout-destination" data-destination-id="${esc(item.id)}">수정</button></div></td></tr>`;
+      return `<tr><td>${esc(item.label || 'USDT')}</td><td>${esc(line)}<br><span style="color:var(--muted);font-size:11px">버전 ${Number(item.info_version || 1)} · 고정 주소</span></td><td>${destToggle(item)}</td></tr>`;
     }).join('') || `<tr><td colspan="3"><div class="empty-state compact"><strong>등록된 USDT 주소가 없어요.</strong></div></td></tr>`;
     const withdrawCards = withdrawals.map((item) => {
       const includePrincipal = item.include_principal === true || item.kind_label === '원금포함';
@@ -630,8 +635,8 @@
           <div class="field"><label>표시 이름</label><input name="label" maxlength="80" placeholder="예: 퍼뜩 입금 계좌" /></div>
           ${kind === 'bank' ? `<div class="field"><label>은행명</label><input name="bank_name" maxlength="80" placeholder="예: 국민은행" /></div>
           <div class="field"><label>예금주</label><input name="account_holder" maxlength="80" placeholder="예금주 이름" /></div>
-          <div class="field full"><label>계좌번호 (원화 원문)</label><input name="account_number" maxlength="80" placeholder="숫자 원문. 회원 화면에는 PIN 뒤에만 보여요" /></div>` : `<div class="field"><label>USDT 네트워크</label><input name="usdt_network" maxlength="40" placeholder="TRC20" value="TRC20" /></div>
-          <div class="field full"><label>USDT 주소 (고정)</label><input name="usdt_address" maxlength="200" placeholder="운영자 고정 TRC20. 회원별 자동생성 아님" /></div>`}
+          <div class="field full"><label>계좌번호 (원화 원문)</label><input name="account_number" maxlength="80" placeholder="바꿀 때만 적어요. 저장된 원문은 다시 보여주지 않아요" autocomplete="off" /></div>` : `<div class="field"><label>USDT 네트워크</label><input name="usdt_network" maxlength="40" placeholder="TRC20" value="TRC20" /></div>
+          <div class="field full"><label>USDT 주소 (고정)</label><input name="usdt_address" maxlength="200" placeholder="바꿀 때만 적어요. 저장된 원문은 다시 보여주지 않아요" autocomplete="off" /></div>`}
           <div class="field full"><label>QR 이미지 경로</label><input name="qr_asset_path" maxlength="500" placeholder="putduk-private 경로. 없으면 회원 화면에서 주소 QR을 만들어요" /></div>
           <div class="field full"><label>메모</label><input name="memo" maxlength="500" placeholder="회원에게 PIN 뒤에 보여줄 한 줄" /></div>
           <div class="field full"><label>안내 문구</label><input name="guidance_text" maxlength="1000" placeholder="입금 후 확인 요청을 남겨 주세요" /></div>
@@ -911,6 +916,64 @@
     }
   }
 
+  function renderPayoutDeleteConfirm() {
+    const api = wrapCore();
+    if (!api) return null;
+    const id = api.getState().modalPayload?.id || api.getState().modalPayload?.destination_id || '';
+    return `<div class="modal-backdrop" data-modal="payout-delete"><div class="modal"><div class="modal-head"><div><h2>입금 안내 삭제</h2><p>한 번 더 확인할게요.</p></div><button class="icon-button" type="button" data-action="close-modal" aria-label="닫기">${icon('x', 18)}</button></div><div class="modal-body"><p class="page-copy">이 입금 안내를 지울까요? 회원 화면에서 바로 사라져요 🗑️</p><div class="modal-actions"><button class="secondary-button" type="button" data-action="close-modal">취소</button><button class="primary-button" type="button" data-action="confirm-payout-destination-delete" data-destination-id="${esc(id)}" aria-label="입금 안내 삭제 확인">확인</button></div></div></div></div>`;
+  }
+
+  async function deletePayoutDestination(id) {
+    const api = wrapCore();
+    if (!api || !id) return;
+    if (api.getState().adminPayoutDeleteBusy) return;
+    api.patchState({ adminPayoutDeleteBusy: true });
+    try {
+      await api.adminRequest('delete_payout_destination', {
+        destination_id: id,
+        change_reason: '회원 입금 안내에서 삭제'
+      });
+      const form = document.getElementById('payoutDestinationForm');
+      if (form?.destination_id && String(form.destination_id.value) === String(id)) {
+        form.reset();
+        const enabled = form.querySelector('[name="enabled"]');
+        if (enabled) enabled.checked = true;
+      }
+      if (typeof api.closeModal === 'function') api.closeModal();
+      else api.patchState({ modal: null, modalPayload: null });
+      if (typeof api.loadAdminFinance === 'function') await api.loadAdminFinance({ silent: false });
+      else api.render();
+      api.showToast('입금 안내를 지웠어요. 회원 화면에서 바로 빠져요 🗑️', 'success');
+    } catch (error) {
+      api.showToast(error?.message || '입금 안내를 지우지 못했어요.', 'warning');
+    } finally {
+      api.patchState({ adminPayoutDeleteBusy: false });
+    }
+  }
+
+  async function togglePayoutDestination(id, enabledRaw) {
+    const api = wrapCore();
+    if (!api || !id) return;
+    const enabled = enabledRaw !== false && enabledRaw !== 'false';
+    try {
+      await api.adminRequest('set_payout_destination_enabled', {
+        destination_id: id,
+        enabled,
+        change_reason: enabled ? '회원 입금 안내에 다시 표시' : '회원 입금 안내에서 숨김'
+      });
+      if (typeof api.loadAdminFinance === 'function') await api.loadAdminFinance({ silent: false });
+      else api.render();
+      api.showToast(
+        enabled
+          ? '회원에게 다시 보여요. 입금 안내에 바로 나와요 👀'
+          : '숨김 처리했어요. 입금 안내에서 바로 빠져요 🔒',
+        'success'
+      );
+    } catch (error) {
+      api.showToast(error?.message || '표시 설정을 바꾸지 못했어요.', 'warning');
+    }
+  }
+
   async function savePayoutDestination(event) {
     const api = wrapCore();
     if (!api) return;
@@ -956,16 +1019,18 @@
     form.label.value = item.label || '';
     form.bank_name.value = item.bank_name || '';
     form.account_holder.value = item.account_holder || '';
-    form.account_number.value = item.account_number || '';
+    form.account_number.value = '';
     form.usdt_network.value = item.usdt_network || 'TRC20';
-    form.usdt_address.value = item.usdt_address || '';
+    form.usdt_address.value = '';
     form.qr_asset_path.value = item.qr_asset_path || '';
     form.memo.value = item.memo || '';
     form.guidance_text.value = item.guidance_text || '';
     form.change_reason.value = '';
     const enabled = form.querySelector('[name="enabled"]');
     if (enabled) enabled.checked = item.enabled !== false;
-    api.showToast('📝 선택한 입금 안내를 수정 칸에 넣었어요.', 'info');
+    api.showToast(item.has_account_number || item.has_usdt_address
+      ? '📝 선택한 입금 안내를 수정 칸에 넣었어요. 원문은 바꿀 때만 다시 적어요.'
+      : '📝 선택한 입금 안내를 수정 칸에 넣었어요.', 'info');
   }
 
   async function resetMemberSecurityPin(event) {
@@ -1379,6 +1444,7 @@
       if (type === 'assign-task') return renderAssignForm();
       if (type === 'notice-form' || type === 'broadcast-notice') return renderNoticeForm();
       if (type === 'company-form') return renderCompanyForm();
+      if (type === 'payout-delete') return renderPayoutDeleteConfirm();
       return null;
     },
     afterRender() {
@@ -1448,6 +1514,19 @@
       }
       if (action === 'edit-payout-destination') {
         fillPayoutDestination(target.dataset.destinationId);
+        return true;
+      }
+      if (action === 'toggle-payout-destination') {
+        togglePayoutDestination(target.dataset.destinationId, target.dataset.enabled);
+        return true;
+      }
+      if (action === 'delete-payout-destination') {
+        const api = core();
+        api?.openModal?.('payout-delete', { id: target.dataset.destinationId, destination_id: target.dataset.destinationId });
+        return true;
+      }
+      if (action === 'confirm-payout-destination-delete') {
+        deletePayoutDestination(target.dataset.destinationId);
         return true;
       }
       if (target?.dataset?.reviewAction === 'rework') {

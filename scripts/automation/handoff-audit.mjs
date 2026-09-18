@@ -55,7 +55,7 @@ items.push(result('static-files', '배포', '정적 출시 파일', missingStati
 items.push(result('lang-ko', 'UI', '회원·운영자 lang=ko', memberHtml.includes('lang="ko"') && adminHtml.includes('lang="ko"'), '문서 언어', 'hard'));
 items.push(result('work-member-open', '근무', '회원 enableWorkApi=true', /enableWorkApi:\s*true/.test(memberHtml) && !/enableWorkApi:\s*false/.test(memberHtml), '회원 dist 실근무 열림', 'hard'));
 items.push(result('work-admin-lock', '잠금', '운영자 enableWorkApi=false', /enableWorkApi:\s*false/.test(adminHtml) && !/enableWorkApi:\s*true/.test(adminHtml), '운영자 셸은 회원 근무 플래그를 켜지 않음', 'hard'));
-items.push(result('finance-lock', '잠금', 'enableFinanceApi=false', /enableFinanceApi:\s*false/.test(memberHtml) && /enableFinanceApi:\s*false/.test(adminHtml) && !/enableFinanceApi:\s*true/.test(html), '입출금·KYC 완료 전 잠금', 'hard'));
+items.push(result('finance-lock', '잠금', 'enableFinanceApi=false', /enableFinanceApi:\s*false/.test(memberHtml) && /enableFinanceApi:\s*false/.test(adminHtml) && !/enableFinanceApi:\s*true/.test(html), '자동 PG/정산 전체 오픈 금지(신청 API는 별도)', 'hard'));
 items.push(result('no-service-role', '보안', '브라우저에 service_role 없음', !launch.includes('service_role') && !launch.includes('sb_secret_'), 'publishable key만 허용', 'hard'));
 items.push(result('no-demo', 'UI', '데모 문구 제거', !['운영자 데모', '미리보기 화면', 'putduk-demo-state'].some((value) => launch.includes(value)), '출시 화면 내부 표현', 'hard'));
 items.push(result('forbidden-ops', 'UI', '운영자 금지 기술 문구 없음', !['API 오류', 'RPC 오류', '토큰 오류', '데이터베이스 오류', 'CRUD'].some((value) => launch.includes(value)), '한국어 대체 문구 사용', 'hard'));

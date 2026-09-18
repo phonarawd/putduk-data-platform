@@ -86,7 +86,8 @@ async function requestUpload(userId: string, payload: JsonRecord) {
   }
 
   const safeName = String(fileName).replace(/[^a-zA-Z0-9._-]/g, "_");
-  const path = `${userId}/${purpose}/${crypto.randomUUID()}-${safeName}`;
+  const folder = purpose === "kyc" ? "kyc" : "deposit-proof";
+  const path = `${folder}/${userId}/${crypto.randomUUID()}-${safeName}`;
   const { data, error } = await admin.storage.from(PRIVATE_BUCKET).createSignedUploadUrl(path);
   if (error || !data) {
     console.error("signed upload failed", error);

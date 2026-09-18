@@ -2,8 +2,10 @@
 
 import type { SupabaseClient, User } from "https://esm.sh/@supabase/supabase-js@2.57.0";
 import { HttpError, rpcMessage, type JsonRecord } from "./http.ts";
-import { isOwnStoragePath, PRIVATE_BUCKET, SIGNED_URL_SECONDS } from "./validate.ts";
+import { isOwnStoragePath, maskAccount, maskUsdt, PRIVATE_BUCKET, SIGNED_URL_SECONDS } from "./validate.ts";
 import { listSecurityPinAudit, resetSecurityPin } from "./deposit-info.ts";
+import { encryptPayoutSecret, payoutSecretFromEnv } from "./payout-crypto.ts";
+import { assertPrivatePreviewAccess } from "./private-file-preview.ts";
 
 const memberRoles = ["super_admin", "member_support"] as const;
 const financeRoles = ["super_admin", "finance"] as const;
@@ -1382,12 +1384,18 @@ export async function reviewKyc(admin: AdminClient, userId: string, payload: Jso
   return { kyc_status: data };
 }
 
-export async function previewPrivateFile(admin: AdminClient, userId: string, payload: JsonRecord, roles: readonly string[]) {
-  await requireRole(admin, userId, roles);
+export async function previewPrivateFile(admin: AdminClient, userId: string, payload: JsonRecord, _roles?: readonly string[]) {
   const path = textValue(payload.path, "파일 경로", 500);
-  if (!path || path.includes("..")) throw new HttpError(400, "파일 경로가 올바르지 않습니다.");
+  const roles = await loadAdminRoles(admin, userId);
+  if (!roles.some((role) => role === "super_admin" || role === "kyc_review" || role === "finance")) {
+    throw new HttpError(403, "이 메뉴를 사용할 권한이 없습니다.");
+  }
+  const access = assertPrivatePreviewAccess(path, payload.purpose, roles);
+  if (!access.ok) {
+    throw new HttpError(Number(access.status || 403), String(access.message || "이 파일은 지금 권한으로 열 수 없어요."));
+  }
 
-  const { data, error } = await admin.storage.from(PRIVATE_BUCKET).createSignedUrl(path, SIGNED_URL_SECONDS);
+  const { data, error } = await admin.storage.from(PRIVATE_BUCKET).createSignedUrl(path as string, SIGNED_URL_SECONDS);
   if (error || !data?.signedUrl) {
     console.error("signed url failed", error);
     throw new HttpError(404, "파일을 찾을 수 없습니다.");
@@ -1474,6 +1482,27 @@ export async function listGrants(admin: AdminClient, userId: string, payload: Js
   return data || [];
 }
 
+function publicPayoutDestination(row: JsonRecord) {
+  const type = String(row.destination_type || "bank");
+  const hasAccount = Boolean(String(row.account_number || (type !== "usdt" ? row.encrypted_value : "") || "").trim());
+  const hasUsdt = Boolean(String(row.usdt_address || (type === "usdt" ? row.encrypted_value : "") || "").trim());
+  return {
+    ...row,
+    encrypted_value: undefined,
+    account_number: undefined,
+    usdt_address: undefined,
+    has_account_number: hasAccount,
+    has_usdt_address: hasUsdt,
+    address_mode: type === "usdt" ? "operator_fixed" : row.address_mode || null
+  };
+}
+
+function enabledFlag(value: unknown, fallback = true) {
+  if (value === false || value === "false" || value === 0 || value === "0") return false;
+  if (value === true || value === "true" || value === 1 || value === "1") return true;
+  return fallback;
+}
+
 export async function listPayoutDestinations(admin: AdminClient, userId: string) {
   await requireRole(admin, userId, financeRoles);
   const { data, error } = await admin.rpc("putduk_admin_payout_destinations_list", { p_admin_id: userId });
@@ -1481,7 +1510,7 @@ export async function listPayoutDestinations(admin: AdminClient, userId: string)
     console.error("payout destinations list failed", error);
     throw new HttpError(503, "입금 안내 계좌를 불러오지 못했습니다.");
   }
-  return Array.isArray(data) ? data : [];
+  return (Array.isArray(data) ? data : []).map((row) => publicPayoutDestination(row as JsonRecord));
 }
 
 export async function upsertPayoutDestination(admin: AdminClient, userId: string, payload: JsonRecord) {
@@ -1490,30 +1519,99 @@ export async function upsertPayoutDestination(admin: AdminClient, userId: string
   if (destinationType !== "bank" && destinationType !== "usdt") {
     throw new HttpError(400, "원화 계좌 또는 USDT를 선택해 주세요.");
   }
+  const secret = payoutSecretFromEnv();
+  const accountPlain = textValue(payload.account_number, "계좌번호", 80, false);
+  const usdtPlain = textValue(payload.usdt_address, "USDT 주소", 200, false);
+  const rawPlain = textValue(payload.encrypted_value, "원문 값", 500, false);
+  const bankName = textValue(payload.bank_name, "은행명", 80, false);
+  let accountEnc: string | null = null;
+  let usdtEnc: string | null = null;
+  try {
+    if (destinationType === "bank") {
+      accountEnc = await encryptPayoutSecret(accountPlain || rawPlain, secret);
+    } else {
+      usdtEnc = await encryptPayoutSecret(usdtPlain || rawPlain, secret);
+    }
+  } catch (error) {
+    throw new HttpError(503, error instanceof Error ? error.message : "입금 안내를 저장하지 못했어요.");
+  }
+  const maskedProvided = textValue(payload.masked_value, "마스킹 값", 120, false);
+  const masked = maskedProvided
+    || (destinationType === "usdt" && (usdtPlain || rawPlain) ? maskUsdt(String(usdtPlain || rawPlain)) : null)
+    || (destinationType === "bank" && (accountPlain || rawPlain) ? maskAccount(String(bankName || ""), String(accountPlain || rawPlain)) : null);
+
   const saved = await callRpc<JsonRecord>(admin, "putduk_admin_payout_destination_upsert", {
     p_admin_id: userId,
     p_destination_id: payload.destination_id ? assertUuid(payload.destination_id, "입금 안내") : null,
     p_destination_type: destinationType,
     p_label: textValue(payload.label, "표시 이름", 80, false),
-    p_masked_value: textValue(payload.masked_value, "마스킹 값", 120, false),
-    p_encrypted_value: textValue(payload.encrypted_value || payload.account_number || payload.usdt_address, "원문 값", 500, false),
+    p_masked_value: masked,
+    p_encrypted_value: accountEnc || usdtEnc,
     p_qr_asset_path: textValue(payload.qr_asset_path, "QR 이미지", 500, false),
-    p_enabled: payload.enabled === false || payload.enabled === "false" ? false : true,
-    p_bank_name: textValue(payload.bank_name, "은행명", 80, false),
+    p_enabled: enabledFlag(payload.enabled, true),
+    p_bank_name: bankName,
     p_account_holder: textValue(payload.account_holder, "예금주", 80, false),
     p_guidance_text: textValue(payload.guidance_text, "안내문구", 1000, false),
     p_usdt_network: textValue(payload.usdt_network, "USDT 네트워크", 40, false) || (destinationType === "usdt" ? "TRC20" : null),
-    p_account_number: textValue(payload.account_number, "계좌번호", 80, false),
-    p_usdt_address: textValue(payload.usdt_address, "USDT 주소", 200, false),
+    p_account_number: accountEnc,
+    p_usdt_address: usdtEnc,
     p_memo: textValue(payload.memo, "메모", 500, false),
     p_change_reason: textValue(payload.change_reason || payload.reason, "변경 사유", 500, false)
   }, "입금 안내 계좌를 저장하지 못했습니다.");
-  const safe = { ...saved, encrypted_value: undefined, address_mode: destinationType === "usdt" ? "operator_fixed" : saved.address_mode };
+  const safe = publicPayoutDestination({ ...saved, destination_type: destinationType });
   await appendAudit(admin, userId, "입금 안내 계좌 저장", "payout_destination", String(saved.id || ""), textValue(payload.change_reason || payload.reason, "변경 사유", 500, false), null, {
     ...safe,
-    account_number: saved.account_number ? "set" : null,
-    usdt_address: saved.usdt_address ? "set" : null
+    has_account_number: Boolean(accountEnc || saved.account_number),
+    has_usdt_address: Boolean(usdtEnc || saved.usdt_address)
   });
+  return safe;
+}
+
+export async function setPayoutDestinationEnabled(admin: AdminClient, userId: string, payload: JsonRecord) {
+  await requireRole(admin, userId, financeRoles);
+  const destinationId = assertUuid(payload.destination_id || payload.id, "입금 안내");
+  const enabled = enabledFlag(payload.enabled, false);
+  const reason = textValue(
+    payload.change_reason || payload.reason,
+    "변경 사유",
+    500,
+    false
+  ) || (enabled ? "회원 입금 안내에 다시 표시" : "회원 입금 안내에서 숨김");
+  const saved = await callRpc<JsonRecord>(admin, "putduk_admin_payout_destination_set_enabled", {
+    p_admin_id: userId,
+    p_destination_id: destinationId,
+    p_enabled: enabled,
+    p_change_reason: reason
+  }, "입금 안내 표시를 바꾸지 못했어요.");
+  const safe = publicPayoutDestination(saved);
+  await appendAudit(admin, userId, enabled ? "입금 안내 회원 표시" : "입금 안내 숨김", "payout_destination", destinationId, reason, null, {
+    enabled: safe.enabled,
+    label: safe.label
+  });
+  return safe;
+}
+
+export async function deletePayoutDestination(admin: AdminClient, userId: string, payload: JsonRecord) {
+  await requireRole(admin, userId, financeRoles);
+  const destinationId = assertUuid(payload.destination_id || payload.id, "입금 안내");
+  const reason = textValue(
+    payload.change_reason || payload.reason,
+    "변경 사유",
+    500,
+    false
+  ) || "회원 입금 안내에서 삭제";
+  const saved = await callRpc<JsonRecord>(admin, "putduk_admin_payout_destination_delete", {
+    p_admin_id: userId,
+    p_destination_id: destinationId,
+    p_change_reason: reason
+  }, "입금 안내를 지우지 못했어요.");
+  const safe = {
+    id: saved.id || destinationId,
+    destination_type: saved.destination_type || null,
+    label: saved.label || null,
+    deleted: true
+  };
+  await appendAudit(admin, userId, "입금 안내 삭제", "payout_destination", destinationId, reason, null, safe);
   return safe;
 }
 
@@ -1650,8 +1748,7 @@ export async function handleOpsAction(
     return { body: { ok: true, ...(await reviewKyc(admin, user.id, payload)) } };
   }
   if (action === "preview_private_file") {
-    const roles = String(payload.purpose || "") === "kyc" ? kycRoles : financeRoles;
-    return { body: { ok: true, ...(await previewPrivateFile(admin, user.id, payload, roles)) } };
+    return { body: { ok: true, ...(await previewPrivateFile(admin, user.id, payload)) } };
   }
   if (action === "referrals" || action === "list_referrals") {
     return { body: { ok: true, referrals: await listReferrals(admin, user.id) } };
@@ -1676,6 +1773,12 @@ export async function handleOpsAction(
   }
   if (action === "upsert_payout_destination") {
     return { body: { ok: true, destination: await upsertPayoutDestination(admin, user.id, payload) } };
+  }
+  if (action === "set_payout_destination_enabled" || action === "toggle_payout_destination") {
+    return { body: { ok: true, destination: await setPayoutDestinationEnabled(admin, user.id, payload) } };
+  }
+  if (action === "delete_payout_destination") {
+    return { body: { ok: true, destination: await deletePayoutDestination(admin, user.id, payload) } };
   }
   if (action === "reset_security_pin" || action === "security_pin_reset") {
     await requireRole(admin, user.id, financeRoles);

@@ -1,0 +1,14 @@
+{
+  "version": "5",
+  "remote": {
+    "https://esm.sh/@noble/hashes@1.8.0/scrypt.js": "79d7e9cc25d66f9111872bae42b51db2df1224434cbe484be17cf810c2c61a54",
+    "https://esm.sh/@supabase/supabase-js@2.57.0": "119dc185b1310fd98a9ee7cb6a660879a2562ea3730ebed9b80e85ecc8c7e3ee"
+  },
+  "workspace": {
+    "packageJson": {
+      "dependencies": [
+        "npm:turbo@2.10.13"
+      ]
+    }
+  }
+}

@@ -238,7 +238,7 @@
       showToast('🔒 실제 근무 제출은 아직 준비 중이에요. 잔액은 그대로예요.', 'warning');
       return;
     }
-    showToast('🔒 입출금은 아직 운영 확인 중이에요. 신청은 접수되지 않고 잔액은 그대로예요.', 'warning');
+    showToast('🔒 입출금 자동 반영은 아직 준비 중이에요. 신청은 운영자가 확인한 뒤에 잔액에 반영돼요.', 'warning');
   }
 
   const STAKE_LADDER = [30000, 50000, 70000, 100000, 300000, 500000, 1000000, 3000000, 5000000, 10000000, 30000000, 100000000];
@@ -1799,8 +1799,11 @@
   function filterDepositItems(list) {
     const method = state.depositMethod;
     const rows = Array.isArray(list) ? list : [];
-    if (!method) return rows;
-    return rows.filter((item) => depositDestinationKind(item) === method);
+    return rows.filter((item) => {
+      if (item && item.enabled === false) return false;
+      if (!method) return true;
+      return depositDestinationKind(item) === method;
+    });
   }
 
   function renderDepositMethodPicker() {
@@ -5300,10 +5303,6 @@
 
   async function sendDepositRequest(values) {
     if (!authState.session) { showToast('👋 로그인 후 입금 확인을 요청할 수 있어요.', 'info'); return; }
-    if (!financeEnabled()) {
-      lockToast('finance');
-      return;
-    }
     try {
       await memberFinanceRequest('submit_deposit', {
         amount: Number(values.amount),
@@ -5314,7 +5313,7 @@
       });
       state.depositJump = null;
       closeModal();
-      showToast('💳 입금 확인 요청을 접수했어요. 잔액은 운영자 확인 후 반영돼요.', 'success');
+      showToast('입금 신청을 접수했어요. 운영자가 확인하면 잔액에 반영돼요 💳', 'success');
     } catch (error) {
       showToast(friendlyAdminError(error), isUnsupportedAction(error) ? 'warning' : 'error');
     }
@@ -5351,10 +5350,6 @@
     const values = formValues(event.target);
     const kind = values.withdraw_kind || state.withdrawIntent || 'allowance';
     const amount = Number(values.amount);
-    if (!financeEnabled() && !opsTrialWithdrawAllowed(amount, kind)) {
-      lockToast('finance');
-      return;
-    }
     const destType = String(values.destination_type || 'bank');
     const stipend = Number(state.wallet.available || 0);
     const workAvail = Number(state.wallet.work || 0);
@@ -5402,14 +5397,10 @@
   async function submitKycForm(event) {
     event.preventDefault();
     if (!authState.session) { showToast('로그인 후 본인확인 자료를 제출할 수 있어요.', 'info'); return; }
-    if (!financeEnabled()) {
-      lockToast('finance');
-      return;
-    }
     try {
       await edgeRequest('submit_kyc', { has_front: Boolean(document.getElementById('kycFront')?.files?.[0]), has_back: Boolean(document.getElementById('kycBack')?.files?.[0]), has_selfie: Boolean(document.getElementById('kycSelfie')?.files?.[0]) });
       closeModal();
-      showToast('본인확인 자료를 접수했어요.', 'success');
+      showToast('본인확인 자료를 접수했어요. 운영자가 확인해요 🪪', 'success');
     } catch (error) {
       showToast(friendlyAdminError(error), isUnsupportedAction(error) ? 'warning' : 'error');
     }

@@ -3,6 +3,7 @@
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.57.0";
 import { HttpError, type JsonRecord } from "./http.ts";
 import { maskAccount, maskUsdt, PRIVATE_BUCKET, SIGNED_URL_SECONDS } from "./validate.ts";
+import { decryptPayoutSecret, payoutSecretFromEnv } from "./payout-crypto.ts";
 import {
   challengePayload,
   DEPOSIT_INFO_LOCKED,
@@ -264,11 +265,23 @@ export async function revealDepositInfo(
   );
 
   const rows = await fullEnabledDestinations(admin);
+  const secret = payoutSecretFromEnv();
   const destinations = [];
   for (const row of rows) {
+    if (row.enabled === false) continue;
     const type = String(row.destination_type || "bank");
-    const account = String(row.account_number || (type === "bank" ? row.encrypted_value : "") || "");
-    const usdt = String(row.usdt_address || (type === "usdt" ? row.encrypted_value : "") || "");
+    let account = "";
+    let usdt = "";
+    try {
+      account = await decryptPayoutSecret(row.account_number || (type === "bank" ? row.encrypted_value : "") || "", secret);
+      usdt = await decryptPayoutSecret(row.usdt_address || (type === "usdt" ? row.encrypted_value : "") || "", secret);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "입금 안내를 열지 못했어요. 잠시 후 다시 해 주세요.";
+      const status = error && typeof error === "object" && "status" in error && typeof (error as { status?: unknown }).status === "number"
+        ? Number((error as { status: number }).status)
+        : 503;
+      throw new HttpError(status, message);
+    }
     destinations.push({
       id: row.id,
       destination_type: type,
