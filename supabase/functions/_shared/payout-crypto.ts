@@ -40,7 +40,12 @@ export async function encryptPayoutSecret(plain: unknown, secret: string) {
   const text = String(plain ?? "").trim();
   if (!text) return null;
   if (isPayoutCiphertext(text)) return text;
-  if (!String(secret || "").trim()) return text;
+  if (!String(secret || "").trim()) {
+    const error = new Error("지급정보 암호화 키가 설정되지 않아 저장할 수 없습니다.") as Error & { status?: number; code?: string };
+    error.status = 503;
+    error.code = "PAYOUT_SECRET_MISSING";
+    throw error;
+  }
   const key = await importPayoutKey(secret);
   const iv = crypto.getRandomValues(new Uint8Array(12));
   const cipher = await crypto.subtle.encrypt(

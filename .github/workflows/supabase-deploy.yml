@@ -42,10 +42,16 @@ jobs:
       - name: Edge Function 시크릿 반영
         env:
           PUTDUK_ALLOWED_ORIGINS: ${{ secrets.PUTDUK_ALLOWED_ORIGINS }}
+          PUTDUK_PAYOUT_SECRET: ${{ secrets.PUTDUK_PAYOUT_SECRET }}
         run: |
           if [ -n "$PUTDUK_ALLOWED_ORIGINS" ]; then
             supabase secrets set PUTDUK_ALLOWED_ORIGINS="$PUTDUK_ALLOWED_ORIGINS" --project-ref "$SUPABASE_PROJECT_REF"
           fi
+          if [ -z "$PUTDUK_PAYOUT_SECRET" ]; then
+            echo "::error::PUTDUK_PAYOUT_SECRET GitHub Secret이 비어 있어 지급정보 암호화 배포를 중단합니다."
+            exit 1
+          fi
+          supabase secrets set PUTDUK_PAYOUT_SECRET="$PUTDUK_PAYOUT_SECRET" --project-ref "$SUPABASE_PROJECT_REF"
 
       - name: Edge Function 배포
         run: |
