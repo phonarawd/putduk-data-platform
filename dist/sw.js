@@ -1,4 +1,4 @@
-const CACHE_NAME = 'putduk-shell-v17';
+const CACHE_NAME = 'putduk-shell-v18';
 const SHELL = [
   '/',
   '/admin/',
@@ -10,14 +10,10 @@ const SHELL = [
   '/assets/ui-icons.js?v=20260918-ui3',
   '/assets/motion-runtime.js?v=20260918-ux1',
   '/assets/channel-talk.js?v=20260918-ch1',
+  '/assets/brand-runtime.js?v=20260919-logo1',
   '/assets/vendor/supabase.min.js?v=20260918-ui3',
   '/manifest.webmanifest',
-  '/favicon.svg',
-  '/icons/icon-180.png',
-  '/icons/icon-192.png',
-  '/icons/icon-512.png',
-  '/icons/icon-192.svg',
-  '/icons/icon-512.svg'
+  '/icons/putduk-premium.png'
 ];
 
 self.addEventListener('install', (event) => {
