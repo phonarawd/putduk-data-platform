@@ -5409,9 +5409,20 @@
     return upload.path;
   }
 
+  function setDepositFormBusy(form, busy) {
+    if (!form) return;
+    form.dataset.phase4Busy = busy ? '1' : '0';
+    const button = form.querySelector('button[type="submit"]');
+    if (!button) return;
+    if (!button.dataset.phase4Label) button.dataset.phase4Label = button.textContent || '입금 확인 요청';
+    button.disabled = busy;
+    button.textContent = busy ? '증빙 확인 중…' : button.dataset.phase4Label;
+  }
+
   async function sendDepositRequest(values, form) {
     if (!authState.session) { showToast('👋 로그인 후 입금 확인을 요청할 수 있어요.', 'info'); return; }
     if (form?.dataset?.phase4Busy === '1') return;
+    setDepositFormBusy(form, true);
     try {
       const file = assertDepositProofFile(depositProofFileOf(values, form));
       const proofPath = await uploadDepositProof(file);
@@ -5428,6 +5439,8 @@
       showToast('입금 신청을 접수했어요. 운영자가 확인하면 잔액에 반영돼요 💳', 'success');
     } catch (error) {
       showToast(friendlyAdminError(error), isUnsupportedAction(error) ? 'warning' : 'error');
+    } finally {
+      setDepositFormBusy(form, false);
     }
   }
 

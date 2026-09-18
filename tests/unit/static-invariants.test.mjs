@@ -289,7 +289,7 @@ test('회원·운영 셸은 자체 스크립트와 캐시 우선 서비스워커
   assert.doesNotMatch(adminHtml, /channelPluginKey/);
   assert.match(adminHtml, /vendor\/supabase\.min\.js/);
   assert.match(sw, /staleWhileRevalidate/);
-  assert.match(sw, /putduk-shell-v20/);
+  assert.match(sw, /putduk-shell-v21/);
   assert.match(sw, /channel-talk\.js/);
   assert.match(http, /userFromVerifiedJwt/);
   assert.match(http, /export function clientIp/);

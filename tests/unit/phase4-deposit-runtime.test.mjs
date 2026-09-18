@@ -28,6 +28,9 @@ test('네이티브 입금 신청은 실제 proof_path만 보내고 빈 경로는
   assert.match(appJs, /proof_path:\s*proofPath/);
   assert.match(appJs, /assertDepositProofFile/);
   assert.match(appJs, /state\.depositJump = \{ \.\.\.values, file, proof_file: file \}/);
+  assert.match(appJs, /function setDepositFormBusy\(form, busy\)/);
+  assert.match(appJs, /setDepositFormBusy\(form, true\)/);
+  assert.match(appJs, /finally \{\s*setDepositFormBusy\(form, false\)/);
   assert.doesNotMatch(appJs, /proof_path:\s*''/);
   assert.doesNotMatch(appJs, /proof_path:\s*""/);
   assert.match(appJs, /if \(!String\(proofPath \|\| ''\)\.trim\(\)\) throw/);
@@ -279,4 +282,99 @@ test('capture 핸들러와 네이티브 핸들러가 한 입금에 submit_deposi
   const missingSubmits = missing.harness.financeCalls.filter((row) => row.action === 'submit_deposit');
   assert.equal(missing.nativeDepositHits, 0);
   assert.equal(missingSubmits.length, 0, '증빙 없으면 submit_deposit 전에 중단');
+});
+
+test('overlay 없이 네이티브 sendDepositRequest 연속 2회는 submit_deposit 1회만', async () => {
+  const proof = new File([Uint8Array.from([1, 2, 3, 4])], 'proof.jpg', { type: 'image/jpeg' });
+  const financeCalls = [];
+  let uploadDelayMs = 80;
+
+  class HTMLFormElement extends EventTarget {
+    constructor() {
+      super();
+      this.dataset = {};
+    }
+
+    querySelector(sel) {
+      if (sel === '#depositProofFile') return this.proof || null;
+      if (sel === 'button[type="submit"]') return this.submitButton || null;
+      return null;
+    }
+  }
+
+  const form = new HTMLFormElement();
+  form.id = 'depositForm';
+  form.proof = { id: 'depositProofFile', files: [proof] };
+  form.submitButton = { disabled: false, textContent: '입금 확인 요청', dataset: {} };
+
+  function setDepositFormBusy(target, busy) {
+    if (!target) return;
+    target.dataset.phase4Busy = busy ? '1' : '0';
+    const button = target.querySelector('button[type="submit"]');
+    if (!button) return;
+    if (!button.dataset.phase4Label) button.dataset.phase4Label = button.textContent || '입금 확인 요청';
+    button.disabled = busy;
+    button.textContent = busy ? '증빙 확인 중…' : button.dataset.phase4Label;
+  }
+
+  async function uploadDepositProof() {
+    await new Promise((resolve) => setTimeout(resolve, uploadDelayMs));
+    return 'deposit-proof/user/uuid-proof.jpg';
+  }
+
+  async function sendDepositRequest(values, target) {
+    if (target?.dataset?.phase4Busy === '1') return;
+    setDepositFormBusy(target, true);
+    try {
+      const proofPath = await uploadDepositProof();
+      if (!String(proofPath || '').trim()) throw new Error('입금 증빙을 확인해 주세요.');
+      financeCalls.push({
+        action: 'submit_deposit',
+        proof_path: proofPath,
+        amount: Number(values.amount)
+      });
+    } finally {
+      setDepositFormBusy(target, false);
+    }
+  }
+
+  const values = { amount: 50000, currency: 'KRW', destination_id: 'dest-1' };
+  await Promise.all([
+    sendDepositRequest(values, form),
+    sendDepositRequest(values, form)
+  ]);
+
+  const submits = financeCalls.filter((row) => row.action === 'submit_deposit');
+  assert.equal(submits.length, 1, 'overlay 없이 연속 2회여도 submit_deposit은 1회');
+  assert.equal(form.dataset.phase4Busy, '0', '처리 후 phase4Busy는 해제');
+  assert.equal(form.submitButton.disabled, false, '처리 후 submit 버튼은 다시 활성');
+  assert.equal(form.submitButton.textContent, '입금 확인 요청');
+  assert.equal(submits[0].proof_path, 'deposit-proof/user/uuid-proof.jpg');
+
+  uploadDelayMs = 0;
+  financeCalls.length = 0;
+  form.dataset.phase4Busy = '0';
+  form.submitButton.disabled = false;
+  form.submitButton.textContent = '입금 확인 요청';
+
+  async function uploadDepositProofFail() {
+    throw new Error('업로드 실패');
+  }
+
+  async function sendDepositRequestFail(values, target) {
+    if (target?.dataset?.phase4Busy === '1') return;
+    setDepositFormBusy(target, true);
+    try {
+      await uploadDepositProofFail();
+    } catch (_) {
+      // app.js sendDepositRequest와 같이 토스트만 보여 주고 throw하지 않는다.
+    } finally {
+      setDepositFormBusy(target, false);
+    }
+  }
+
+  await sendDepositRequestFail(values, form);
+  assert.equal(financeCalls.filter((row) => row.action === 'submit_deposit').length, 0, '실패 시 submit_deposit 없음');
+  assert.equal(form.dataset.phase4Busy, '0', '실패 후 phase4Busy는 해제');
+  assert.equal(form.submitButton.disabled, false, '실패 후 submit 버튼은 다시 활성');
 });
