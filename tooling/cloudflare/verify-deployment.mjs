@@ -8,8 +8,10 @@ const root = process.cwd();
 const sha = process.env.GITHUB_SHA || process.env.PUTDUK_DEPLOY_SHA || "";
 const memberUrl = String(process.env.MEMBER_URL || process.env.MEMBER_DOMAIN || "https://app.hiptk.app").replace(/\/$/, "");
 const opsUrl = String(process.env.OPS_URL || process.env.OPS_DOMAIN || "https://ops.hiptk.app").replace(/\/$/, "");
+const pagesUrl = String(process.env.PAGES_PROJECT_URL || process.env.PAGES_URL || "https://putduk-git-preview.pages.dev").replace(/\/$/, "");
 const member = memberUrl.startsWith("http") ? memberUrl : `https://${memberUrl}`;
 const ops = opsUrl.startsWith("http") ? opsUrl : `https://${opsUrl}`;
+const pages = pagesUrl.startsWith("http") ? pagesUrl : `https://${pagesUrl}`;
 
 function distOk() {
   const index = join(root, "dist/index.html");
@@ -21,15 +23,59 @@ function distOk() {
   return [index, admin, css, js, manifest, sw].every((file) => existsSync(file));
 }
 
-async function inspect(url) {
-  const response = await fetch(url, { redirect: "follow" });
+function normalizeAssetRef(value) {
+  try {
+    const parsed = new URL(value, "https://putduk.invalid/");
+    return `${parsed.pathname.replace(/^\/+/, "")}${parsed.search}`;
+  } catch {
+    return String(value || "").replace(/^\.\//, "").replace(/^\/+/, "");
+  }
+}
+
+function htmlFingerprint(body) {
+  const scripts = [...String(body || "").matchAll(/<script\b[^>]*\bsrc=["']([^"']+)["'][^>]*>/gi)]
+    .map((match) => normalizeAssetRef(match[1]));
+  const styles = [...String(body || "").matchAll(/<link\b[^>]*>/gi)]
+    .map((match) => match[0])
+    .filter((tag) => /\brel=["'][^"']*stylesheet[^"']*["']/i.test(tag))
+    .map((tag) => tag.match(/\bhref=["']([^"']+)["']/i)?.[1] || "")
+    .filter(Boolean)
+    .map(normalizeAssetRef);
+  const refs = [...new Set([...scripts, ...styles])].sort();
+  return { scripts, styles, refs };
+}
+
+function fingerprintMatch(actual, expected) {
+  const actualSet = new Set(actual.refs);
+  const missing = expected.refs.filter((ref) => !actualSet.has(ref));
+  return { matches: missing.length === 0, missing };
+}
+
+async function inspect(url, expectedBody = "") {
+  const probe = new URL(url);
+  probe.searchParams.set("putduk_verify", sha || String(Date.now()));
+  const response = await fetch(probe, {
+    redirect: "follow",
+    cache: "no-store",
+    headers: { "cache-control": "no-cache" }
+  });
   const contentType = response.headers.get("content-type") || "";
   const body = await response.text();
+  const fingerprint = htmlFingerprint(body);
+  const expectedFingerprint = htmlFingerprint(expectedBody);
+  const match = fingerprintMatch(fingerprint, expectedFingerprint);
   return {
     status: response.status,
     html: contentType.includes("text/html") && body.includes("퍼뜩"),
-    contentType
+    contentType,
+    fingerprint,
+    matchesExpected: match.matches,
+    missingRefs: match.missing
   };
+}
+
+function sameFingerprint(left, right) {
+  return JSON.stringify(left.refs) === JSON.stringify(right.refs);
 }
 
 function leakScan() {
@@ -60,15 +106,36 @@ if (!distOk()) {
 }
 console.log("Build output: PASS");
 
-const memberResult = await inspect(`${member}/`);
-const opsResult = await inspect(`${ops}/admin/`);
-console.log(`Member site: domain=${member} HTTP=${memberResult.status} html=${memberResult.html}`);
-console.log(`Ops site: domain=${ops} HTTP=${opsResult.status} html=${opsResult.html}`);
+const memberExpected = readFileSync(join(root, "dist/index.html"), "utf8");
+const opsExpected = readFileSync(join(root, "dist/admin/index.html"), "utf8");
+const pagesResult = await inspect(`${pages}/`, memberExpected);
+const memberResult = await inspect(`${member}/`, memberExpected);
+const opsResult = await inspect(`${ops}/admin/`, opsExpected);
+const memberMatchesPages = sameFingerprint(memberResult.fingerprint, pagesResult.fingerprint);
+
+console.log(`Pages project: domain=${pages} HTTP=${pagesResult.status} html=${pagesResult.html} fingerprint=${pagesResult.matchesExpected ? "PASS" : "FAIL"}`);
+console.log(`Member site: domain=${member} HTTP=${memberResult.status} html=${memberResult.html} fingerprint=${memberResult.matchesExpected ? "PASS" : "FAIL"}`);
+console.log(`Member vs Pages fingerprint: ${memberMatchesPages ? "PASS" : "FAIL"}`);
+console.log(`Ops site: domain=${ops} HTTP=${opsResult.status} html=${opsResult.html} fingerprint=${opsResult.matchesExpected ? "PASS" : "FAIL"}`);
+if (!pagesResult.matchesExpected) console.error(`Pages missing refs: ${pagesResult.missingRefs.join(", ")}`);
+if (!memberResult.matchesExpected) console.error(`Member missing refs: ${memberResult.missingRefs.join(", ")}`);
+if (!memberMatchesPages) console.error("Split routing detected: member custom domain HTML differs from canonical Pages project HTML.");
+if (!opsResult.matchesExpected) console.error(`Ops missing refs: ${opsResult.missingRefs.join(", ")}`);
 if (sha) console.log(`commit_sha: ${sha}`);
 
 const leak = leakScan();
 console.log(`Secret leak scan: ${leak ? "PASS" : "FAIL"}`);
 
-const ok = memberResult.status === 200 && memberResult.html && opsResult.status === 200 && opsResult.html && leak;
+const ok = pagesResult.status === 200
+  && pagesResult.html
+  && pagesResult.matchesExpected
+  && memberResult.status === 200
+  && memberResult.html
+  && memberResult.matchesExpected
+  && memberMatchesPages
+  && opsResult.status === 200
+  && opsResult.html
+  && opsResult.matchesExpected
+  && leak;
 if (!ok) process.exit(1);
 console.log("Cloudflare verify: PASS");
