@@ -26,6 +26,16 @@ test('정적 셸 경로가 회원·운영자·PWA 파일을 제공한다', async
   assert.equal(admin.status, 200);
   assert.match(admin.text, /data-mode="admin"/);
   assert.match(admin.text, /퍼뜩/);
+  assert.match(admin.text, /phase3-admin-wiring\.js/);
+
+  const phase31 = await fetchText(`${started.url}/admin/phase3-admin-wiring.js`);
+  assert.equal(phase31.status, 200);
+  assert.match(phase31.text, /list_members/);
+  assert.match(phase31.text, /get_member/);
+  assert.match(phase31.text, /member_activity/);
+  assert.match(phase31.text, /data-phase31-member-page/);
+  assert.match(phase31.text, /수동 배정 내역/);
+  assert.match(phase31.text, /감사 로그/);
 
   const manifest = await fetchText(`${started.url}/manifest.webmanifest`);
   assert.equal(manifest.status, 200);
@@ -54,10 +64,15 @@ test('운영자 포트 루트는 회원 화면이 아니라 운영자 셸이다'
   assert.match(root.text, /data-mode="admin"/);
   assert.doesNotMatch(root.text, /data-mode="member"/);
   assert.match(root.text, /운영자 관리센터/);
+  assert.match(root.text, /phase3-admin-wiring\.js/);
 
   const indexHtml = await fetchText(`${started.url}/index.html`);
   assert.match(indexHtml.text, /data-mode="admin"/);
   assert.doesNotMatch(indexHtml.text, /data-mode="member"/);
+
+  const phase31 = await fetchText(`${started.url}/admin/phase3-admin-wiring.js`);
+  assert.equal(phase31.status, 200);
+  assert.match(phase31.text, /phase31MemberPage/);
 
   const assets = await fetchText(`${started.url}/assets/origin-split.js`);
   assert.equal(assets.status, 200);
