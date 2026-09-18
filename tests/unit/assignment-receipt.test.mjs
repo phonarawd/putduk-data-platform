@@ -46,7 +46,7 @@ test('출근 확인·근무 전표는 애니메이션 없이 배정카드·영�
 test('운영자 잔액 조정은 칸을 골라 서버에 보낸다', async () => {
   const { appJs } = await readLaunchFiles();
   const adminOps = await readRepo('supabase', 'functions', '_shared', 'admin-ops.ts');
-  const migration = await readRepo('supabase', 'migrations', '20260918200000_putduk_session_ip_and_adjust_bucket.sql');
+  const migration = await readRepo('supabase', 'migrations', '20260918111416_putduk_session_ip_and_adjust_bucket.sql');
   assert.match(appJs, /name="bucket"/);
   assert.match(appJs, /reason: values\.reason,\s*bucket/);
   assert.match(adminOps, /normalizeAdjustBucket/);

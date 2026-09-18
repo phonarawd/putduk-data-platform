@@ -150,6 +150,7 @@
 
   let activeStorageKey = storageKey;
   let state = loadState();
+  if (isAdmin) scrubLegacyAdminFinanceStorage();
   let runFrame = null;
   let chartInstance = null;
   let chartLoading = null;
@@ -174,10 +175,45 @@
     return next;
   }
 
+  function sanitizeAdminFinanceForStorage(finance) {
+    if (!finance || typeof finance !== 'object') return finance;
+    return { ...finance, destinations: [] };
+  }
+
+  function scrubPersistedStatePayload(payload) {
+    if (!payload || typeof payload !== 'object') return payload;
+    delete payload.adminKycPreview;
+    delete payload.adminWithdrawalReveal;
+    if (payload.adminFinance) payload.adminFinance = sanitizeAdminFinanceForStorage(payload.adminFinance);
+    return payload;
+  }
+
+  function scrubLegacyAdminFinanceStorage() {
+    if (!isAdmin || typeof localStorage === 'undefined') return;
+    try {
+      for (let i = 0; i < localStorage.length; i += 1) {
+        const key = localStorage.key(i);
+        if (!key || !key.startsWith(storageKey)) continue;
+        const raw = localStorage.getItem(key);
+        if (!raw) continue;
+        let parsed;
+        try { parsed = JSON.parse(raw); } catch (_) { continue; }
+        const scrubbed = scrubPersistedStatePayload(parsed);
+        const nextRaw = JSON.stringify(scrubbed);
+        if (nextRaw !== raw) localStorage.setItem(key, nextRaw);
+      }
+    } catch (_) {}
+  }
+
   function loadState(key = activeStorageKey) {
     try {
-      const stored = JSON.parse(localStorage.getItem(key) || 'null');
-      if (!stored) return freshState(key !== storageKey);
+      const raw = localStorage.getItem(key);
+      if (!raw) return freshState(key !== storageKey);
+      const stored = scrubPersistedStatePayload(JSON.parse(raw));
+      const scrubbedRaw = JSON.stringify(stored);
+      if (scrubbedRaw !== raw) {
+        try { localStorage.setItem(key, scrubbedRaw); } catch (_) {}
+      }
       return { ...freshState(key !== storageKey), ...stored, wallet: { ...freshState(key !== storageKey).wallet, ...(stored.wallet || {}) } };
     } catch (_) {
       return freshState(key !== storageKey);
@@ -188,6 +224,7 @@
     try {
       const { _workLockCue, _playedMotionCue, _motionCanvas, toast, modal, modalPayload, adminMemberDetail, adminKycPreview, adminWithdrawalReveal, depositJump, adminMotion, adminMotionError, crewPulse, depositReveal, depositRevealExpiresAt, depositRevealToken, ...rest } = state;
       const safe = { ...rest, run: state.run ? { ...state.run, overlayOpen: false } : null, toast: null, modal: null, modalPayload: null, adminMemberDetail: null, depositReveal: null, depositRevealExpiresAt: null, depositRevealToken: null };
+      if (safe.adminFinance) safe.adminFinance = sanitizeAdminFinanceForStorage(safe.adminFinance);
       localStorage.setItem(activeStorageKey, JSON.stringify(safe));
     } catch (_) {}
   }

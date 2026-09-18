@@ -267,7 +267,7 @@ test('배포 헤더에 CSP가 있고 자동 정산 플래그는 꺼져 있다', 
   assert.match(memberHtml, /enableFinanceApi:\s*false/);
   assert.doesNotMatch(memberHtml, /enableFinanceApi:\s*true/);
   assert.match(adminHtml, /enableFinanceApi:\s*false/);
-  assert.equal(await existsRepo('supabase', 'migrations', '20260918172000_putduk_fk_indexes_ops_security.sql'), true);
+  assert.equal(await existsRepo('supabase', 'migrations', '20260918073245_putduk_fk_indexes_ops_security.sql'), true);
 });
 
 test('회원·운영 셸은 자체 스크립트와 캐시 우선 서비스워커를 쓴다', async () => {

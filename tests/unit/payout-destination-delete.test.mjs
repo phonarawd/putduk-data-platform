@@ -5,7 +5,7 @@ import { readRepo } from '../helpers/repo.mjs';
 test('운영자 입금 안내는 숨김과 별개로 실제로 지울 수 있다', async () => {
   const adminJs = await readRepo('dist', 'admin', 'admin.js');
   const adminOps = await readRepo('supabase', 'functions', '_shared', 'admin-ops.ts');
-  const deleteSql = await readRepo('supabase', 'migrations', '20260918190000_putduk_payout_destination_delete.sql');
+  const deleteSql = await readRepo('supabase', 'migrations', '20260918075042_putduk_payout_destination_delete.sql');
   const listSql = await readRepo('supabase', 'migrations', '20260918080000_putduk_deposit_pin_gate.sql');
   const schemaSql = await readRepo('supabase', 'migrations', '20260916233653_putduk_ops_finance_schema.sql');
   const pinSql = await readRepo('supabase', 'migrations', '20260918090000_putduk_deposit_pin_rpc.sql');
