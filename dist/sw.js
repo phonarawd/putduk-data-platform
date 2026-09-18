@@ -1,16 +1,16 @@
-const CACHE_NAME = 'putduk-shell-v19';
+const CACHE_NAME = 'putduk-shell-v20';
 const SHELL = [
   '/',
   '/admin/',
   '/assets/app.css?v=20260918-ui3',
-  '/assets/app.js?v=20260918-ui3',
+  '/assets/app.js?v=20260919-p4d1',
   '/assets/overlay-surface.css?v=20260918-flash2',
   '/assets/overlay-surface.js?v=20260918-ui3',
   '/assets/origin-split.js?v=20260918-ui3',
   '/assets/ui-icons.js?v=20260918-ui3',
   '/assets/motion-runtime.js?v=20260918-ux1',
   '/assets/channel-talk.js?v=20260918-ch1',
-  '/assets/phase4-finance-wiring.js?v=20260919-p4r1',
+  '/assets/phase4-finance-wiring.js?v=20260919-p4r2',
   '/assets/brand-runtime.js?v=20260919-logo1',
   '/assets/vendor/supabase.min.js?v=20260918-ui3',
   '/manifest.webmanifest',

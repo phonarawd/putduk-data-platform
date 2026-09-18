@@ -3485,7 +3485,7 @@
           ? '테더 주소는 PIN 뒤에만 보여요. 금액은 직접 적어요.'
           : '계좌는 PIN 뒤에만 보여요. 금액은 직접 적어요.';
       const amountForm = isDepositRevealed()
-        ? `<form id="depositForm"><div class="notice"><span style="color:var(--emerald)">${icon('wallet',17)}</span><div>보낸 뒤 운영자가 확인해요. 화면에서 잔액을 올리지 않아요.</div></div><div class="form-grid" style="margin-top:16px"><div class="field"><label for="depositAmount">입금 금액</label><input id="depositAmount" name="amount" type="number" min="1" step="1" required placeholder="보낼 금액을 직접 입력" value="${state.depositPresetAmount || ''}" /></div><div class="field"><label for="depositCurrency">통화</label><select id="depositCurrency" name="currency"><option value="KRW" ${currency === 'KRW' ? 'selected' : ''}>원화</option><option value="USDT" ${currency === 'USDT' ? 'selected' : ''}>USDT</option></select></div></div><input type="hidden" name="destination_id" value="${esc(filterDepositItems(state.depositReveal)?.[0]?.id || state.depositReveal?.[0]?.id || '')}" /><div class="modal-actions"><button class="secondary-button" type="button" data-action="close-modal">취소</button><button class="primary-button" type="submit">입금 확인 요청</button></div></form>`
+        ? `<form id="depositForm"><div class="notice"><span style="color:var(--emerald)">${icon('wallet',17)}</span><div>보낸 뒤 운영자가 확인해요. 화면에서 잔액을 올리지 않아요.</div></div><div class="form-grid" style="margin-top:16px"><div class="field"><label for="depositAmount">입금 금액</label><input id="depositAmount" name="amount" type="number" min="1000" step="1" required placeholder="보낼 금액을 직접 입력" value="${state.depositPresetAmount || ''}" /></div><div class="field"><label for="depositCurrency">통화</label><select id="depositCurrency" name="currency"><option value="KRW" ${currency === 'KRW' ? 'selected' : ''}>원화</option><option value="USDT" ${currency === 'USDT' ? 'selected' : ''}>USDT</option></select></div></div><input type="hidden" name="destination_id" value="${esc(filterDepositItems(state.depositReveal)?.[0]?.id || state.depositReveal?.[0]?.id || '')}" /><div class="field full"><label for="depositProofFile">입금 증빙</label><input id="depositProofFile" name="proof_file" type="file" accept="image/jpeg,image/png,image/webp,application/pdf" required /><small style="color:var(--muted)">이체내역·전송 화면을 JPG, PNG, WEBP, PDF로 올려 주세요. 최대 10MB예요.</small></div><div class="modal-actions"><button class="secondary-button" type="button" data-action="close-modal">취소</button><button class="primary-button" type="submit">입금 확인 요청</button></div></form>`
         : '';
       return `<div class="modal-backdrop" data-modal="info"><div class="modal"><div class="modal-head"><div><h2 class="modal-title-row">${icon('credit-card', 20)} ${method === 'usdt' ? 'USDT로 입금' : method === 'krw' ? '원화로 입금' : '입금하기'}</h2><p>${lead}</p></div><button class="icon-button" data-action="close-modal" aria-label="닫기">${icon('x',18)}</button></div><div class="modal-body">${renderDepositDestinations()}${amountForm}</div></div></div>`;
     }
@@ -5367,13 +5367,59 @@
     }
   }
 
-  async function sendDepositRequest(values) {
+  const DEPOSIT_PROOF_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'application/pdf']);
+  const DEPOSIT_PROOF_MAX_BYTES = 10 * 1024 * 1024;
+
+  function depositProofFileOf(values, form) {
+    if (values?.file instanceof File && values.file.size > 0) return values.file;
+    if (values?.proof_file instanceof File && values.proof_file.size > 0) return values.proof_file;
+    const picked = form?.querySelector?.('#depositProofFile')?.files?.[0];
+    return picked && picked.size > 0 ? picked : null;
+  }
+
+  function assertDepositProofFile(file) {
+    if (!file) throw new Error('입금 이체내역 또는 전송 증빙 파일을 올려 주세요.');
+    if (!DEPOSIT_PROOF_TYPES.has(String(file.type || '').toLowerCase())) {
+      throw new Error('입금 증빙은 JPG, PNG, WEBP, PDF만 올릴 수 있어요.');
+    }
+    if (!Number.isFinite(file.size) || file.size <= 0 || file.size > DEPOSIT_PROOF_MAX_BYTES) {
+      throw new Error('입금 증빙은 10MB 이하 파일만 올릴 수 있어요.');
+    }
+    return file;
+  }
+
+  async function uploadDepositProof(file) {
+    const ticket = await memberFinanceRequest('request_upload', {
+      purpose: 'deposit_proof',
+      file_name: file.name,
+      content_type: file.type
+    });
+    const upload = ticket?.upload;
+    if (!upload?.bucket || !upload?.path || !upload?.token) {
+      throw new Error('입금 증빙 업로드 주소를 만들지 못했어요.');
+    }
+    if (!supabaseClient) throw new Error('입금 서버 연결을 확인해 주세요.');
+    const result = await supabaseClient.storage
+      .from(upload.bucket)
+      .uploadToSignedUrl(upload.path, upload.token, file, {
+        contentType: file.type,
+        upsert: false
+      });
+    if (result.error) throw new Error('입금 증빙 파일을 올리지 못했어요.');
+    return upload.path;
+  }
+
+  async function sendDepositRequest(values, form) {
     if (!authState.session) { showToast('👋 로그인 후 입금 확인을 요청할 수 있어요.', 'info'); return; }
+    if (form?.dataset?.phase4Busy === '1') return;
     try {
+      const file = assertDepositProofFile(depositProofFileOf(values, form));
+      const proofPath = await uploadDepositProof(file);
+      if (!String(proofPath || '').trim()) throw new Error('입금 증빙을 확인해 주세요.');
       await memberFinanceRequest('submit_deposit', {
         amount: Number(values.amount),
         currency: values.currency || 'KRW',
-        proof_path: '',
+        proof_path: proofPath,
         destination_id: values.destination_id || state.depositReveal?.[0]?.id || null,
         note: [values.bank, values.holder].filter(Boolean).join(' · ') || null
       });
@@ -5387,14 +5433,22 @@
 
   async function submitDepositForm(event) {
     event.preventDefault();
-    const values = formValues(event.target);
+    const form = event.target;
+    const values = formValues(form);
+    const file = depositProofFileOf(values, form);
+    try {
+      assertDepositProofFile(file);
+    } catch (error) {
+      showToast(error?.message || '입금 증빙을 확인해 주세요.', 'warning');
+      return;
+    }
     if (isHighJumpAmount(values.amount)) {
-      state.depositJump = values;
+      state.depositJump = { ...values, file, proof_file: file };
       state._playedMotionCue = null;
       openModal('deposit-jump');
       return;
     }
-    await sendDepositRequest(values);
+    await sendDepositRequest({ ...values, file }, form);
   }
 
   async function submitDepositJumpForm(event) {
@@ -5407,7 +5461,7 @@
       showToast('🙂 같은 금액을 다시 적거나, 아래를 밀어 확정해요.', 'info');
       return;
     }
-    await sendDepositRequest(jump);
+    await sendDepositRequest(jump, event.target);
   }
 
   async function submitWithdrawForm(event) {

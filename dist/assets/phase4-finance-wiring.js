@@ -148,11 +148,15 @@
 
   function augmentDepositForm(form) {
     if (!form || form.dataset.phase4FinanceWired === '1') return;
-    form.dataset.phase4FinanceWired = '1';
     const amount = form.querySelector('#depositAmount');
     if (amount) amount.min = '1000';
+    if (form.querySelector('#depositProofFile')) {
+      form.dataset.phase4FinanceWired = '1';
+      return;
+    }
     const actions = form.querySelector('.modal-actions');
     if (!actions) return;
+    form.dataset.phase4FinanceWired = '1';
     const field = document.createElement('div');
     field.className = 'field full';
     field.innerHTML = `<label for="depositProofFile">입금 증빙</label>
@@ -193,13 +197,9 @@
     }
 
     if (form.id === 'depositJumpForm') {
+      if (!highPending) return;
       event.preventDefault();
       event.stopImmediatePropagation();
-      if (!highPending) {
-        toast('입금 증빙을 다시 선택해 주세요.', 'warning');
-        document.querySelector('[data-action="back-deposit"]')?.click();
-        return;
-      }
       const typed = String(document.getElementById('depositJumpRepeat')?.value || '').replace(/\D/g, '');
       const slid = Number(document.getElementById('depositJumpSlide')?.value || 0) >= 100;
       if (typed !== String(highPending.amount) && !slid) {
