@@ -33,7 +33,7 @@ test('입금은 원화·USDT를 먼저 고른다', async () => {
   const { appJs } = await readLaunchFiles();
   assert.match(appJs, /data-deposit-method="krw"/);
   assert.match(appJs, /data-deposit-method="usdt"/);
-  assert.match(appJs, /depositMethod/);
+  assert.match(appJs, /depositMethod \|\| ''/);
 });
 
 test('관리자 입출금은 다섯 탭이고 모바일 카드가 있다', async () => {

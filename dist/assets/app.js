@@ -2606,7 +2606,7 @@
     const next = nextMemberBand(current);
     const quota = dailyQuotaParts();
     const quotaLine = !quota.loaded ? '오늘 남은 업무는 확인 중이에요.' : quota.unlimited ? '오늘 남은 업무는 무제한이에요.' : `오늘 남은 업무 ${quota.value}${quota.suffix}`;
-    const nextLine = next ? `다음 등급은 ${next.label}이에요.` : '지금이 가장 높은 등급이에요.';
+    const nextLine = next ? `다음 등급은 ${next.label}${ieya(next.label)}.` : '지금이 가장 높은 등급이에요.';
     const cards = MEMBER_BANDS.map((band) => {
       const mine = band.label === current.label || band.raw === current.raw;
       const stats = (band.stats || []).map((stat) => `<div class="benefit-stat">${icon(stat.icon, 15)}<div><small>${esc(stat.label)}</small><strong>${esc(stat.value)}</strong></div></div>`).join('');
@@ -3383,7 +3383,7 @@
     if (key === 'modal:deposit') {
       const list = Array.isArray(state.depositDestinations) ? state.depositDestinations : [];
       const revealed = isDepositRevealed() ? (Array.isArray(state.depositReveal) ? state.depositReveal.length : 1) : 0;
-      return `${list.length}:${state.depositPinSet ? 1 : 0}:${revealed}:${state.depositDestinationsError ? 1 : 0}:${state.depositPresetAmount || ''}`;
+      return `${list.length}:${state.depositPinSet ? 1 : 0}:${revealed}:${state.depositDestinationsError ? 1 : 0}:${state.depositPresetAmount || ''}:${state.depositMethod || ''}`;
     }
     if (key.startsWith('review:')) return String(state.reviewWait?.status || '');
     if (key === 'modal:member-detail') return String(state.modalPayload?.id || state.adminMemberDetail?.id || '');
