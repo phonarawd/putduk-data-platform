@@ -209,6 +209,165 @@
     return BADGE_FROM[raw] || raw || '라인';
   }
 
+  function sortedTierLimits(rows) {
+    const map = new Map((Array.isArray(rows) ? rows : []).map((row) => [badgeTier(row.tier), row]));
+    return BADGE_TIERS.map((tier) => {
+      const row = map.get(tier) || {};
+      const limit = Number(row.daily_limit);
+      const unlimited = Number.isFinite(limit) ? limit <= 0 : false;
+      return {
+        tier,
+        daily_limit: Number.isFinite(limit) ? limit : null,
+        unlimited,
+        updated_at: row.updated_at || null
+      };
+    });
+  }
+
+  function quotaLimitText(value, unlimited) {
+    if (unlimited) return '무제한';
+    if (value == null || value === '') return '확인 중';
+    return `${Number(value)}회`;
+  }
+
+  async function loadTierDailyLimits({ silent = false } = {}) {
+    const api = core();
+    if (!api) return;
+    try {
+      const result = await api.adminRequest('list_tier_daily_limits', {});
+      const limits = sortedTierLimits(result.limits || result);
+      api.patchState({
+        adminTierDailyLimits: limits,
+        adminTierDailyLimitsError: null,
+        adminTierDailyLimitsContract: true
+      });
+    } catch (error) {
+      api.patchState({
+        adminTierDailyLimits: [],
+        adminTierDailyLimitsContract: !api.isUnsupportedAction?.(error),
+        adminTierDailyLimitsError: api.friendlyAdminError(error)
+      });
+    } finally {
+      if (!silent) api.render();
+    }
+  }
+
+  function readTierLimitForm() {
+    return BADGE_TIERS.map((tier) => {
+      const unlimited = document.getElementById(`tierUnlimited-${tier}`)?.checked === true;
+      const raw = document.getElementById(`tierLimit-${tier}`)?.value;
+      return { tier, unlimited, daily_limit: unlimited ? 0 : raw };
+    });
+  }
+
+  function bindTierLimitToggles() {
+    BADGE_TIERS.forEach((tier) => {
+      const box = document.getElementById(`tierUnlimited-${tier}`);
+      const input = document.getElementById(`tierLimit-${tier}`);
+      if (!box || !input || box.dataset.bound === '1') return;
+      box.dataset.bound = '1';
+      box.addEventListener('change', () => {
+        input.disabled = box.checked;
+        if (box.checked) input.value = '';
+      });
+    });
+  }
+
+  function bindMemberQuotaToggles() {
+    const form = document.getElementById('memberTaskQuotaForm');
+    if (!form || form.dataset.bound === '1') return;
+    form.dataset.bound = '1';
+    const useDefault = form.use_tier_default;
+    const unlimited = form.member_unlimited;
+    const input = form.daily_limit_override;
+    const sync = () => {
+      const defaults = useDefault?.checked === true;
+      if (unlimited) unlimited.disabled = defaults;
+      if (input) {
+        input.disabled = defaults || unlimited?.checked === true;
+        if (defaults || unlimited?.checked) input.value = input.value;
+      }
+    };
+    useDefault?.addEventListener('change', sync);
+    unlimited?.addEventListener('change', sync);
+    sync();
+  }
+
+  async function saveTierDailyLimits() {
+    const api = core();
+    if (!api) return;
+    const rows = readTierLimitForm();
+    for (const row of rows) {
+      if (!row.unlimited) {
+        const amount = Number(row.daily_limit);
+        if (!Number.isInteger(amount) || amount < 1) {
+          api.showToast('⚠️ 횟수는 1 이상 정수로 적어 주세요. 무제한은 체크만 켜 주세요.', 'warning');
+          return;
+        }
+      }
+    }
+    try {
+      let latest = null;
+      for (const row of rows) {
+        latest = await api.adminRequest('set_tier_daily_limit', {
+          tier: row.tier,
+          daily_limit: row.unlimited ? 0 : Number(row.daily_limit),
+          unlimited: row.unlimited
+        });
+      }
+      const limits = sortedTierLimits(latest?.limits || []);
+      api.patchState({
+        adminTierDailyLimits: limits,
+        adminTierDailyLimitsError: null,
+        adminTierDailyLimitsContract: true
+      });
+      api.showToast('✅ 등급별 하루 업무 한도를 저장했어요.', 'success');
+      api.render();
+    } catch (error) {
+      api.showToast(api.friendlyAdminError(error), api.isUnsupportedAction(error) ? 'warning' : 'error');
+    }
+  }
+
+  async function saveMemberTaskQuota(event) {
+    const api = core();
+    if (!api) return;
+    const form = event.target;
+    const userId = String(form.user_id?.value || '').trim();
+    const useDefault = form.use_tier_default?.checked === true;
+    const unlimited = form.member_unlimited?.checked === true;
+    const extra = Number(form.extra_task_starts?.value || 0);
+    const override = Number(form.daily_limit_override?.value);
+    if (!useDefault && !unlimited && (!Number.isInteger(override) || override < 1)) {
+      api.showToast('⚠️ 이 회원 한도는 1 이상 정수이거나 무제한이어야 해요.', 'warning');
+      return;
+    }
+    if (!Number.isInteger(extra) || extra < 0) {
+      api.showToast('⚠️ 추가 횟수는 0 이상 정수로 적어 주세요.', 'warning');
+      return;
+    }
+    try {
+      const result = await api.adminRequest('set_member_task_quota', {
+        user_id: userId,
+        use_tier_default: useDefault,
+        unlimited,
+        daily_limit_override: useDefault ? null : (unlimited ? 0 : override),
+        extra_task_starts: extra
+      });
+      const quota = result.quota?.quota || result.quota || null;
+      const member = {
+        ...(api.getState().modalPayload || api.getState().adminMemberDetail || {}),
+        daily_task_quota: quota,
+        daily_task_limit_override: useDefault ? null : (unlimited ? 0 : override),
+        extra_task_starts: extra
+      };
+      api.patchState({ modalPayload: member, adminMemberDetail: member });
+      api.showToast('✅ 이 회원의 하루 한도 예외를 저장했어요.', 'success');
+      api.render();
+    } catch (error) {
+      api.showToast(api.friendlyAdminError(error), api.isUnsupportedAction(error) ? 'warning' : 'error');
+    }
+  }
+
   function memberStatusLabel(status) {
     return ({ active: '활동 중', pending: '대기', blocked: '차단', suspended: '정지' })[status] || '확인 중';
   }
@@ -902,7 +1061,16 @@
     const contractNote = state.adminCampaignsContract === false
       ? `<p class="admin-hint">지원금 설정을 아직 서버에 연결하지 못했어요. 저장 버튼을 눌러도 반영되지 않아요.</p>`
       : '';
-    return `<div class="section-heading" style="margin-top:0"><div><h1 class="page-title">운영 설정</h1><p class="page-copy">처음 가입한 회원에게 주는 지원금과, 화면에 보여줄 안내 문구를 저장해요.</p></div><button class="primary-button" data-action="save-settings">설정 저장</button></div>${contractNote}<div class="admin-card"><div class="admin-card-head"><div><h3>신규 회원 업무 지원금</h3><p>기존 지급 기록은 변경하지 않고, 앞으로 가입하는 회원에게만 적용됩니다.</p></div><span class="pill ${campaign.enabled === false ? 'wait' : 'ok'}">${campaign.enabled === false ? '중지' : '사용 중'}</span></div><div class="form-grid"><div class="field"><label>기본 지급 금액</label><input id="supportGrantInput" type="number" value="${Number(campaign.amount ?? state.supportGrant)}" min="0" step="1000" /></div><div class="field"><label>지급 시점</label><select id="supportTriggerInput"><option value="signup" ${campaign.trigger_type === 'signup' ? 'selected' : ''}>가입 완료 후</option><option value="email_verified" ${campaign.trigger_type === 'email_verified' ? 'selected' : ''}>이메일 인증 후</option><option value="phone_verified" ${campaign.trigger_type === 'phone_verified' ? 'selected' : ''}>휴대폰 인증 후</option><option value="kyc_approved" ${campaign.trigger_type === 'kyc_approved' ? 'selected' : ''}>본인확인 완료 후</option></select></div><div class="field"><label>사용 범위</label><select id="supportScopeInput"><option value="work_only" ${campaign.usage_scope === 'work_only' ? 'selected' : ''}>업무 전용</option><option value="withdrawable" ${campaign.usage_scope === 'withdrawable' ? 'selected' : ''}>출금 가능</option></select></div><div class="field"><label>유효기간(일)</label><input id="supportExpireInput" type="number" min="0" value="${Number(campaign.expires_in_days || 0)}" /></div><div class="field"><label>캠페인 상태</label><select id="supportEnabledInput"><option value="true" ${campaign.enabled !== false ? 'selected' : ''}>활성화</option><option value="false" ${campaign.enabled === false ? 'selected' : ''}>중지</option></select></div><div class="field full"><label>회원에게 보여줄 안내</label><textarea id="supportCopyInput" rows="3">${esc(copy)}</textarea></div></div></div>`;
+    const limits = sortedTierLimits(state.adminTierDailyLimits);
+    const limitNote = state.adminTierDailyLimitsContract === false
+      ? `<p class="admin-hint">등급별 하루 한도를 서버에서 아직 불러오지 못했어요. 저장해도 반영되지 않아요.</p>`
+      : (state.adminTierDailyLimitsError ? `<p class="admin-hint">${esc(state.adminTierDailyLimitsError)}</p>` : '');
+    const limitRows = limits.map((row) => {
+      const unlimited = row.unlimited === true;
+      const value = unlimited || row.daily_limit == null ? '' : String(row.daily_limit);
+      return `<div class="field"><label for="tierLimit-${esc(row.tier)}">${esc(row.tier)}</label><input id="tierLimit-${esc(row.tier)}" type="number" min="1" max="365" step="1" inputmode="numeric" ${unlimited ? 'disabled' : ''} value="${esc(value)}" placeholder="${unlimited ? '무제한' : '서버 값'}" /><label class="check-row" style="margin-top:8px"><input id="tierUnlimited-${esc(row.tier)}" type="checkbox" ${unlimited ? 'checked' : ''} /> <span>무제한</span></label></div>`;
+    }).join('');
+    return `<div class="section-heading" style="margin-top:0"><div><h1 class="page-title">운영 설정</h1><p class="page-copy">처음 가입한 회원에게 주는 지원금과, 화면에 보여줄 안내 문구를 저장해요.</p></div><button class="primary-button" data-action="save-settings">설정 저장</button></div>${contractNote}<div class="admin-card"><div class="admin-card-head"><div><h3>신규 회원 업무 지원금</h3><p>기존 지급 기록은 변경하지 않고, 앞으로 가입하는 회원에게만 적용됩니다.</p></div><span class="pill ${campaign.enabled === false ? 'wait' : 'ok'}">${campaign.enabled === false ? '중지' : '사용 중'}</span></div><div class="form-grid"><div class="field"><label>기본 지급 금액</label><input id="supportGrantInput" type="number" value="${Number(campaign.amount ?? state.supportGrant)}" min="0" step="1000" /></div><div class="field"><label>지급 시점</label><select id="supportTriggerInput"><option value="signup" ${campaign.trigger_type === 'signup' ? 'selected' : ''}>가입 완료 후</option><option value="email_verified" ${campaign.trigger_type === 'email_verified' ? 'selected' : ''}>이메일 인증 후</option><option value="phone_verified" ${campaign.trigger_type === 'phone_verified' ? 'selected' : ''}>휴대폰 인증 후</option><option value="kyc_approved" ${campaign.trigger_type === 'kyc_approved' ? 'selected' : ''}>본인확인 완료 후</option></select></div><div class="field"><label>사용 범위</label><select id="supportScopeInput"><option value="work_only" ${campaign.usage_scope === 'work_only' ? 'selected' : ''}>업무 전용</option><option value="withdrawable" ${campaign.usage_scope === 'withdrawable' ? 'selected' : ''}>출금 가능</option></select></div><div class="field"><label>유효기간(일)</label><input id="supportExpireInput" type="number" min="0" value="${Number(campaign.expires_in_days || 0)}" /></div><div class="field"><label>캠페인 상태</label><select id="supportEnabledInput"><option value="true" ${campaign.enabled !== false ? 'selected' : ''}>활성화</option><option value="false" ${campaign.enabled === false ? 'selected' : ''}>중지</option></select></div><div class="field full"><label>회원에게 보여줄 안내</label><textarea id="supportCopyInput" rows="3">${esc(copy)}</textarea></div></div></div><div class="admin-card" style="margin-top:18px"><div class="admin-card-head"><div><h3>등급별 하루 업무 한도</h3><p>서버에 저장된 횟수를 보여주고, 저장하면 회원 화면과 출근 제한이 같이 바뀌어요. 숫자는 이 화면에 고정되어 있지 않아요.</p></div><button class="small-button primary" type="button" data-action="save-tier-daily-limits">한도 저장</button></div>${limitNote}<form id="tierDailyLimitForm" class="form-grid" style="margin-top:12px">${limitRows}</form></div>`;
   }
 
   function historyRows(items, emptyText, renderRow) {
@@ -963,6 +1131,14 @@
       '접속 주소': displayText(priv.last_login_ip),
       '본인확인': kycStatusLabel(profile.kyc_status),
       '추천 수': String(Array.isArray(pack.referrals) ? pack.referrals.length : Number(pack.referral_count || 0)),
+      '오늘 작업(사용/한도)': memberQuotaText(pack.daily_task_quota),
+      '등급 기본 한도': quotaLimitText(pack.daily_task_quota?.tier_limit, Number(pack.daily_task_quota?.tier_limit || 0) <= 0 && pack.daily_task_quota != null),
+      '오늘 사용': pack.daily_task_quota ? String(Number(pack.daily_task_quota.used_today || 0)) : '확인 중',
+      '오늘 남은 횟수': pack.daily_task_quota?.unlimited ? '무제한' : (pack.daily_task_quota ? String(Number(pack.daily_task_quota.remaining_today || 0)) : '확인 중'),
+      '회원별 예외': pack.daily_task_limit_override == null && pack.profile?.daily_task_limit_override == null
+        ? '없음(등급 기본)'
+        : quotaLimitText(pack.daily_task_limit_override ?? pack.profile?.daily_task_limit_override, Number(pack.daily_task_limit_override ?? pack.profile?.daily_task_limit_override) === 0),
+      '추가 횟수': String(Number(pack.extra_task_starts ?? pack.profile?.extra_task_starts ?? 0)),
       '출금 가능': money(wallet.available ?? bucket('available').available_amount),
       '업무 진행': money(wallet.work ?? bucket('work_balance').available_amount),
       '잠금 금액': money(wallet.work_held ?? bucket('work_balance').held_amount),
@@ -1039,7 +1215,14 @@
     const piiNote = pack && pack.pii_access === false
       ? `<div class="notice" style="margin-bottom:12px"><span style="color:var(--gold)">${icon('shield-alert', 17)}</span><div>전체 개인정보는 최고 운영자만 볼 수 있어요.</div></div>`
       : '';
-    return `<div class="modal-backdrop" data-modal="member-detail"><div class="modal member-detail-modal"><div class="modal-head"><div><h2>회원 자세히</h2><p>${esc(member.public_id || '사원번호 확인 중')}</p></div><button class="icon-button" data-action="close-modal">${icon('x', 18)}</button></div><div class="modal-body">${piiNote}<div class="detail-list"><div><span>이름</span><strong>${esc(displayText(member.display_name))}</strong></div><div><span>이메일</span><strong>${esc(displayText(member.email))}</strong></div><div><span>휴대폰</span><strong>${esc(displayText(member.phone || member.phone_e164))}</strong></div><div><span>사원증</span><strong>${esc(badgeTier(member.member_tier))}</strong></div><div><span>상태</span><strong>${esc(memberStatusLabel(member.status || 'pending'))}</strong></div><div><span>가입일</span><strong>${esc(displayTime(member.created_at))}</strong></div><div><span>최근 접속</span><strong>${esc(displayTime(member.last_login_at))}</strong></div><div><span>접속 주소</span><strong>${esc(displayText(member.last_login_ip))}</strong></div><div><span>본인확인</span><strong>${esc(kycStatusLabel(member.kyc_status))}</strong></div><div><span>추천 수</span><strong>${Number(member.referral_count || 0)}</strong></div><div><span>오늘 작업(사용/한도)</span><strong>${esc(memberQuotaText(member.daily_task_quota))}</strong></div><div><span>지원금</span><strong>${money(wallet.support)}</strong></div><div><span>출금 가능</span><strong>${money(wallet.available)}</strong></div><div><span>업무 진행</span><strong>${money(wallet.work)}</strong></div><div><span>잠금 금액</span><strong>${money(wallet.held)}</strong></div></div>${memberHistoriesHtml(pack)}<div class="action-row" style="margin-top:16px"><button class="small-button primary" data-action="member-credit" data-member-id="${esc(id)}">잔액 입금</button><button class="small-button" data-action="member-debit" data-member-id="${esc(id)}">잔액 차감</button><button class="small-button" data-action="member-block" data-member-id="${esc(id)}" data-member-status="blocked">차단</button><button class="small-button" data-action="member-block" data-member-id="${esc(id)}" data-member-status="active">차단 해제</button><button class="small-button" data-action="member-tier" data-member-id="${esc(id)}">등급 변경</button><button class="small-button" data-action="member-reset" data-member-id="${esc(id)}">비밀번호 재설정</button><button class="small-button primary" data-action="assign-task" data-member-id="${esc(id)}">업무 배정</button><button class="small-button" data-action="target-notice" data-member-id="${esc(id)}">알림</button></div></div></div></div>`;
+    const quota = member.daily_task_quota || pack.daily_task_quota || {};
+    const override = member.daily_task_limit_override ?? pack.daily_task_limit_override ?? pack.profile?.daily_task_limit_override ?? null;
+    const extra = Number(member.extra_task_starts ?? pack.extra_task_starts ?? pack.profile?.extra_task_starts ?? 0);
+    const useDefault = override == null;
+    const memberUnlimited = !useDefault && Number(override) === 0;
+    const overrideValue = useDefault || memberUnlimited ? '' : String(override);
+    const remainingText = quota.unlimited ? '무제한' : (quota.remaining_today == null ? '확인 중' : String(Number(quota.remaining_today)));
+    return `<div class="modal-backdrop" data-modal="member-detail"><div class="modal member-detail-modal"><div class="modal-head"><div><h2>회원 자세히</h2><p>${esc(member.public_id || '사원번호 확인 중')}</p></div><button class="icon-button" data-action="close-modal">${icon('x', 18)}</button></div><div class="modal-body">${piiNote}<div class="detail-list"><div><span>이름</span><strong>${esc(displayText(member.display_name))}</strong></div><div><span>이메일</span><strong>${esc(displayText(member.email))}</strong></div><div><span>휴대폰</span><strong>${esc(displayText(member.phone || member.phone_e164))}</strong></div><div><span>사원증</span><strong>${esc(badgeTier(member.member_tier))}</strong></div><div><span>상태</span><strong>${esc(memberStatusLabel(member.status || 'pending'))}</strong></div><div><span>가입일</span><strong>${esc(displayTime(member.created_at))}</strong></div><div><span>최근 접속</span><strong>${esc(displayTime(member.last_login_at))}</strong></div><div><span>접속 주소</span><strong>${esc(displayText(member.last_login_ip))}</strong></div><div><span>본인확인</span><strong>${esc(kycStatusLabel(member.kyc_status))}</strong></div><div><span>추천 수</span><strong>${Number(member.referral_count || 0)}</strong></div><div><span>오늘 작업(사용/한도)</span><strong>${esc(memberQuotaText(quota))}</strong></div><div><span>등급 기본 한도</span><strong>${esc(quotaLimitText(quota.tier_limit, Number(quota.tier_limit || 0) <= 0 && quota.tier_limit != null))}</strong></div><div><span>오늘 사용</span><strong>${quota.used_today == null ? '확인 중' : Number(quota.used_today)}</strong></div><div><span>오늘 남은 횟수</span><strong>${esc(remainingText)}</strong></div><div><span>회원별 예외</span><strong>${esc(useDefault ? '없음(등급 기본)' : quotaLimitText(override, memberUnlimited))}</strong></div><div><span>추가 횟수</span><strong>${extra}</strong></div><div><span>지원금</span><strong>${money(wallet.support)}</strong></div><div><span>출금 가능</span><strong>${money(wallet.available)}</strong></div><div><span>업무 진행</span><strong>${money(wallet.work)}</strong></div><div><span>잠금 금액</span><strong>${money(wallet.held)}</strong></div></div><form id="memberTaskQuotaForm" class="admin-card" style="margin-top:16px"><input type="hidden" name="user_id" value="${esc(id)}" /><div class="admin-card-head"><div><h3>이 회원 하루 한도 예외</h3><p>비어 있으면 등급 기본값을 씁니다. 저장하면 서버 한도와 출근 제한이 같이 바뀌어요.</p></div></div><div class="form-grid"><label class="check-row field full"><input name="use_tier_default" type="checkbox" ${useDefault ? 'checked' : ''} /> <span>등급 기본 한도 쓰기</span></label><div class="field"><label>회원 한도</label><input name="daily_limit_override" type="number" min="1" max="365" step="1" ${useDefault || memberUnlimited ? 'disabled' : ''} value="${esc(overrideValue)}" /></div><label class="check-row field"><input name="member_unlimited" type="checkbox" ${memberUnlimited ? 'checked' : ''} ${useDefault ? 'disabled' : ''} /> <span>무제한</span></label><div class="field"><label>추가 횟수</label><input name="extra_task_starts" type="number" min="0" max="365" step="1" value="${extra}" /></div></div><div class="modal-actions"><button class="primary-button" type="submit">예외 저장</button></div></form>${memberHistoriesHtml(pack)}<div class="action-row" style="margin-top:16px"><button class="small-button primary" data-action="member-credit" data-member-id="${esc(id)}">잔액 입금</button><button class="small-button" data-action="member-debit" data-member-id="${esc(id)}">잔액 차감</button><button class="small-button" data-action="member-block" data-member-id="${esc(id)}" data-member-status="blocked">차단</button><button class="small-button" data-action="member-block" data-member-id="${esc(id)}" data-member-status="active">차단 해제</button><button class="small-button" data-action="member-tier" data-member-id="${esc(id)}">등급 변경</button><button class="small-button" data-action="member-reset" data-member-id="${esc(id)}">비밀번호 재설정</button><button class="small-button primary" data-action="assign-task" data-member-id="${esc(id)}">업무 배정</button><button class="small-button" data-action="target-notice" data-member-id="${esc(id)}">알림</button></div></div></div></div>`;
   }
 
   function renderMemberTier() {
@@ -1136,6 +1319,8 @@
       wrapCore();
       bindPreview();
       bindMotionSliders();
+      bindTierLimitToggles();
+      bindMemberQuotaToggles();
       scheduleHydrate();
       ensureMemberPack();
       const api = core();
@@ -1163,6 +1348,7 @@
           const result = await api.adminRequest('get_member_copy', {});
           api.patchState({ adminMemberCopy: result.copy || DEFAULT_MEMBER_COPY });
         } catch (_) {}
+        await loadTierDailyLimits({ silent: true });
       }
       if (page === 'notifications' || page === 'members') {
         if (typeof api.loadAdminMembers === 'function') await api.loadAdminMembers({ silent: true });
@@ -1184,6 +1370,10 @@
       }
       if (action === 'save-settings') {
         saveSettingsWithCopy();
+        return true;
+      }
+      if (action === 'save-tier-daily-limits') {
+        saveTierDailyLimits();
         return true;
       }
       if (action === 'withdraw-complete') {
@@ -1231,6 +1421,16 @@
       event.preventDefault();
       event.stopImmediatePropagation();
       resetMemberSecurityPin(event);
+    }
+    if (event.target?.id === 'tierDailyLimitForm') {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      saveTierDailyLimits();
+    }
+    if (event.target?.id === 'memberTaskQuotaForm') {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      saveMemberTaskQuota(event);
     }
   }, true);
 })();

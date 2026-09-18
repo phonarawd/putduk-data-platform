@@ -1,6 +1,7 @@
 // 입출금 전체 오픈은 화면 플래그만으로 열지 않는다. Edge도 같은 규칙을 본다.
 // KYC/PG 전에는 PUTDUK_ENABLE_FINANCE_API 가 true가 아니어야 한다.
-// 꺼진 상태의 예외: 체험 수당 3천 원 출금(운영 경로). 원금 출금·일반 입금은 막는다.
+// 꺼진 상태의 예외: 체험 근무로 확정된 수당 3천 원 출금 신청(운영 경로).
+// 지원금 1만 원 자체는 출금하지 않는다. 실제 송금은 운영자가 수동 처리한다.
 
 export const FINANCE_API_CLOSED = 'FINANCE_API_CLOSED';
 export const OPS_TRIAL_WITHDRAW_MAX = 3000;

@@ -10,7 +10,8 @@ import {
   isWithinKstDay,
   dailyQuotaSummary,
   dailyQuotaLabel,
-  demoteMemberTierOnce
+  demoteMemberTierOnce,
+  effectiveDailyCap
 } from '../../src/work/tier-daily-limit.mjs';
 import { readRepo, readLaunchFiles } from '../helpers/repo.mjs';
 
@@ -56,6 +57,17 @@ test('KST 자정 경계는 UTC 자정이 아니라 한국 시간 자정을 기�
   assert.equal(isWithinKstDay('2026-09-17T14:59:59.000Z', lateNightKst), false);
   assert.equal(isWithinKstDay('2026-09-18T14:59:59.999Z', lateNightKst), true);
   assert.equal(isWithinKstDay('2026-09-18T15:00:00.000Z', lateNightKst), false);
+});
+
+test('회원 예외와 추가 횟수는 등급 한도 위에 더해지고 무제한에는 더하지 않는다', () => {
+  const line = effectiveDailyCap({ tierLimit: 3, override: null, extra: 2 });
+  assert.equal(line.unlimited, false);
+  assert.equal(line.cap, 5);
+  const override = effectiveDailyCap({ tierLimit: 3, override: 1, extra: 2 });
+  assert.equal(override.cap, 3);
+  const unlimited = effectiveDailyCap({ tierLimit: 3, override: 0, extra: 9 });
+  assert.equal(unlimited.unlimited, true);
+  assert.equal(unlimited.cap, 0);
 });
 
 test('하루 한도 요약은 남은 횟수를 0 미만으로 내리지 않고, 0=무제한을 표시한다', () => {
@@ -184,10 +196,11 @@ test('관리자 회원 상세는 같은 putduk_member_daily_task_quota RPC로 �
 
   assert.match(adminJs, /function memberQuotaText\(quota\)/);
   assert.match(adminJs, /오늘 작업\(사용\/한도\)/);
-  assert.match(adminJs, /memberQuotaText\(member\.daily_task_quota\)/);
+  assert.match(adminJs, /memberQuotaText\(quota\)/);
 
-  // 조회만 하고, 운영자가 값을 조정하는 입력 UI는 이번에 추가하지 않았다.
-  assert.doesNotMatch(adminJs, /data-action="set-tier-daily-limit"/);
+  assert.match(adminJs, /data-action="save-tier-daily-limits"/);
+  assert.match(adminJs, /list_tier_daily_limits/);
+  assert.match(adminJs, /set_tier_daily_limit/);
 
   // app.js의 flattenMemberDetail이 daily_task_quota를 흘려보내야 admin.js가 값을 받는다.
   assert.match(appJs, /daily_task_quota: payload\.daily_task_quota \|\| null/);

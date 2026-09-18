@@ -56,8 +56,14 @@ function utf8(value: string): Uint8Array {
   return new TextEncoder().encode(value);
 }
 
+function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
+  const copy = new ArrayBuffer(bytes.byteLength);
+  new Uint8Array(copy).set(bytes);
+  return copy;
+}
+
 async function sha256Hex(value: string): Promise<string> {
-  const digest = await crypto.subtle.digest("SHA-256", utf8(value));
+  const digest = await crypto.subtle.digest("SHA-256", toArrayBuffer(utf8(value)));
   return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 

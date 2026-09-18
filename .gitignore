@@ -24,6 +24,9 @@ supabase/.temp/
 Thumbs.db
 _wu_cleanup.log
 
+# 로컬 QA 스크린샷. Git에 올리지 않는다. 로컬 파일은 삭제하지 않는다.
+qa-evidence/
+
 # 차단된 외부 레포 사본. 내용을 읽거나 커밋하지 않는다.
 AI-Profit-OS/
 putduk-ops/

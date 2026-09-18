@@ -133,6 +133,9 @@
     adminCampaigns: [],
     adminCampaignsError: null,
     adminCampaignsContract: null,
+    adminTierDailyLimits: [],
+    adminTierDailyLimitsError: null,
+    adminTierDailyLimitsContract: null,
     adminFormBusy: false,
     adminMotion: { bot_enabled: true, crowd_min: 8, crowd_max: 24, burn_per_minute: 2 },
     adminMotionError: null,
@@ -923,6 +926,8 @@
           held: parseLedgerAmount(summary.work_held ?? buckets.work_balance?.held_amount ?? summary.held ?? held.held_amount)
         },
         daily_task_quota: payload.daily_task_quota || null,
+        daily_task_limit_override: payload.daily_task_limit_override ?? payload.profile?.daily_task_limit_override ?? null,
+        extra_task_starts: Number(payload.extra_task_starts ?? payload.profile?.extra_task_starts ?? 0),
         pii_access: payload.pii_access === true,
         pii_masked: payload.pii_masked === true
       };

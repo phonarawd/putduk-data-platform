@@ -36,6 +36,22 @@ export function defaultDailyLimitForTier(rawTier) {
   return DEFAULT_TIER_DAILY_LIMITS[tier] ?? 0;
 }
 
+// 서버와 같은 우선순위: 회원 예외 → 등급 한도 → 추가 횟수. 무제한(0)에는 추가 횟수를 더하지 않는다.
+export function effectiveDailyCap({ tierLimit, override, extra } = {}) {
+  const extraStarts = Math.max(0, Math.trunc(Number(extra || 0)));
+  const hasOverride = override != null && override !== '';
+  const base = hasOverride
+    ? Math.max(0, Math.trunc(Number(override)))
+    : Math.max(0, Math.trunc(Number(tierLimit ?? 0)));
+  const unlimited = base <= 0;
+  return {
+    unlimited,
+    base,
+    extra: extraStarts,
+    cap: unlimited ? 0 : base + extraStarts
+  };
+}
+
 const KST_OFFSET_MS = 9 * 60 * 60 * 1000;
 
 // date_trunc('day', now() at time zone 'Asia/Seoul') at time zone 'Asia/Seoul' 와 동일한

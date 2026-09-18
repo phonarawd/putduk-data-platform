@@ -1,5 +1,6 @@
 // 입출금 전체 오픈은 화면 플래그만으로 열지 않는다. 환경값이 true가 아니면 닫힌다.
-// 꺼진 상태 예외: 체험 수당 3천 원 출금(운영 경로). PIN·지갑·근무·KYC는 그대로 둔다.
+// 꺼진 상태 예외: 체험 근무로 확정된 수당 3천 원 출금 신청(운영 경로).
+// 지원금 1만 원 자체는 출금하지 않는다. 실제 송금은 운영자가 수동 처리한다.
 
 export const FINANCE_API_CLOSED = "FINANCE_API_CLOSED";
 export const OPS_TRIAL_WITHDRAW_MAX = 3000;

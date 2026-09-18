@@ -442,7 +442,7 @@ export async function getMember(admin: AdminClient, userId: string, payload: Jso
   const memberId = assertUuid(payload.user_id || payload.member_id, "회원");
 
   const [profileResult, privateResult, walletResult, taskResult, depositResult, withdrawalResult, kycResult, referralResult, assignResult, ledgerResult, submissionResult, eventResult, quotaResult] = await Promise.all([
-    admin.from("profiles").select("id,public_id,display_name,member_tier,status,kyc_status,referral_code,trial_consumed_at,line_open,line_closed_at,priority_pick,dedicated_queue,weekly_volume_boost,high_value_notice,principal_withdraw_count,created_at,updated_at").eq("id", memberId).maybeSingle(),
+    admin.from("profiles").select("id,public_id,display_name,member_tier,status,kyc_status,referral_code,trial_consumed_at,line_open,line_closed_at,priority_pick,dedicated_queue,weekly_volume_boost,high_value_notice,principal_withdraw_count,daily_task_limit_override,extra_task_starts,created_at,updated_at").eq("id", memberId).maybeSingle(),
     admin.schema("private").from("profile_private").select("legal_name,birth_date,phone_e164,email_snapshot,last_login_at,last_login_ip,marketing_opt_in").eq("user_id", memberId).maybeSingle(),
     admin.from("wallet_accounts").select("bucket,currency,available_amount,held_amount,updated_at").eq("user_id", memberId),
     listMemberTaskRuns(admin, memberId),
@@ -540,6 +540,8 @@ export async function getMember(admin: AdminClient, userId: string, payload: Jso
     assignments: assignResult.data || [],
     wallet_summary: walletSummary((walletResult.data || []) as JsonRecord[]),
     daily_task_quota: quotaResult.data || null,
+    daily_task_limit_override: (profileResult.data as JsonRecord).daily_task_limit_override ?? null,
+    extra_task_starts: Number((profileResult.data as JsonRecord).extra_task_starts || 0),
     pii_access: revealPii,
     pii_masked: !revealPii,
     auth: {
@@ -630,6 +632,51 @@ function normalizeMemberTierLabel(value: unknown): string {
   return MEMBER_TIER_ALIASES[key] || "라인";
 }
 
+const BADGE_TIER_ORDER = ["라인", "크루", "선임", "전담"] as const;
+
+function isUnlimitedFlag(value: unknown): boolean {
+  if (value === true) return true;
+  const raw = String(value ?? "").trim().toLowerCase();
+  return raw === "true" || raw === "yes" || raw === "unlimited" || raw === "무제한";
+}
+
+function parseTierDailyLimit(payload: JsonRecord): number {
+  if (isUnlimitedFlag(payload.unlimited)) return 0;
+  if (isUnlimitedFlag(payload.daily_limit)) return 0;
+  const amount = Number(payload.daily_limit ?? payload.limit);
+  if (!Number.isFinite(amount) || amount < 0) {
+    throw new HttpError(400, "하루 한도는 0 이상 숫자여야 해요. 0은 무제한이에요.");
+  }
+  if (!Number.isInteger(amount)) {
+    throw new HttpError(400, "하루 한도는 정수로 적어 주세요.");
+  }
+  if (amount > 365) {
+    throw new HttpError(400, "하루 한도는 365회까지 저장할 수 있어요. 그 이상은 무제한을 켜 주세요.");
+  }
+  return amount;
+}
+
+function sortTierDailyLimits(rows: JsonRecord[]): JsonRecord[] {
+  const rank = new Map<string, number>(BADGE_TIER_ORDER.map((tier, index) => [tier, index]));
+  return [...rows].sort((left, right) => {
+    const a = rank.get(normalizeMemberTierLabel(left.tier)) ?? 99;
+    const b = rank.get(normalizeMemberTierLabel(right.tier)) ?? 99;
+    return a - b;
+  });
+}
+
+function parseOverrideLimit(payload: JsonRecord): number | null {
+  if (payload.clear_override === true || payload.use_tier_default === true) return null;
+  if (payload.daily_limit_override === undefined || payload.daily_limit_override === null || payload.daily_limit_override === "") {
+    if (isUnlimitedFlag(payload.unlimited)) return 0;
+    return null;
+  }
+  return parseTierDailyLimit({
+    daily_limit: payload.daily_limit_override,
+    unlimited: payload.unlimited
+  });
+}
+
 export async function changeMemberTier(admin: AdminClient, userId: string, payload: JsonRecord) {
   await requireRole(admin, userId, memberRoles);
   const memberId = assertUuid(payload.user_id || payload.member_id, "회원");
@@ -646,6 +693,56 @@ export async function changeMemberTier(admin: AdminClient, userId: string, paylo
   if (error || !data) throw new HttpError(503, "회원 등급을 변경하지 못했습니다.");
 
   await appendAudit(admin, userId, "회원 등급 변경", "profile", memberId, textValue(payload.reason, "사유", 240, false), before.data, data);
+  return data;
+}
+
+export async function listTierDailyLimits(admin: AdminClient, userId: string) {
+  await requireRole(admin, userId, [...contentRoles, ...financeRoles, ...memberRoles]);
+  const data = await callRpc<unknown>(admin, "putduk_admin_list_tier_daily_limits", {
+    p_admin_id: userId
+  }, "등급별 하루 한도를 불러오지 못했어요.");
+  const rows = Array.isArray(data) ? (data as JsonRecord[]) : [];
+  return { limits: sortTierDailyLimits(rows), stored: "api" as const };
+}
+
+export async function setTierDailyLimit(admin: AdminClient, userId: string, payload: JsonRecord) {
+  await requireRole(admin, userId, contentRoles);
+  const tier = normalizeMemberTierLabel(textValue(payload.tier, "등급", 40));
+  if (!(BADGE_TIER_ORDER as readonly string[]).includes(tier)) {
+    throw new HttpError(400, "사원증 등급을 확인해 주세요.");
+  }
+  const dailyLimit = parseTierDailyLimit(payload);
+  const listed = await listTierDailyLimits(admin, userId);
+  const before = listed.limits.find((row) => normalizeMemberTierLabel(row.tier) === tier) || null;
+  const data = await callRpc<JsonRecord>(admin, "putduk_admin_set_tier_daily_limit", {
+    p_admin_id: userId,
+    p_tier: tier,
+    p_daily_limit: dailyLimit
+  }, "등급별 하루 한도를 저장하지 못했어요.");
+  await appendAudit(admin, userId, "등급 하루 한도 변경", "member_tier_daily_limit", null, tier, before, data);
+  const latest = await listTierDailyLimits(admin, userId);
+  return { limit: data, ...latest };
+}
+
+export async function setMemberTaskQuota(admin: AdminClient, userId: string, payload: JsonRecord) {
+  await requireRole(admin, userId, [...memberRoles, ...contentRoles]);
+  const memberId = assertUuid(payload.user_id || payload.member_id, "회원");
+  const extraRaw = payload.extra_task_starts ?? payload.extra_starts ?? 0;
+  const extra = Number(extraRaw);
+  if (!Number.isFinite(extra) || extra < 0 || !Number.isInteger(extra)) {
+    throw new HttpError(400, "추가 횟수는 0 이상 정수여야 해요.");
+  }
+  if (extra > 365) {
+    throw new HttpError(400, "추가 횟수는 365회까지 저장할 수 있어요.");
+  }
+  const override = parseOverrideLimit(payload);
+  const data = await callRpc<JsonRecord>(admin, "putduk_admin_set_member_task_quota", {
+    p_admin_id: userId,
+    p_user_id: memberId,
+    p_daily_limit_override: override,
+    p_extra_task_starts: extra
+  }, "회원 하루 한도 예외를 저장하지 못했어요.");
+  await appendAudit(admin, userId, "회원 하루 한도 예외", "profile", memberId, textValue(payload.reason, "사유", 240, false), null, data);
   return data;
 }
 
@@ -941,20 +1038,26 @@ export async function listDeposits(admin: AdminClient, userId: string) {
 
 export async function listWithdrawals(admin: AdminClient, userId: string) {
   await requireRole(admin, userId, financeRoles);
-  let result = await admin
+  const full = await admin
     .from("withdrawal_requests")
     .select(WITHDRAWAL_SELECT_FULL)
     .order("created_at", { ascending: false })
     .limit(120);
-  if (result.error && isMissingColumn(result.error)) {
-    result = await admin
+  let rows: JsonRecord[] = [];
+  if (full.error && isMissingColumn(full.error)) {
+    const basic = await admin
       .from("withdrawal_requests")
       .select(WITHDRAWAL_SELECT_BASIC)
       .order("created_at", { ascending: false })
       .limit(120);
+    if (basic.error) throw new HttpError(503, "출금내역을 불러오지 못했습니다.");
+    rows = (basic.data || []) as JsonRecord[];
+  } else if (full.error) {
+    throw new HttpError(503, "출금내역을 불러오지 못했습니다.");
+  } else {
+    rows = (full.data || []) as JsonRecord[];
   }
-  if (result.error) throw new HttpError(503, "출금내역을 불러오지 못했습니다.");
-  const labeled = await attachMemberLabels(admin, (result.data || []) as JsonRecord[]);
+  const labeled = await attachMemberLabels(admin, rows);
   return labeled.map(shapeWithdrawal);
 }
 
@@ -1451,6 +1554,15 @@ export async function handleOpsAction(
   }
   if (action === "change_member_tier" || action === "update_member_tier") {
     return { body: { ok: true, profile: await changeMemberTier(admin, user.id, payload) } };
+  }
+  if (action === "list_tier_daily_limits" || action === "tier_daily_limits") {
+    return { body: { ok: true, ...(await listTierDailyLimits(admin, user.id)) } };
+  }
+  if (action === "set_tier_daily_limit" || action === "save_tier_daily_limit") {
+    return { body: { ok: true, ...(await setTierDailyLimit(admin, user.id, payload)) } };
+  }
+  if (action === "set_member_task_quota" || action === "save_member_task_quota") {
+    return { body: { ok: true, quota: await setMemberTaskQuota(admin, user.id, payload) } };
   }
   if (action === "reset_member_password") {
     return { body: { ok: true, ...(await resetMemberPassword(admin, user.id, payload)) } };
