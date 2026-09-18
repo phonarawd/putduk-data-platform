@@ -1,4 +1,4 @@
-const CACHE_NAME = 'putduk-shell-v23';
+const CACHE_NAME = 'putduk-shell-v24';
 const SHELL = [
   '/',
   '/admin/',
@@ -12,6 +12,8 @@ const SHELL = [
   '/assets/channel-talk.js?v=20260918-ch1',
   '/assets/phase4-finance-wiring.js?v=20260919-p4r2',
   '/assets/brand-runtime.js?v=20260919-logo1',
+  '/assets/uiux-final-2026.css?v=20260919-uiux1',
+  '/assets/uiux-final-2026.js?v=20260919-uiux1',
   '/assets/vendor/supabase.min.js?v=20260918-ui3',
   '/manifest.webmanifest',
   '/icons/putduk-premium.png',
