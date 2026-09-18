@@ -1695,6 +1695,7 @@ html[data-theme="dark"] .toast {
   .benefit-stats { grid-template-columns:1fr; }
   .deposit-method-grid { grid-template-columns:1fr; }
 }
+.help-channel .primary-button { width:100%; margin-top:12px; }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration:.01ms !important; animation-iteration-count:1 !important; scroll-behavior:auto !important; transition-duration:.01ms !important; }

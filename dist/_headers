@@ -4,7 +4,7 @@
   Referrer-Policy: strict-origin-when-cross-origin
   Permissions-Policy: geolocation=(), microphone=()
   Cache-Control: public, max-age=0, must-revalidate
-  Content-Security-Policy: default-src 'self'; base-uri 'self'; form-action 'self'; object-src 'none'; frame-ancestors 'none'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' https://gaugwamwceqdnqdqrxqg.supabase.co wss://gaugwamwceqdnqdqrxqg.supabase.co; worker-src 'self' blob:; media-src 'self' blob:
+  Content-Security-Policy: default-src 'self'; base-uri 'self'; form-action 'self'; object-src 'none'; frame-ancestors 'none'; script-src 'self' 'unsafe-inline' https://cdn.channel.io https://*.channel.io https://*.sentry-cdn.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data: https://cdn.channel.io https://*.channel.io; connect-src 'self' https://gaugwamwceqdnqdqrxqg.supabase.co wss://gaugwamwceqdnqdqrxqg.supabase.co https://*.channel.io https://*.channel.app https://*.sentry.io wss://*.channel.io wss://*.front-ws.channel.io; worker-src 'self' blob:; media-src 'self' blob: https://*.channel.io; frame-src 'self' https://*.channel.io https://channel.io https://*.channel.app; child-src 'self' blob: https://*.channel.io
   Cross-Origin-Opener-Policy: same-origin
 
 /assets/*

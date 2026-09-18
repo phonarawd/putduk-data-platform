@@ -1637,6 +1637,7 @@
       authState.error = error;
     } finally {
       authState.loading = false;
+      syncChannelTalk();
     }
   }
 
@@ -2985,6 +2986,11 @@
     return `<div class="section-heading" style="margin-top:0"><div><h1 class="page-title">도움말</h1><p class="page-copy">오늘 근무부터 정산까지, 사원 안내를 나눠 두었어요.</p></div></div>
       <div class="help-tabs">${tabs.map((item) => `<button type="button" class="filter-button ${tab === item.id ? 'active' : ''}" data-help-tab="${item.id}">${item.label}</button>`).join('')}</div>
       <div class="panel panel-pad help-body">${bodies[tab] || bodies.work}</div>
+      <div class="panel panel-pad help-channel">
+        <h3>실시간 상담</h3>
+        <p class="help-line">${icon('circle-help', 16)}<span>💬 근무나 정산이 막히면 상담 창에서 바로 물어보세요.</span></p>
+        <button type="button" class="primary-button" data-action="open-channel-talk" aria-label="상담원에게 물어보기">💬 상담원에게 물어보기</button>
+      </div>
       <div class="help-accordion">
         <details><summary>컴퓨터에서도 출근할 수 있어요</summary><p>홈 화면 아이콘이 없어도 브라우저에서 근무·입금이 돼요.</p></details>
         <details><summary>원금은 업무잔액에 남아 보여요</summary><p>기본 출금은 수당만이에요. 보증금까지는 한 번 더 확인한 뒤에만 나가요.</p></details>
@@ -3687,6 +3693,21 @@
     return window.PutdukOverlaySurface || null;
   }
 
+  function syncChannelTalk() {
+    if (isAdmin) return;
+    const api = window.PutdukChannelTalk;
+    if (!api || typeof api.sync !== 'function') return;
+    api.sync({
+      enabled: true,
+      pluginKey: config.channelPluginKey,
+      session: authState.session,
+      profile: authState.profile,
+      page: state.memberPage || 'dashboard',
+      theme: state.theme,
+      overlayKey: overlaySurfaceKey()
+    });
+  }
+
   function overlaySurfaceKey() {
     const api = overlayApi();
     if (api && typeof api.overlaySurfaceKey === 'function') return api.overlaySurfaceKey(state);
@@ -3805,6 +3826,7 @@
     }
     restoreDepositForm();
     paintDepositQr();
+    syncChannelTalk();
     if (state.toast) {
       const pendingToast = state.toast;
       state.toast = null;
@@ -4851,6 +4873,11 @@
     if (action === 'open-signup') { state.authMode = 'signup'; openModal('auth'); return; }
     if (action === 'open-login') { state.authMode = 'login'; openModal('auth'); return; }
     if (action === 'logout') { signOut(); return; }
+    if (action === 'open-channel-talk') {
+      const api = window.PutdukChannelTalk;
+      if (api && typeof api.openMessenger === 'function') api.openMessenger();
+      return;
+    }
     if (action === 'lock-deposit-info') { lockDepositReveal({ silent: false }); showToast('🔒 입금 안내를 다시 잠갔어요.', 'info'); return; }
     if (action === 'install-app') { installApp(); return; }
     if (action === 'mark-notices-read') {

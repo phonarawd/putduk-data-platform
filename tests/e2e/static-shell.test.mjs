@@ -19,6 +19,8 @@ test('정적 셸 경로가 회원·운영자·PWA 파일을 제공한다', async
   assert.match(member.text, /data-mode="member"/);
   assert.match(member.text, /enableWorkApi:\s*true/);
   assert.match(member.text, /enableFinanceApi:\s*false/);
+  assert.match(member.text, /channel-talk\.js/);
+  assert.match(member.text, /channelPluginKey/);
 
   const admin = await fetchText(`${started.url}/admin/`);
   assert.equal(admin.status, 200);

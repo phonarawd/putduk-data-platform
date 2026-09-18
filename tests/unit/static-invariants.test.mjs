@@ -10,6 +10,7 @@ const requiredFiles = [
   'dist/assets/overlay-surface.css',
   'dist/assets/overlay-surface.js',
   'dist/assets/origin-split.js',
+  'dist/assets/channel-talk.js',
   'dist/assets/ui-icons.js',
   'dist/assets/vendor/supabase.min.js',
   'dist/assets/vendor/chart.umd.min.js',
@@ -233,6 +234,12 @@ test('같은 오버레이는 다시 페이드하지 않고 부트는 인증 전�
   assert.equal(appJs.includes('data-lucide'), false);
   assert.equal(appJs.includes("memberFinanceRequest('lock_stake'"), false);
   assert.match(appJs, /hydrateSession\(data\.session\)/);
+  assert.match(appJs, /syncChannelTalk\(\)/);
+  assert.match(appJs, /open-channel-talk/);
+  const channelTalk = await readRepo('dist', 'assets', 'channel-talk.js');
+  assert.match(channelTalk, /cdn\.channel\.io\/plugin\/ch-plugin-web\.js/);
+  assert.match(channelTalk, /PutdukChannelTalk/);
+  assert.doesNotMatch(channelTalk, /memberHash/);
   assert.match(appJs, /chart\.umd\.min\.js/);
   assert.equal(appJs.includes('initializeAuth().then(() => render());\n  render();'), false);
   assert.equal(appJs.includes("motion.playWorkPhase(canvas, motionPartner(node), 'lock'"), false);
@@ -249,6 +256,8 @@ test('배포 헤더에 CSP가 있고 자동 정산 플래그는 꺼져 있다', 
   const { memberHtml, adminHtml } = await readLaunchFiles();
   assert.match(headers, /Content-Security-Policy:/);
   assert.match(headers, /script-src 'self' 'unsafe-inline'/);
+  assert.match(headers, /cdn\.channel\.io/);
+  assert.match(headers, /frame-src 'self' https:\/\/\*\.channel\.io/);
   assert.doesNotMatch(headers, /cdn\.tailwindcss\.com/);
   assert.doesNotMatch(headers, /unpkg\.com/);
   assert.doesNotMatch(headers, /cdn\.jsdelivr\.net/);
@@ -270,13 +279,18 @@ test('회원·운영 셸은 자체 스크립트와 캐시 우선 서비스워커
   const adminControl = await readRepo('supabase', 'functions', 'admin-control', 'index.ts');
   assert.match(memberHtml, /vendor\/supabase\.min\.js/);
   assert.match(memberHtml, /ui-icons\.js/);
+  assert.match(memberHtml, /channel-talk\.js/);
+  assert.match(memberHtml, /channelPluginKey:\s*'a1b92284-6a36-41aa-9f00-4f4b084c4f47'/);
   assert.match(memberHtml, /data-boot-shell/);
   assert.doesNotMatch(memberHtml, /cdn\.tailwindcss/);
   assert.doesNotMatch(memberHtml, /unpkg\.com/);
   assert.doesNotMatch(adminHtml, /cdn\.tailwindcss/);
+  assert.doesNotMatch(adminHtml, /channel-talk\.js/);
+  assert.doesNotMatch(adminHtml, /channelPluginKey/);
   assert.match(adminHtml, /vendor\/supabase\.min\.js/);
   assert.match(sw, /staleWhileRevalidate/);
-  assert.match(sw, /putduk-shell-v16/);
+  assert.match(sw, /putduk-shell-v17/);
+  assert.match(sw, /channel-talk\.js/);
   assert.match(http, /userFromVerifiedJwt/);
   assert.match(http, /export function clientIp/);
   assert.match(http, /true-client-ip/);

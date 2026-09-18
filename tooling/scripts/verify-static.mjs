@@ -6,6 +6,7 @@ import { pathToFileURL } from 'node:url';
 
 const root = process.cwd();
 await import(pathToFileURL(join(root, 'tooling/scripts/sync-overlay-surface.mjs')).href);
+await import(pathToFileURL(join(root, 'tooling/scripts/sync-channel-talk.mjs')).href);
 const execFileAsync = promisify(execFile);
 const requiredFiles = [
   'dist/index.html',
@@ -14,6 +15,7 @@ const requiredFiles = [
   'dist/assets/app.js',
   'dist/assets/overlay-surface.js',
   'dist/assets/overlay-surface.css',
+  'dist/assets/channel-talk.js',
   'dist/manifest.webmanifest',
   'dist/sw.js',
   'dist/_headers',
@@ -34,6 +36,7 @@ const appJs = await readFile(join(root, 'dist/assets/app.js'), 'utf8');
 
 await execFileAsync(process.execPath, ['--check', join(root, 'dist/assets/app.js')]);
 await execFileAsync(process.execPath, ['--check', join(root, 'dist/assets/overlay-surface.js')]);
+await execFileAsync(process.execPath, ['--check', join(root, 'dist/assets/channel-talk.js')]);
 
 if (!memberHtml.includes('lang="ko"') || !adminHtml.includes('lang="ko"')) {
   throw new Error('회원·관리자 문서 언어가 한국어로 설정되어야 합니다.');

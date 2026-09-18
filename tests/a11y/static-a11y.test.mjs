@@ -14,7 +14,7 @@ test('문서 언어·뷰포트·아이콘 접근성 힌트가 있다', async () 
 
 test('필수 컨트롤에 한국어 aria-label이 있다', async () => {
   const { appJs } = await readLaunchFiles();
-  for (const label of ['메뉴 열기', '테마 전환', '알림', '닫기', '퍼뜩 앱 설치', 'KYC 창 닫기', '알림 창 닫기', '추천 코드 복사']) {
+  for (const label of ['메뉴 열기', '테마 전환', '알림', '닫기', '퍼뜩 앱 설치', 'KYC 창 닫기', '알림 창 닫기', '추천 코드 복사', '상담원에게 물어보기']) {
     if (label === '알림') {
       assert.match(appJs, /aria-label="알림/);
       continue;
