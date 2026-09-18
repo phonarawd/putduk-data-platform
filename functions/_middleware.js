@@ -1,3 +1,14 @@
+function stampOrigin(response) {
+  const headers = new Headers(response.headers);
+  headers.set('X-Putduk-Origin', 'putduk-data-platform-pages');
+  headers.set('X-Putduk-Router', '20260919-origin-probe1');
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers
+  });
+}
+
 export async function onRequest(context) {
   const url = new URL(context.request.url);
   const host = url.hostname.toLowerCase();
@@ -11,7 +22,7 @@ export async function onRequest(context) {
 
   if (isOps && !adminPath && !staticPath) {
     url.pathname = '/admin/';
-    return Response.redirect(url.toString(), 302);
+    return stampOrigin(Response.redirect(url.toString(), 302));
   }
 
   if (!isOps && adminPath) {
@@ -23,9 +34,9 @@ export async function onRequest(context) {
     if (opsHost) {
       url.hostname = opsHost;
       url.pathname = '/admin/';
-      return Response.redirect(url.toString(), 302);
+      return stampOrigin(Response.redirect(url.toString(), 302));
     }
   }
 
-  return context.next();
+  return stampOrigin(await context.next());
 }
