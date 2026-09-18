@@ -110,9 +110,10 @@ test('사원증 뒷면은 사원번호 아래 가로 안내다', async () => {
   assert.match(appJs, /로그인하면 오늘 라인이 이 카드에 보여요/);
   assert.match(appCss, /\.id-face\.id-back \.id-face-body/);
   assert.match(appCss, /\.id-back-copy[\s\S]{0,240}word-break:\s*keep-all/);
-  assert.match(appCss, /\.id-face\[hidden\]/);
-  assert.match(appCss, /display:\s*none\s*!important/);
-  assert.equal(appCss.includes('.id-face.id-back { transform:rotateY(180deg); }'), false);
+  assert.match(appCss, /preserve-3d/);
+  assert.match(appCss, /rotateY\(180deg\)/);
+  assert.match(appCss, /backface-visibility:\s*hidden/);
+  assert.equal(appJs.includes('id-front"${flipped'), false);
 });
 
 test('회원 지갑·내역은 카드형이고 입금 폼에 증빙 위치·안내 메모가 없다', async () => {

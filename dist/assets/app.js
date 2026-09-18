@@ -89,6 +89,8 @@
     onboardingPwaDone: false,
     onboardingGrantSeen: false,
     helpTab: 'work',
+    adminFinanceTab: 'payouts',
+    depositMethod: '',
     walletLedgerTab: 'all',
     lastCrewPartnerId: null,
     idCardFlipped: false,
@@ -615,7 +617,8 @@
     const w = walletThree();
     const heldText = w.workHeld == null ? '확인 필요' : formatLedgerAmount(w.workHeld);
     const workHint = w.workHeld != null && w.workHeld > 0 ? `잠금 ${heldText}` : '근무에 쓰는 돈';
-    return `<div class="wallet-slots"><div class="wallet-slot">${uiLead('gift', '지원금')}<strong>${formatLedgerAmount(w.support)}</strong><small>출금 안 됨</small></div><div class="wallet-slot">${uiLead('briefcase', '업무잔액')}<strong>${formatLedgerAmount(w.work)}</strong><small>${workHint}</small></div><div class="wallet-slot">${uiLead('banknote', '출금가능')}<strong>${formatLedgerAmount(w.withdrawable)}</strong><small>기본은 수당만</small></div></div>`;
+    const supportZero = Number(w.support || 0) === 0;
+    return `<div class="wallet-slots"><div class="wallet-slot${supportZero ? ' is-zero' : ''}">${uiLead('gift', '지원금')}<strong>${formatLedgerAmount(w.support)}</strong><small>출금 안 됨</small></div><div class="wallet-slot">${uiLead('briefcase', '업무잔액')}<strong>${formatLedgerAmount(w.work)}</strong><small>${workHint}</small></div><div class="wallet-slot is-focus">${uiLead('banknote', '출금가능')}<strong>${formatLedgerAmount(w.withdrawable)}</strong><small>기본은 수당만</small></div></div>`;
   }
 
   function displayPublicId() {
@@ -626,8 +629,13 @@
 
   function tierBand(tier) {
     const raw = String(tier || authState.profile?.member_tier || '일반 파트너');
-    const map = { '일반 파트너': '라인', '인증 파트너': '크루', '우수 파트너': '선임', '글로벌 디렉터': '전담' };
+    const map = { '일반 파트너': '라인', '라인': '라인', '인증 파트너': '크루', '크루': '크루', '우수 파트너': '선임', '선임': '선임', '글로벌 디렉터': '전담', '전담': '전담' };
     return { raw, label: map[raw] || raw };
+  }
+
+  function nextMemberBand(current) {
+    const index = MEMBER_BANDS.findIndex((band) => band.label === current.label || band.raw === current.raw);
+    return index >= 0 ? (MEMBER_BANDS[index + 1] || null) : MEMBER_BANDS[1] || null;
   }
 
   // 대시보드·라인 찾기·업무 카드·출근 확인이 전부 같은 state.dailyTaskQuota(서버
@@ -982,11 +990,18 @@
 
   const MEMBER_TIERS = ['일반 파트너', '인증 파트너', '우수 파트너', '글로벌 디렉터'];
   const MEMBER_BANDS = [
-    { raw: '일반 파트너', label: '라인', ladder: '소액 3·5·7·10만 칸', perks: ['기본 라인 근무', '다음 한 칸씩 완료 해금', '잠금 잔액이 있으면 그 금액 칸부터 출근'] },
-    { raw: '인증 파트너', label: '크루', ladder: '중간 30·50·100만 칸', perks: ['주간 근무 자리', '중간 금액 칸 안내', '기본 라인 근무 유지'] },
-    { raw: '우수 파트너', label: '선임', ladder: '고액 300·500·1000만 칸', perks: ['우선 집기', '고액 사전 공지', '주간 근무 자리'] },
-    { raw: '글로벌 디렉터', label: '전담', ladder: '초고액은 운영자 배정', perks: ['전담 라인', '우선 집기', '고액 사전 공지', '주간 근무 자리'] }
+    { raw: '일반 파트너', label: '라인', tone: 'line', badge: '01', ladder: '소액 3·5·7·10만 칸', perks: ['기본 라인 근무', '다음 한 칸씩 완료 해금', '잠금 잔액이 있으면 그 금액 칸부터 출근'], stats: [{ icon: 'briefcase', label: '오늘 선택', value: '기본 라인' }, { icon: 'hourglass', label: '검수 순서', value: '보통' }, { icon: 'unlock', label: '다음 칸', value: '한 칸씩 해금' }] },
+    { raw: '인증 파트너', label: '크루', tone: 'crew', badge: '02', ladder: '중간 30·50·100만 칸', perks: ['주간 근무 자리', '중간 금액 칸 안내', '기본 라인 근무 유지'], stats: [{ icon: 'briefcase', label: '오늘 선택', value: '라인보다 여유' }, { icon: 'hourglass', label: '검수 순서', value: '조금 빠름' }, { icon: 'building-2', label: '자리', value: '같은 협력사 이어서' }] },
+    { raw: '우수 파트너', label: '선임', tone: 'lead', badge: '03', ladder: '고액 300·500·1000만 칸', perks: ['우선 집기', '고액 사전 공지', '주간 근무 자리'], stats: [{ icon: 'star', label: '우선 집기', value: '주간 물량' }, { icon: 'hourglass', label: '검수 순서', value: '더 빨리' }, { icon: 'bell', label: '안내', value: '다음 칸 먼저' }] },
+    { raw: '글로벌 디렉터', label: '전담', tone: 'desk', badge: '04', ladder: '초고액은 운영자 배정', perks: ['전담 라인', '우선 집기', '고액 사전 공지', '주간 근무 자리'], stats: [{ icon: 'shield-check', label: '전담 큐', value: '고액 사전 공지' }, { icon: 'hourglass', label: '검수 순서', value: '가장 먼저' }, { icon: 'lock', label: '초고액', value: '운영자 배정' }] }
   ];
+  const NODE_FILTER_HINTS = {
+    all: '오늘 열린 라인을 모두 봐요.',
+    '빠른 확인': '짧은 시간 칸이에요. 처음 출근하기 좋아요.',
+    '일반 처리': '기본 근무 칸이에요. 잠금과 수당을 보고 골라요.',
+    '집중 처리': '조금 더 오래 보는 칸이에요.',
+    '전문 검수': '검수가 촘촘한 칸이에요. 잠금이 더 커요.'
+  };
 
   function normalizePhone(value) {
     const digits = String(value || '').replace(/\D/g, '');
@@ -1492,10 +1507,31 @@
     }
   }
 
+  function depositDestinationKind(item) {
+    return String(item.destination_type || '') === 'usdt' ? 'usdt' : 'krw';
+  }
+
+  function filterDepositItems(list) {
+    const method = state.depositMethod;
+    const rows = Array.isArray(list) ? list : [];
+    if (!method) return rows;
+    return rows.filter((item) => depositDestinationKind(item) === method);
+  }
+
+  function renderDepositMethodPicker() {
+    return `<div class="deposit-method-grid"><button type="button" class="deposit-method" data-deposit-method="krw"><strong>원화 계좌</strong><span>은행으로 넣을 때</span></button><button type="button" class="deposit-method" data-deposit-method="usdt"><strong>USDT</strong><span>테더로 넣을 때</span></button></div>`;
+  }
+
   function renderDepositDestinations() {
+    if (!state.depositMethod && !isDepositRevealed()) {
+      return renderDepositMethodPicker();
+    }
+    const methodBack = state.depositMethod && !isDepositRevealed()
+      ? `<button class="text-link" type="button" data-deposit-method="">다른 방법으로</button>`
+      : '';
     if (isDepositRevealed()) {
       const remain = depositRevealRemaining();
-      const list = Array.isArray(state.depositReveal) ? state.depositReveal : [];
+      const list = filterDepositItems(state.depositReveal);
       const cards = list.map((item) => {
         const isUsdt = String(item.destination_type || '') === 'usdt';
         const title = item.label || item.bank_name || (isUsdt ? 'USDT' : '입금 계좌');
@@ -1510,11 +1546,11 @@
           : '';
         return `<article class="deposit-dest revealed"><strong>${esc(title)}</strong><p>${esc(secret || '확인 필요')}</p>${memo}${qr}</article>`;
       }).join('');
-      return `<div class="notice" style="margin-bottom:12px"><span style="color:var(--gold)">${icon('timer',17)}</span><div><strong id="depositRevealRemain">${remain}초 뒤 자동 잠금</strong><br>계좌와 주소는 지금만 보여요. 화면에서 잔액을 올리지 않아요.</div></div><div class="deposit-dest-list">${cards || '<div class="notice">운영자가 아직 입금 계좌·USDT를 등록하지 않았어요.</div>'}</div><div class="modal-actions" style="margin-bottom:12px"><button class="secondary-button" type="button" data-action="lock-deposit-info">지금 잠그기</button></div>`;
+      return `<div class="notice" style="margin-bottom:12px"><span style="color:var(--gold)">${icon('timer',17)}</span><div><strong id="depositRevealRemain">${remain}초 뒤 자동 잠금</strong><br>${state.depositMethod === 'usdt' ? '주소는 지금만 보여요.' : '계좌는 지금만 보여요.'} 화면에서 잔액을 올리지 않아요.</div></div><div class="deposit-dest-list">${cards || '<div class="notice">이 방법으로 보여줄 입금 안내가 없어요.</div>'}</div><div class="modal-actions" style="margin-bottom:12px"><button class="secondary-button" type="button" data-action="lock-deposit-info">지금 잠그기</button></div>`;
     }
-    const list = Array.isArray(state.depositDestinations) ? state.depositDestinations : [];
-    const methods = (state.depositMethods || []).join(' · ') || '원화 계좌 · USDT';
-    const assets = (state.depositAssets || []).join(' · ') || 'KRW · USDT';
+    const list = filterDepositItems(state.depositDestinations);
+    const methods = state.depositMethod === 'usdt' ? 'USDT' : state.depositMethod === 'krw' ? '원화 계좌' : ((state.depositMethods || []).join(' · ') || '원화 계좌 · USDT');
+    const assets = state.depositMethod === 'usdt' ? 'USDT' : state.depositMethod === 'krw' ? 'KRW' : ((state.depositAssets || []).join(' · ') || 'KRW · USDT');
     const masked = list.map((item) => {
       const title = item.label || item.bank_name || (String(item.destination_type || '') === 'usdt' ? 'USDT' : '입금 계좌');
       const line = [item.bank_name, item.masked_value, item.usdt_network].filter(Boolean).join(' · ');
@@ -1526,13 +1562,14 @@
         ? `<form id="depositPinForm" class="pin-gate"><label class="field" for="depositPin"><span>보안 PIN 6자리</span><input id="depositPin" name="pin" type="password" inputmode="numeric" maxlength="6" pattern="[0-9]{6}" required placeholder="••••••" autocomplete="one-time-code" /></label><div class="modal-actions"><button class="secondary-button" type="button" data-action="close-modal">닫기</button><button class="primary-button" type="submit">안내 확인</button></div></form>`
         : `<form id="depositPinSetForm" class="pin-gate"><p class="page-copy">입금 계좌를 보려면 보안 PIN 6자리를 먼저 만들어요. 출금 비밀번호와는 따로 잠겨 있어요.</p><label class="field" for="depositPinNew"><span>새 보안 PIN</span><input id="depositPinNew" name="pin" type="password" inputmode="numeric" maxlength="6" pattern="[0-9]{6}" required placeholder="숫자 6자리" /></label><label class="field" for="depositPinConfirm"><span>한 번 더</span><input id="depositPinConfirm" name="pin_confirm" type="password" inputmode="numeric" maxlength="6" pattern="[0-9]{6}" required placeholder="다시 입력" /></label><div class="modal-actions"><button class="secondary-button" type="button" data-action="close-modal">닫기</button><button class="primary-button" type="submit">PIN 만들기</button></div></form>`;
     if (state.depositDestinationsError) {
-      return `<div class="notice" style="margin-bottom:14px"><span style="color:var(--gold)">${icon('landmark',17)}</span><div>${esc(state.depositPinCopy || '입금 계좌 안내를 확인하지 못했어요.')}</div></div>${pinForm}`;
+      return `${methodBack}<div class="notice" style="margin-bottom:14px"><span style="color:var(--gold)">${icon('landmark',17)}</span><div>${esc(state.depositPinCopy || '입금 계좌 안내를 확인하지 못했어요.')}</div></div>${pinForm}`;
     }
-    return `<div class="notice" style="margin-bottom:12px"><span style="color:var(--emerald)">${icon('shield-check',17)}</span><div>입금 방법 ${esc(methods)} · 지원 자산 ${esc(assets)}<br>${esc(state.depositPinCopy || '🔐 보안 PIN 입력 후 입금 안내 확인')}</div></div><div class="deposit-dest-list">${masked || '<p class="page-copy">운영자가 아직 입금 계좌·USDT를 등록하지 않았어요. 안내가 오면 이 자리에 보여요.</p>'}</div>${pinForm}`;
+    return `${methodBack}<div class="notice" style="margin-bottom:12px"><span style="color:var(--emerald)">${icon('shield-check',17)}</span><div>${esc(methods)} · ${esc(assets)}<br>${esc(state.depositPinCopy || '🔐 보안 PIN 입력 후 입금 안내 확인')}</div></div><div class="deposit-dest-list">${masked || '<p class="page-copy">이 방법으로 보여줄 입금 안내가 아직 없어요.</p>'}</div>${pinForm}`;
   }
 
   async function openDepositModal() {
     state.depositJump = null;
+    state.depositMethod = '';
     openModal('deposit');
     await loadDepositDestinations();
     if (state.modal === 'deposit') render();
@@ -2314,7 +2351,7 @@
       : (signedIn ? '라인이 열리면 배지가 이 카드에 보여요' : '로그인하면 오늘 라인이 이 카드에 보여요');
     return `<div class="id-stage"><button type="button" class="id-flip${flipped ? ' is-flipped' : ''}" data-action="flip-idcard" aria-pressed="${flipped ? 'true' : 'false'}" aria-label="${flipped ? '사원증 앞면 보기' : '사원증 뒷면 보기'}">
       <div class="id-flip-inner">
-        <div class="id-face id-front"${flipped ? ' hidden' : ''}>
+        <div class="id-face id-front">
           <div class="id-face-head">
             <span class="id-chip" aria-hidden="true"></span>
             ${mark}
@@ -2333,7 +2370,7 @@
             </div>
           </div>
         </div>
-        <div class="id-face id-back"${flipped ? '' : ' hidden'}>
+        <div class="id-face id-back">
           <div class="id-face-body id-face-body-back">
             <p class="id-back-kicker">사원증 뒷면</p>
             <p class="id-back-meta"><span class="id-number" title="${esc(publicId)}">사원번호 ${esc(publicId)}</span><span class="id-back-sep" aria-hidden="true">|</span><span>${esc(band.label)} 등급</span></p>
@@ -2394,17 +2431,17 @@
         <div class="hero-card">
           <div class="eyebrow"><span class="pulse-dot"></span> ${heroLine}</div>
           <h1 class="hero-title">작업실에 출근하고<br><span style="color:var(--emerald-strong)">한 칸만 확인해요.</span></h1>
-          <p class="hero-copy">오늘 배정된 물량 5건의 실물 라벨 번호를 입력해 대조하고 제출하면 돼요. 일이 끝나면 원금과 수당이 잔액에 같이 반영돼요.</p>
+          <p class="hero-copy">오늘 배정된 물량 5건의 실물 라벨 번호를 입력해 대조하면 돼요.</p>
           <div class="hero-actions"><button class="primary-button" data-nav="nodes">${icon('waypoints', 18)} 라인 찾기</button>${accountButton}</div>
           <div class="hero-metrics"><div><div class="metric-label">오늘 라인</div><div class="metric-value">${memberCatalogNodes().length}<small>칸</small></div></div><div><div class="metric-label">검수 완료</div><div class="metric-value">${state.history.filter((item) => item.status === '검수 완료').length}<small>건</small></div></div><div><div class="metric-label">오늘 작업 가능</div><div class="metric-value">${esc(quotaValue)}<small>${esc(quotaSuffix)}</small></div></div><div><div class="metric-label">근무 상태</div><div class="metric-value" style="font-size:18px;color:var(--emerald-strong)">${esc(attendance.label)}</div></div></div>
         </div>
         <div class="panel panel-pad crew-side">
           ${renderCrewIdCard()}
-          <p class="page-copy" style="margin-top:12px">탭하면 뒷면이 보여요.</p>
+          <p class="page-copy" style="margin-top:12px">탭하면 사원증이 한 번 돌아가요.</p>
         </div>
       </section>
       ${inProgress ? `<div class="notice" style="margin-bottom:18px"><span style="color:var(--emerald)">${icon('activity',17)}</span><div style="flex:1"><strong>${esc(inProgress.title)}</strong> 근무를 이어가고 있어요.<br><span style="color:var(--muted)">화면을 닫아도 서버 기준으로 이어져요.</span></div><button class="small-button primary" data-action="open-run">근무 화면 열기</button></div>` : ''}
-      ${waiting ? `<div class="notice" style="margin-bottom:18px"><span style="color:var(--gold)">${icon('clipboard-check',17)}</span><div style="flex:1"><strong>${esc(waiting.title)}</strong> 제출이 끝나 검수를 기다리고 있어요.<br><span style="color:var(--muted)">새 출근은 검수가 끝난 뒤에 할 수 있어요.</span></div><button class="small-button primary" data-action="open-review-wait">검수 대기 보기</button></div>` : ''}
+      ${waiting ? `<div class="notice" style="margin-bottom:18px"><span style="color:var(--gold)">${icon('clipboard-check',17)}</span><div style="flex:1"><strong>검수를 기다리고 있어요</strong><br><span style="color:var(--muted)">${esc(waiting.title)} · 새 출근은 검수가 끝난 뒤에 할 수 있어요.</span></div><button class="small-button primary" data-action="open-review-wait">검수 대기 보기</button></div>` : ''}
       <section class="dashboard-grid">
         <div class="panel"><div class="panel-head"><div><div class="panel-title">최근 수당 흐름</div><div class="panel-subtitle">검수 완료된 수당만 표시해요</div></div><span class="status-badge">${icon('trending-up', 13)} 서버 기록</span></div><div class="chart-wrap"><canvas id="earningsChart" aria-label="최근 7일 수당 흐름"></canvas></div></div>
         <div class="wallet-card"><div class="eyebrow" style="color:#a8f3d2">${icon('layout-grid', 14)} 내 지갑 세 칸</div>${renderWalletSlots()}<div class="wallet-cta"><button class="secondary-button" data-nav="wallet">지갑 보기</button><button class="gold-button" data-action="deposit-info">${icon('credit-card', 16)} 입금하기</button></div></div>
@@ -2455,7 +2492,7 @@
     const quotaLine = authState.session
       ? `<div class="notice" style="margin-bottom:14px"><span style="color:var(--emerald)">${icon('clock-3', 17)}</span><div>${esc(dailyQuotaSummaryText())}</div></div>`
       : '';
-    return `<div class="section-heading" style="margin-top:0"><div><h1 class="page-title">라인 찾기</h1><p class="page-copy">오늘 배정된 라인이에요. 잠금 금액과 수당을 보고 출근하세요.</p></div><button class="secondary-button" data-action="deposit-info">${icon('wallet', 16)} 입금 안내</button></div>${quotaLine}${renderFomoBoard('nodes')}<div class="filter-row"><button class="filter-button active" data-filter="all">전체</button><button class="filter-button" data-filter="빠른 확인">빠른 확인</button><button class="filter-button" data-filter="일반 처리">일반 처리</button><button class="filter-button" data-filter="집중 처리">집중 처리</button><button class="filter-button" data-filter="전문 검수">전문 검수</button></div><section class="node-grid" id="nodeGrid">${grid}</section><div class="notice" style="margin-top:18px"><span style="color:var(--emerald)">${icon('info',17)}</span><div><strong>정산 안내</strong><br>${settleNote('span')} 화면에서 금액을 더하거나 빼지 않아요.</div></div>`;
+    return `<div class="section-heading" style="margin-top:0"><div><h1 class="page-title">라인 찾기</h1><p class="page-copy">오늘 배정된 라인이에요. 잠금 금액과 수당을 보고 출근하세요.</p></div><button class="secondary-button" data-action="deposit-info">${icon('wallet', 16)} 입금 안내</button></div>${quotaLine}<div class="filter-row"><button class="filter-button active" data-filter="all">전체</button><button class="filter-button" data-filter="빠른 확인">빠른 확인</button><button class="filter-button" data-filter="일반 처리">일반 처리</button><button class="filter-button" data-filter="집중 처리">집중 처리</button><button class="filter-button" data-filter="전문 검수">전문 검수</button></div><p class="filter-hint" id="nodeFilterHint">${esc(NODE_FILTER_HINTS.all)}</p><section class="node-grid" id="nodeGrid">${grid}</section><div class="notice" style="margin-top:18px"><span style="color:var(--emerald)">${icon('info',17)}</span><div><strong>정산 안내</strong><br>${settleNote('span')} 화면에서 금액을 더하거나 빼지 않아요.</div></div>`;
   }
 
   function renderHistoryPage() {
@@ -2549,7 +2586,7 @@
     const body = rows.length
       ? `<div class="record-list">${cards}</div><div class="record-table-wrap"><table class="record-table"><thead><tr><th>구분</th><th>내용</th><th>금액</th><th>상태</th><th>일시</th></tr></thead><tbody>${tableRows}</tbody></table></div>`
       : empty;
-    return `<div class="section-heading" style="margin-top:0"><div><h1 class="page-title">지갑</h1><p class="page-copy">지원금·업무잔액·출금가능 세 칸을 섞지 않아요.</p></div><div class="wallet-toolbar"><button class="secondary-button" data-action="open-kyc">${icon('shield-check', 16)} 본인확인</button><button class="secondary-button" data-action="deposit-info">${icon('credit-card', 16)} 입금하기</button></div></div>
+    return `<div class="section-heading" style="margin-top:0"><div><h1 class="page-title">지갑</h1><p class="page-copy">지원금·업무잔액·출금가능 세 칸을 나눠 봐요.</p></div><div class="wallet-toolbar"><button class="secondary-button" data-action="open-kyc">${icon('shield-check', 16)} 본인확인</button><button class="secondary-button" data-action="deposit-info">${icon('credit-card', 16)} 입금하기</button></div></div>
       <div class="wallet-card" style="margin-bottom:18px"><div class="eyebrow" style="color:#a8f3d2">${icon('layout-grid',14)} 세 칸 잔액</div>${renderWalletSlots()}</div>
       ${pendingOut ? `<div class="notice" style="margin-bottom:18px"><span style="color:var(--gold)">${icon('hourglass',17)}</span><div><strong>출금 ${pendingOut}건이 처리 중이에요.</strong><br>운영자가 같은 날 바로 처리해요. 화면에서 금액을 숨기지 않아요.</div></div>` : ''}
       <div class="withdraw-actions"><button class="primary-button" data-action="withdraw-allowance">${icon('banknote', 16)} 수당만 출금</button><button class="secondary-button" data-action="withdraw-principal">${icon('landmark', 16)} 보증금까지 출금</button></div>
@@ -2561,17 +2598,22 @@
 
   function renderMembershipPage() {
     const band = tierBand();
-    return `<div class="membership-page"><div class="section-heading" style="margin-top:0"><div><h1 class="page-title">사원증</h1><p class="page-copy">이름·사진·사원번호·협력사 배지가 한 장에 있어요.</p></div><span class="status-badge gold">${icon('sparkles',13)} ${esc(band.label)} 등급</span></div><div class="membership-stage">${renderCrewIdCard()}<p class="page-copy membership-hint">탭하면 앞·뒷면을 바꿔 봐요.</p><div class="membership-links"><button type="button" class="text-link" data-nav="benefits">${icon('award', 16)} 등급·혜택 보기</button><button type="button" class="text-link" data-nav="referrals">${icon('gift', 16)} 추천 코드 보기</button></div></div></div>`;
+    return `<div class="membership-page"><div class="section-heading" style="margin-top:0"><div><h1 class="page-title">사원증</h1><p class="page-copy">이름·사진·사원번호가 한 장에 있어요. 탭하면 뒷면이 돌아와요.</p></div><span class="status-badge gold">${icon('sparkles',13)} ${esc(band.label)} 등급</span></div><div class="membership-stage">${renderCrewIdCard()}<p class="page-copy membership-hint">탭하면 사원증이 한 번 돌아가요.</p><div class="membership-links"><button type="button" class="text-link" data-nav="benefits">${icon('award', 16)} 등급·혜택 보기</button><button type="button" class="text-link" data-nav="referrals">${icon('gift', 16)} 추천 코드 보기</button></div></div></div>`;
   }
 
   function renderBenefitsPage() {
     const current = tierBand();
+    const next = nextMemberBand(current);
+    const quota = dailyQuotaParts();
+    const quotaLine = !quota.loaded ? '오늘 남은 업무는 확인 중이에요.' : quota.unlimited ? '오늘 남은 업무는 무제한이에요.' : `오늘 남은 업무 ${quota.value}${quota.suffix}`;
+    const nextLine = next ? `다음 등급은 ${next.label}이에요.` : '지금이 가장 높은 등급이에요.';
     const cards = MEMBER_BANDS.map((band) => {
-        const mine = band.label === current.label || band.raw === current.raw;
-      return `<article class="benefit-card${mine ? ' is-current' : ''}"><div class="benefit-card-head"><h3>${esc(band.label)}</h3>${mine ? '<span class="status-badge gold">지금 등급</span>' : ''}</div><p class="benefit-ladder">${esc(band.ladder)}</p><ul class="benefit-list">${band.perks.map((perk) => `<li>${icon('check', 14)}<span>${esc(perk)}</span></li>`).join('')}</ul></article>`;
+      const mine = band.label === current.label || band.raw === current.raw;
+      const stats = (band.stats || []).map((stat) => `<div class="benefit-stat">${icon(stat.icon, 15)}<div><small>${esc(stat.label)}</small><strong>${esc(stat.value)}</strong></div></div>`).join('');
+      return `<article class="benefit-card${mine ? ' is-current' : ''}" data-tone="${esc(band.tone || 'line')}"><div class="benefit-card-head"><span class="benefit-badge" aria-hidden="true">${esc(band.badge || '')}</span><div><h3>${esc(band.label)}</h3><p class="benefit-ladder">${esc(band.ladder)}</p></div>${mine ? '<span class="status-badge gold">지금 등급</span>' : ''}</div><div class="benefit-stats">${stats}</div></article>`;
     }).join('');
-    return `<div class="section-heading" style="margin-top:0"><div><h1 class="page-title">등급·혜택</h1><p class="page-copy">${esc(current.label)} 등급이에요. 다음 등급 조건은 곧 안내돼요.</p></div></div>
-      <div class="benefit-grid">${cards}</div>
+    return `<div class="section-heading" style="margin-top:0"><div><h1 class="page-title">등급·혜택</h1><p class="page-copy">${esc(current.label)} 등급이에요. ${esc(nextLine)} 다음 등급 조건은 곧 안내돼요.</p><p class="page-copy">${esc(quotaLine)}</p></div></div>
+      <div class="benefit-grid benefit-ladder">${cards}</div>
       <div class="panel panel-pad benefit-note">
         <h2>보증금까지 출금하면</h2>
         <p class="help-line">${icon('banknote', 16)}<span>돈은 같은 날 바로 드려요. 며칠 뒤에 묶지 않아요.</span></p>
@@ -2590,7 +2632,7 @@
     const timeline = rows.length
       ? rows.map((row) => `<div class="timeline-item"><div class="timeline-dot ${row.status === 'paid' ? '' : 'pending'}"></div><div class="timeline-content"><strong>${esc(row.label)}</strong><p>${esc(referralStatusLabel(row.status))} · 입금·업무 여부는 서버 상태값으로만 표시합니다.</p></div><div class="timeline-time">${row.status === 'paid' ? '+5,000원' : referralStatusLabel(row.status)}</div></div>`).join('')
       : `<div class="empty-state compact"><strong>아직 추천한 회원이 없어요.</strong><p>추천 코드로 가입한 회원이 생기면 단계가 여기에 나타납니다.</p></div>`;
-    return `<div class="section-heading" style="margin-top:0"><div><h1 class="page-title">추천인 혜택</h1><p class="page-copy">추천한 회원의 가입·인증·업무 완료 상태를 단계별로 확인해요.</p></div><button class="primary-button" data-action="copy-referral">${icon('copy',16)} 추천 코드 복사</button></div><div class="grid-hero"><div class="hero-card" style="min-height:220px"><div class="eyebrow"><span class="pulse-dot"></span> 내 추천 코드</div><div style="display:flex;align-items:center;gap:13px;margin-top:18px"><div style="font-size:34px;font-weight:900;letter-spacing:.08em">${esc(referralCode())}</div><button class="icon-button" data-action="copy-referral">${icon('copy',16)}</button></div><p class="hero-copy" style="margin-top:14px">초대한 회원이 실제 입금과 유효한 업무를 완료하고 검수를 통과하면 추천 보상이 확정됩니다.</p></div><div class="panel panel-pad"><div class="panel-title">추천 보상 현황</div><div class="wallet-balance" style="color:var(--text);margin:12px 0 18px">${money(state.wallet.referral)}</div><div class="wallet-row"><span>초대한 회원</span><strong>${rows.length}명</strong></div><div class="wallet-row"><span>조건 확인 중</span><strong>${pending}명</strong></div><div class="wallet-row"><span>보상 확정</span><strong>${paid}명</strong></div></div></div><div class="panel"><div class="panel-head"><div><div class="panel-title">추천 회원 단계</div><div class="panel-subtitle">개인정보는 보호된 상태로 표시됩니다.</div></div></div><div class="timeline">${timeline}</div></div>`;
+    return `<div class="section-heading" style="margin-top:0"><div><h1 class="page-title">추천인 혜택</h1><p class="page-copy">코드를 나눠 주고, 가입·입금·근무가 끝나면 보상이 확정돼요.</p></div><button class="primary-button" data-action="copy-referral">${icon('copy',16)} 추천 코드 복사</button></div><div class="grid-hero"><div class="hero-card" style="min-height:220px"><div class="eyebrow"><span class="pulse-dot"></span> 내 추천 코드</div><div style="display:flex;align-items:center;gap:13px;margin-top:18px"><div style="font-size:34px;font-weight:900;letter-spacing:.08em">${esc(referralCode())}</div><button class="icon-button" data-action="copy-referral">${icon('copy',16)}</button></div><p class="hero-copy" style="margin-top:14px">초대한 회원이 실제 입금과 유효한 업무를 완료하고 검수를 통과하면 추천 보상이 확정됩니다.</p><ol class="referral-funnel"><li>가입</li><li>입금</li><li>근무 완료</li><li>보상</li></ol></div><div class="panel panel-pad referral-stats"><div class="panel-title">추천 보상 현황</div><div class="wallet-balance" style="color:var(--text);margin:12px 0 18px">${money(state.wallet.referral)}</div><div class="wallet-row"><span>초대한 회원</span><strong>${rows.length}명</strong></div><div class="wallet-row"><span>조건 확인 중</span><strong>${pending}명</strong></div><div class="wallet-row"><span>보상 확정</span><strong>${paid}명</strong></div></div></div><div class="panel"><div class="panel-head"><div><div class="panel-title">추천 회원 단계</div><div class="panel-subtitle">개인정보는 보호된 상태로 표시됩니다.</div></div></div><div class="timeline">${timeline}</div></div>`;
   }
 
   function renderSupportPage() {
@@ -2609,7 +2651,12 @@
     };
     return `<div class="section-heading" style="margin-top:0"><div><h1 class="page-title">도움말</h1><p class="page-copy">오늘 근무부터 정산까지, 사원 안내를 나눠 두었어요.</p></div></div>
       <div class="help-tabs">${tabs.map((item) => `<button type="button" class="filter-button ${tab === item.id ? 'active' : ''}" data-help-tab="${item.id}">${item.label}</button>`).join('')}</div>
-      <div class="panel panel-pad help-body">${bodies[tab] || bodies.work}</div>`;
+      <div class="panel panel-pad help-body">${bodies[tab] || bodies.work}</div>
+      <div class="help-accordion">
+        <details><summary>컴퓨터에서도 출근할 수 있어요</summary><p>홈 화면 아이콘이 없어도 브라우저에서 근무·입금이 돼요.</p></details>
+        <details><summary>원금은 업무잔액에 남아 보여요</summary><p>기본 출금은 수당만이에요. 보증금까지는 한 번 더 확인한 뒤에만 나가요.</p></details>
+        <details><summary>검수가 끝날 때까지 새 출근은 기다려요</summary><p>제출한 칸이 승인되거나 반려되면 다음 칸을 고를 수 있어요.</p></details>
+      </div>`;
   }
 
   function renderMemberPage() {
@@ -2971,7 +3018,7 @@
     return `<div class="modal-backdrop player-backdrop" data-modal="review-wait"><div class="player-sheet review-wait-sheet">
       <div class="player-card">
         <div class="player-toolbar">
-          <div class="player-kicker">${icon('clipboard-check', 15)} 검수 대기 업무</div>
+          <div class="player-kicker">${icon('clipboard-check', 15)} 검수를 기다리고 있어요</div>
           <button type="button" class="icon-button" data-action="close-review-wait" aria-label="닫기">${icon('x', 18)}</button>
         </div>
         <div class="detail-list">
@@ -2982,7 +3029,7 @@
           <div><span>운영자 확인 결과</span><strong>${esc(operatorResult)}</strong></div>
           <div><span>재확인 요청 내용</span><strong>${esc(reworkCopy)}</strong></div>
         </div>
-        <div class="notice" style="margin-top:16px"><span style="color:var(--gold)">${icon('hourglass',17)}</span><div>새 업무는 이 검수가 끝난 뒤에 시작할 수 있어요. 화면을 닫아도 서버 상태로 남아 있어요.</div></div>
+        <div class="notice" style="margin-top:16px"><span style="color:var(--gold)">${icon('hourglass',17)}</span><div>새 출근은 검수가 끝난 뒤에 할 수 있어요. 화면을 닫아도 서버에 남아 있어요.</div></div>
         <div class="modal-actions"><button class="secondary-button" type="button" data-action="close-review-wait">작업실로</button><button class="primary-button" type="button" disabled aria-disabled="true">새 업무 시작</button></div>
       </div>
     </div></div>`;
@@ -3107,10 +3154,17 @@
 
   function renderInfoModal(kind) {
     if (kind === 'deposit') {
+      const method = state.depositMethod;
+      const currency = method === 'usdt' ? 'USDT' : 'KRW';
+      const lead = !method
+        ? '원화와 USDT를 나눠 보여 드려요.'
+        : method === 'usdt'
+          ? '테더 주소는 PIN 뒤에만 보여요. 금액은 직접 적어요.'
+          : '계좌는 PIN 뒤에만 보여요. 금액은 직접 적어요.';
       const amountForm = isDepositRevealed()
-        ? `<form id="depositForm"><div class="notice"><span style="color:var(--emerald)">${icon('wallet',17)}</span><div>보낸 뒤 운영자가 확인해요. 화면에서 잔액을 올리지 않아요.</div></div><div class="form-grid" style="margin-top:16px"><div class="field"><label for="depositAmount">입금 금액</label><input id="depositAmount" name="amount" type="number" min="1" step="1" required placeholder="보낼 금액을 직접 입력" value="${state.depositPresetAmount || ''}" /></div><div class="field"><label for="depositCurrency">통화</label><select id="depositCurrency" name="currency"><option value="KRW">원화</option><option value="USDT">USDT</option></select></div></div><input type="hidden" name="destination_id" value="${esc(state.depositReveal?.[0]?.id || '')}" /><div class="modal-actions"><button class="secondary-button" type="button" data-action="close-modal">취소</button><button class="primary-button" type="submit">입금 확인 요청</button></div></form>`
+        ? `<form id="depositForm"><div class="notice"><span style="color:var(--emerald)">${icon('wallet',17)}</span><div>보낸 뒤 운영자가 확인해요. 화면에서 잔액을 올리지 않아요.</div></div><div class="form-grid" style="margin-top:16px"><div class="field"><label for="depositAmount">입금 금액</label><input id="depositAmount" name="amount" type="number" min="1" step="1" required placeholder="보낼 금액을 직접 입력" value="${state.depositPresetAmount || ''}" /></div><div class="field"><label for="depositCurrency">통화</label><select id="depositCurrency" name="currency"><option value="KRW" ${currency === 'KRW' ? 'selected' : ''}>원화</option><option value="USDT" ${currency === 'USDT' ? 'selected' : ''}>USDT</option></select></div></div><input type="hidden" name="destination_id" value="${esc(filterDepositItems(state.depositReveal)?.[0]?.id || state.depositReveal?.[0]?.id || '')}" /><div class="modal-actions"><button class="secondary-button" type="button" data-action="close-modal">취소</button><button class="primary-button" type="submit">입금 확인 요청</button></div></form>`
         : '';
-      return `<div class="modal-backdrop" data-modal="info"><div class="modal"><div class="modal-head"><div><h2 class="modal-title-row">${icon('credit-card', 20)} 입금하기</h2><p>보안 PIN으로 계좌·USDT를 확인한 뒤, 원하는 금액을 직접 적어요.</p></div><button class="icon-button" data-action="close-modal" aria-label="닫기">${icon('x',18)}</button></div><div class="modal-body">${renderDepositDestinations()}${amountForm}</div></div></div>`;
+      return `<div class="modal-backdrop" data-modal="info"><div class="modal"><div class="modal-head"><div><h2 class="modal-title-row">${icon('credit-card', 20)} ${method === 'usdt' ? 'USDT로 입금' : method === 'krw' ? '원화로 입금' : '입금하기'}</h2><p>${lead}</p></div><button class="icon-button" data-action="close-modal" aria-label="닫기">${icon('x',18)}</button></div><div class="modal-body">${renderDepositDestinations()}${amountForm}</div></div></div>`;
     }
     const principal = state.withdrawIntent === 'principal';
     const notice = principal
@@ -4141,6 +4195,7 @@
     if (state.modal === 'deposit' || state.modal === 'info') lockDepositReveal({ silent: true });
     if (state.modal !== 'deposit-jump') state.depositJump = null;
     state.depositPresetAmount = null;
+    state.depositMethod = '';
     state.modal = null;
     state.modalPayload = null;
     render();
@@ -4403,6 +4458,19 @@
       state.helpTab = target.dataset.helpTab;
       saveState();
       render();
+      return;
+    }
+    if (target.dataset.financeTab) {
+      state.adminFinanceTab = target.dataset.financeTab;
+      saveState();
+      render();
+      return;
+    }
+    if (target.dataset.depositMethod !== undefined) {
+      state.depositMethod = target.dataset.depositMethod || '';
+      saveState();
+      render();
+      paintDepositQr();
       return;
     }
     if (target.dataset.ledgerTab) {
@@ -5193,6 +5261,8 @@
     document.querySelectorAll('#nodeGrid .node-card').forEach((card) => {
       card.style.display = value === 'all' || card.dataset.level === value ? '' : 'none';
     });
+    const hint = document.getElementById('nodeFilterHint');
+    if (hint) hint.textContent = NODE_FILTER_HINTS[value] || NODE_FILTER_HINTS.all;
   });
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) {

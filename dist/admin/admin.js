@@ -64,6 +64,10 @@
     return core()?.icon ? core().icon(name, size) : '';
   }
 
+  function mobileCards(html) {
+    return html ? `<div class="admin-mobile-cards">${html}</div>` : '';
+  }
+
   function parseWorkSpec(node) {
     const empty = { stake: 0, stipend: 0, photos: [], choices: [], answer: 1, slots: 0, tier_band: '소액', partner_slug: '', requires_assign: false, question_prompt_ko: '' };
     if (!node) return empty;
@@ -583,45 +587,91 @@
     const pinAudit = Array.isArray(finance.pin_audit) ? finance.pin_audit : [];
     const pinRows = pinAudit.map((item) => `<tr><td>${esc(pinEventLabel(item.event))}</td><td>${esc(pinScopeLabel(item.scope))}</td><td>${item.created_at ? new Date(item.created_at).toLocaleString('ko-KR') : '-'}</td></tr>`).join('')
       || `<tr><td colspan="3"><div class="empty-state compact"><strong>보안 PIN 기록이 아직 없어요.</strong></div></td></tr>`;
-    return `<div class="section-heading" style="margin-top:0"><div><h1 class="page-title">입출금 처리</h1><p class="page-copy">출금은 완료 한 번으로 바로 처리해요. 회원 잔액은 서버가 바꿉니다.</p></div>${seedButtons('finance', state.adminFinanceLoading)}</div>${contractNote}${error}
-      <div class="admin-stat-grid">
-        <div class="admin-stat"><p>출금 신청</p><strong>${wait}</strong><span style="color:var(--gold)">바로 완료 가능</span></div>
-        <div class="admin-stat"><p>입금 확인 대기</p><strong>${depositWait}</strong><span>수동 확인</span></div>
-        <div class="admin-stat"><p>본인확인</p><strong>${finance.kyc.length}</strong><span>원본 주소는 공개하지 않음</span></div>
-      </div>
-      <div class="admin-card"><div class="admin-card-head"><div><h3>출금 신청 목록</h3><p>완료를 누르면 같은 날 바로 이체 처리되고, 회원 잔액·내역이 서버에서 바뀌어요.</p></div></div>
-        <div class="table-wrap"><table><thead><tr><th>구분</th><th>금액</th><th>사원번호</th><th>상태</th><th>신청 시각</th><th></th></tr></thead><tbody>${body}</tbody></table></div>
-      </div>
-      <div class="admin-card"><div class="admin-card-head"><div><h3>입금 확인</h3><p>입금은 확인 후 회원 잔액에 반영돼요.</p></div></div>
-        <div class="table-wrap"><table><thead><tr><th>사원번호</th><th>금액</th><th>상태</th><th></th></tr></thead><tbody>${depositRows}</tbody></table></div>
-      </div>
-      <div class="admin-card"><div class="admin-card-head"><div><h3>입금 안내 설정</h3><p>원화 계좌와 USDT(고정 TRC20) 원문을 저장해요. 회원은 보안 PIN 뒤에만 보고, 화면만 바꾸면 입금 추적이 깨져요. 같은 안내를 수정하면 버전이 올라갑니다.</p></div></div>
-        <div class="table-wrap"><table><thead><tr><th>이름</th><th>종류</th><th>안내</th><th>표시</th></tr></thead><tbody>${destRows}</tbody></table></div>
-        <form id="payoutDestinationForm" class="form-grid" style="margin-top:16px">
+    const destKind = (item) => String(item.destination_type || '') === 'usdt' ? 'usdt' : 'bank';
+    const bankDestRows = destinations.filter((item) => destKind(item) === 'bank').map((item) => {
+      const line = [item.bank_name, item.account_holder, item.masked_value].filter(Boolean).join(' · ') || '확인 필요';
+      return `<tr><td>${esc(item.label || '원화 계좌')}</td><td>${esc(line)}<br><span style="color:var(--muted);font-size:11px">버전 ${Number(item.info_version || 1)}</span></td><td><span class="pill ${item.enabled === false ? 'wait' : 'ok'}">${item.enabled === false ? '숨김' : '회원 표시'}</span><div class="action-row"><button type="button" class="small-button" data-action="edit-payout-destination" data-destination-id="${esc(item.id)}">수정</button></div></td></tr>`;
+    }).join('') || `<tr><td colspan="3"><div class="empty-state compact"><strong>등록된 원화 계좌가 없어요.</strong></div></td></tr>`;
+    const usdtDestRows = destinations.filter((item) => destKind(item) === 'usdt').map((item) => {
+      const line = [item.usdt_network, item.masked_value].filter(Boolean).join(' · ') || '확인 필요';
+      return `<tr><td>${esc(item.label || 'USDT')}</td><td>${esc(line)}<br><span style="color:var(--muted);font-size:11px">버전 ${Number(item.info_version || 1)} · 고정 주소</span></td><td><span class="pill ${item.enabled === false ? 'wait' : 'ok'}">${item.enabled === false ? '숨김' : '회원 표시'}</span><div class="action-row"><button type="button" class="small-button" data-action="edit-payout-destination" data-destination-id="${esc(item.id)}">수정</button></div></td></tr>`;
+    }).join('') || `<tr><td colspan="3"><div class="empty-state compact"><strong>등록된 USDT 주소가 없어요.</strong></div></td></tr>`;
+    const withdrawCards = withdrawals.map((item) => {
+      const includePrincipal = item.include_principal === true || item.kind_label === '원금포함';
+      const kind = includePrincipal ? '원금포함' : '수당만';
+      const amount = item.currency === 'USDT' ? `${Number(item.amount || 0).toLocaleString('ko-KR')} 테더` : money(item.amount);
+      const employee = item.employee_no || item.member_public_id || '-';
+      const canComplete = ['submitted', 'checking', 'approved'].includes(item.status);
+      const statusLabel = ({ submitted: '접수', checking: '확인 중', approved: '이체 대기', sent: '완료', completed: '완료', rejected: '반려', cancelled: '취소' })[item.status] || '처리 중';
+      const actions = canComplete
+        ? `<div class="action-row"><button type="button" class="small-button primary" data-action="withdraw-complete" data-withdrawal-id="${esc(item.id)}">완료</button><button type="button" class="small-button" data-finance-action="review_withdrawal" data-finance-id="${esc(item.id)}" data-finance-decision="rejected">반려</button></div>`
+        : `<span style="color:var(--muted);font-size:12px">처리 끝</span>`;
+      return `<article class="admin-mobile-card"><div class="admin-mobile-top"><strong>${esc(kind)} · ${esc(amount)}</strong><span class="pill ${item.status === 'sent' || item.status === 'completed' ? 'ok' : 'wait'}">${esc(statusLabel)}</span></div><p>${esc(employee)} · ${esc(item.member_name || '')}</p>${actions}</article>`;
+    }).join('');
+    const depositCards = finance.deposits.map((item) => {
+      const pending = ['submitted', 'checking'].includes(item.status);
+      const actions = pending
+        ? `<div class="action-row"><button class="small-button primary" data-finance-action="review_deposit" data-finance-id="${esc(item.id)}" data-finance-decision="approved">확인</button><button class="small-button" data-finance-action="review_deposit" data-finance-id="${esc(item.id)}" data-finance-decision="rejected">반려</button></div>`
+        : `<span style="color:var(--muted);font-size:12px">처리 끝</span>`;
+      return `<article class="admin-mobile-card"><div class="admin-mobile-top"><strong>${esc(item.member_public_id || item.member_name || '-')}</strong><span class="pill ${item.status === 'approved' ? 'ok' : 'wait'}">${esc(item.status === 'approved' ? '확인' : item.status === 'rejected' ? '반려' : '대기')}</span></div><p>${money(item.amount)}</p>${actions}</article>`;
+    }).join('');
+    const tab = state.adminFinanceTab || 'payouts';
+    const tabs = [
+      { id: 'payouts', label: '출금' },
+      { id: 'deposits', label: '입금' },
+      { id: 'krw', label: '원화' },
+      { id: 'usdt', label: 'USDT' },
+      { id: 'security', label: '보안기록' }
+    ];
+    const tabNav = `<div class="help-tabs finance-tabs">${tabs.map((item) => `<button type="button" class="filter-button ${tab === item.id ? 'active' : ''}" data-finance-tab="${item.id}">${item.label}</button>`).join('')}</div>`;
+    const destForm = (kind) => `<form id="payoutDestinationForm" class="form-grid" style="margin-top:16px">
           <input type="hidden" name="destination_id" value="" />
-          <div class="field"><label>종류</label><select name="destination_type"><option value="bank">원화 계좌</option><option value="usdt">USDT 고정 주소</option></select></div>
+          <div class="field"><label>종류</label><select name="destination_type"><option value="bank" ${kind === 'bank' ? 'selected' : ''}>원화 계좌</option><option value="usdt" ${kind === 'usdt' ? 'selected' : ''}>USDT 고정 주소</option></select></div>
           <div class="field"><label>표시 이름</label><input name="label" maxlength="80" placeholder="예: 퍼뜩 입금 계좌" /></div>
-          <div class="field"><label>은행명</label><input name="bank_name" maxlength="80" placeholder="예: 국민은행" /></div>
+          ${kind === 'bank' ? `<div class="field"><label>은행명</label><input name="bank_name" maxlength="80" placeholder="예: 국민은행" /></div>
           <div class="field"><label>예금주</label><input name="account_holder" maxlength="80" placeholder="예금주 이름" /></div>
-          <div class="field full"><label>계좌번호 (원화 원문)</label><input name="account_number" maxlength="80" placeholder="숫자 원문. 회원 화면에는 PIN 뒤에만 보여요" /></div>
-          <div class="field"><label>USDT 네트워크</label><input name="usdt_network" maxlength="40" placeholder="TRC20" value="TRC20" /></div>
-          <div class="field full"><label>USDT 주소 (고정)</label><input name="usdt_address" maxlength="200" placeholder="운영자 고정 TRC20. 회원별 자동생성 아님" /></div>
+          <div class="field full"><label>계좌번호 (원화 원문)</label><input name="account_number" maxlength="80" placeholder="숫자 원문. 회원 화면에는 PIN 뒤에만 보여요" /></div>` : `<div class="field"><label>USDT 네트워크</label><input name="usdt_network" maxlength="40" placeholder="TRC20" value="TRC20" /></div>
+          <div class="field full"><label>USDT 주소 (고정)</label><input name="usdt_address" maxlength="200" placeholder="운영자 고정 TRC20. 회원별 자동생성 아님" /></div>`}
           <div class="field full"><label>QR 이미지 경로</label><input name="qr_asset_path" maxlength="500" placeholder="putduk-private 경로. 없으면 회원 화면에서 주소 QR을 만들어요" /></div>
           <div class="field full"><label>메모</label><input name="memo" maxlength="500" placeholder="회원에게 PIN 뒤에 보여줄 한 줄" /></div>
           <div class="field full"><label>안내 문구</label><input name="guidance_text" maxlength="1000" placeholder="입금 후 확인 요청을 남겨 주세요" /></div>
           <div class="field full"><label>변경 사유</label><input name="change_reason" maxlength="500" placeholder="계좌·주소를 바꾸면 필수" /></div>
           <label class="check-row field full"><input type="checkbox" name="enabled" checked /> 회원 입금 화면에 바로 보여요</label>
           <div class="modal-actions field full"><button class="primary-button" type="submit">입금 안내 저장</button></div>
-        </form>
-      </div>
-      <div class="admin-card"><div class="admin-card-head"><div><h3>보안 PIN 재설정</h3><p>운영자는 PIN 원문을 볼 수 없어요. 재설정만 하면 회원이 다시 만듭니다.</p></div></div>
+        </form>`;
+    const panel = tab === 'deposits'
+      ? `<div class="admin-card"><div class="admin-card-head"><div><h3>입금 확인</h3><p>입금은 확인 후 회원 잔액에 반영돼요.</p></div></div>
+        <div class="table-wrap"><table><thead><tr><th>사원번호</th><th>금액</th><th>상태</th><th></th></tr></thead><tbody>${depositRows}</tbody></table></div>${mobileCards(depositCards)}
+      </div>`
+      : tab === 'krw'
+        ? `<div class="admin-card"><div class="admin-card-head"><div><h3>입금 안내 설정 · 원화</h3><p>원문 계좌는 회원 PIN 뒤에만 보여요. 화면만 바꾸면 입금 추적이 깨져요.</p></div></div>
+        <div class="table-wrap"><table><thead><tr><th>이름</th><th>안내</th><th>표시</th></tr></thead><tbody>${bankDestRows}</tbody></table></div>
+        ${destForm('bank')}
+      </div>`
+      : tab === 'usdt'
+        ? `<div class="admin-card"><div class="admin-card-head"><div><h3>USDT 입금 안내</h3><p>고정 TRC20 원문을 저장해요. 회원별 자동생성은 하지 않아요.</p></div></div>
+        <div class="table-wrap"><table><thead><tr><th>이름</th><th>안내</th><th>표시</th></tr></thead><tbody>${usdtDestRows}</tbody></table></div>
+        ${destForm('usdt')}
+      </div>`
+        : tab === 'security'
+          ? `<div class="admin-card"><div class="admin-card-head"><div><h3>보안 PIN 재설정</h3><p>운영자는 PIN 원문을 볼 수 없어요. 재설정만 하면 회원이 다시 만듭니다.</p></div></div>
         <form id="securityPinResetForm" class="form-grid">
           <div class="field"><label>회원</label>${memberPickerHtml()}</div>
           <div class="field full"><label>사유</label><input name="reason" required maxlength="500" placeholder="재설정 사유" /></div>
           <div class="modal-actions field full"><button class="primary-button" type="submit">PIN 재설정</button></div>
         </form>
         <div class="table-wrap" style="margin-top:16px"><table><thead><tr><th>기록</th><th>범위</th><th>시각</th></tr></thead><tbody>${pinRows}</tbody></table></div>
+      </div>`
+          : `<div class="admin-card"><div class="admin-card-head"><div><h3>출금 신청 목록</h3><p>완료를 누르면 같은 날 바로 이체 처리되고, 회원 잔액·내역이 서버에서 바뀌어요.</p></div></div>
+        <div class="table-wrap"><table><thead><tr><th>구분</th><th>금액</th><th>사원번호</th><th>상태</th><th>신청 시각</th><th></th></tr></thead><tbody>${body}</tbody></table></div>${mobileCards(withdrawCards)}
       </div>`;
+    return `<div class="section-heading" style="margin-top:0"><div><h1 class="page-title">입출금 처리</h1><p class="page-copy">출금은 완료 한 번으로 바로 처리해요. 회원 잔액은 서버가 바꿉니다.</p></div>${seedButtons('finance', state.adminFinanceLoading)}</div>${contractNote}${error}
+      <div class="admin-stat-grid">
+        <div class="admin-stat"><p>출금 신청</p><strong>${wait}</strong><span style="color:var(--gold)">바로 완료 가능</span></div>
+        <div class="admin-stat"><p>입금 확인 대기</p><strong>${depositWait}</strong><span>수동 확인</span></div>
+        <div class="admin-stat"><p>본인확인</p><strong>${finance.kyc.length}</strong><span>원본 주소는 공개하지 않음</span></div>
+      </div>
+      ${tabNav}${panel}`;
   }
 
   function renderNodes() {
@@ -648,11 +698,20 @@
       </tr>`;
     }).join('');
     const bodyHtml = body || `<tr><td colspan="7"><div class="empty-state compact"><div class="empty-icon">${icon('waypoints', 22)}</div><strong>등록된 업무 카드가 없어요.</strong><p>근무 보증·수당·문제 보기를 넣고 카드를 만들어 주세요.</p></div></td></tr>`;
+    const mobile = rows.map((node) => {
+      const spec = parseWorkSpec(node);
+      const company = brands.find((item) => item.id === node.companyId) || api.adminBrandById?.(node.companyId) || { name: '협력사' };
+      const status = node.catalogStatus;
+      const action = status === 'published' ? 'pause_node' : 'publish_node';
+      const label = status === 'published' ? '회원 공개 중지' : status === 'archived' ? '다시 공개' : '회원 공개';
+      const statusText = status === 'published' ? '공개 중' : status === 'paused' ? '일시 중지' : status === 'archived' ? '보관됨' : '작성 중';
+      return `<article class="admin-mobile-card"><div class="admin-mobile-top"><strong>${esc(node.title)}</strong><span class="pill ${status === 'published' ? 'ok' : 'wait'}">${statusText}</span></div><p>${esc(company.name)} · 보증 ${money(spec.stake)} · 수당 ${money(spec.stipend)}</p><div class="action-row"><button class="small-button ${status === 'published' ? 'primary' : ''}" data-catalog-node-action="${action}" data-node-id="${esc(node.id)}">${label}</button><button class="small-button" data-action="edit-node" data-node-id="${esc(node.id)}">수정</button></div></article>`;
+    }).join('');
     const errorText = state.adminCatalogError ? String(state.adminCatalogError.message || state.adminCatalogError) : '';
     const notice = state.adminCatalogError
       ? `<div class="notice" style="margin-bottom:18px"><span style="color:var(--gold)">${icon('triangle-alert', 17)}</span><div><strong>업무 목록을 불러오지 못했어요.</strong><br>${esc(errorText)} <button class="text-link" data-action="refresh-catalog">다시 불러오기</button></div></div>`
       : '';
-    return `<div class="section-heading" style="margin-top:0"><div><h1 class="page-title">업무 카드 관리</h1><p class="page-copy">근무 보증, 수당, 문제 사진, 보기 두 개, 정답, 자리를 등록해요. 미리보기는 회원 카드와 같은 세 줄입니다.</p></div><button class="primary-button" data-action="add-node">${icon('plus', 16)} 업무 카드 만들기</button></div>${notice}<div class="admin-card"><div class="table-wrap"><table><thead><tr><th>업무 카드</th><th>협력사</th><th>근무 보증</th><th>수당</th><th>자리</th><th>공개</th><th></th></tr></thead><tbody>${bodyHtml}</tbody></table></div></div>`;
+    return `<div class="section-heading" style="margin-top:0"><div><h1 class="page-title">업무 카드 관리</h1><p class="page-copy">근무 보증, 수당, 문제 사진, 보기 두 개, 정답, 자리를 등록해요. 미리보기는 회원 카드와 같은 세 줄입니다.</p></div><button class="primary-button" data-action="add-node">${icon('plus', 16)} 업무 카드 만들기</button></div>${notice}<div class="admin-card"><div class="table-wrap"><table><thead><tr><th>업무 카드</th><th>협력사</th><th>근무 보증</th><th>수당</th><th>자리</th><th>공개</th><th></th></tr></thead><tbody>${bodyHtml}</tbody></table></div>${mobileCards(mobile)}</div>`;
   }
 
   function renderReviews() {
@@ -734,7 +793,7 @@
       : '';
     const crowdMaxLimit = Math.max(200, Number(settings.crowd_max || 0));
     const burnLimit = Math.max(30, Number(settings.burn_per_minute || 0));
-    return `<div class="section-heading" style="margin-top:0"><div><h1 class="page-title">연출</h1><p class="page-copy">봇 연출과 인원·자리 소진 값을 저장해요. 회원 작업실과 라인 찾기에 바로 보여요.</p></div><button type="button" class="primary-button" data-action="save-motion">설정 저장</button></div>${error}
+    return `<div class="section-heading" style="margin-top:0"><div><h1 class="page-title">연출</h1><p class="page-copy">봇 연출과 인원·자리 소진 값을 저장해요. 회원 작업실에 바로 보여요.</p></div><button type="button" class="primary-button" data-action="save-motion">설정 저장</button></div>${error}
       <div class="admin-card">
         <div class="admin-card-head"><div><h3>봇 연출</h3><p>방금 피드·자리 소진에 쓰는 값입니다. 빼지 말고 세기만 조절하세요.</p></div></div>
         <form id="motionSettingsForm" class="form-grid">
@@ -1045,7 +1104,14 @@
       </tr>`;
     }).join('');
     const body = rows || `<tr><td colspan="12"><div class="empty-state compact"><div class="empty-icon">${icon('users', 22)}</div><strong>${state.adminMembersLoading ? '회원 정보를 불러오고 있어요.' : '표시할 회원이 없어요.'}</strong><p>검색은 사원번호·이름·이메일·휴대폰을 기준으로 합니다.</p></div></td></tr>`;
-    return `<div class="section-heading" style="margin-top:0"><div><h1 class="page-title">회원 관리</h1><p class="page-copy">출금 가능·업무 진행·잠금 금액을 나눠 확인해요. 목록의 개인정보는 가려져 있어요.</p></div><button class="secondary-button" data-action="refresh-members" ${state.adminMembersLoading ? 'disabled' : ''}>${icon('refresh-cw', 16)} ${state.adminMembersLoading ? '불러오는 중…' : '새로고침'}</button></div>${error}<div class="admin-card"><form id="memberSearchForm" class="search-bar"><input id="memberSearchInput" value="${esc(state.adminMemberQuery || '')}" placeholder="사원번호, 이름, 이메일, 휴대폰" /><button class="small-button primary" type="submit">찾기</button></form><div class="filter-row"><button class="filter-button ${filter === 'all' ? 'active' : ''}" data-member-filter="all">전체${state.adminMembersContract ? ` ${state.adminMemberTotal}` : ''}</button><button class="filter-button ${filter === 'active' ? 'active' : ''}" data-member-filter="active">활동 중</button><button class="filter-button ${filter === 'pending' ? 'active' : ''}" data-member-filter="pending">확인 중</button><button class="filter-button ${filter === 'blocked' ? 'active' : ''}" data-member-filter="blocked">차단</button></div><div class="table-wrap"><table><thead><tr><th>사원번호</th><th>이름</th><th>이메일</th><th>휴대폰</th><th>사원증</th><th>최근 접속</th><th>접속 주소</th><th>출금 가능</th><th>업무 진행</th><th>잠금</th><th>상태</th><th></th></tr></thead><tbody>${body}</tbody></table></div></div>`;
+    const memberCards = members.map((item) => {
+      const status = item.status || 'pending';
+      const ok = status === 'active';
+      const memberId = esc(item.id || item.user_id || '');
+      const wallet = item.wallet || {};
+      return `<article class="admin-mobile-card"><div class="admin-mobile-top"><strong>${esc(item.public_id || '-')}</strong><span class="pill ${ok ? 'ok' : 'wait'}">${esc(memberStatusLabel(status))}</span></div><p>${esc(maskPersonName(item.legal_name || item.display_name || '퍼뜩 회원'))} · ${esc(badgeTier(item.member_tier))}</p><p>출금 ${money(wallet.available)} · 업무 ${money(wallet.work)}</p><div class="action-row"><button class="small-button" data-action="member-detail" data-member-id="${memberId}">자세히</button><button class="small-button primary" data-action="member-credit" data-member-id="${memberId}">잔액 입금</button></div></article>`;
+    }).join('');
+    return `<div class="section-heading" style="margin-top:0"><div><h1 class="page-title">회원 관리</h1><p class="page-copy">출금 가능·업무 진행·잠금 금액을 나눠 확인해요. 목록의 개인정보는 가려져 있어요.</p></div><button class="secondary-button" data-action="refresh-members" ${state.adminMembersLoading ? 'disabled' : ''}>${icon('refresh-cw', 16)} ${state.adminMembersLoading ? '불러오는 중…' : '새로고침'}</button></div>${error}<div class="admin-card"><form id="memberSearchForm" class="search-bar"><input id="memberSearchInput" value="${esc(state.adminMemberQuery || '')}" placeholder="사원번호, 이름, 이메일, 휴대폰" /><button class="small-button primary" type="submit">찾기</button></form><div class="filter-row"><button class="filter-button ${filter === 'all' ? 'active' : ''}" data-member-filter="all">전체${state.adminMembersContract ? ` ${state.adminMemberTotal}` : ''}</button><button class="filter-button ${filter === 'active' ? 'active' : ''}" data-member-filter="active">활동 중</button><button class="filter-button ${filter === 'pending' ? 'active' : ''}" data-member-filter="pending">확인 중</button><button class="filter-button ${filter === 'blocked' ? 'active' : ''}" data-member-filter="blocked">차단</button></div><div class="table-wrap"><table><thead><tr><th>사원번호</th><th>이름</th><th>이메일</th><th>휴대폰</th><th>사원증</th><th>최근 접속</th><th>접속 주소</th><th>출금 가능</th><th>업무 진행</th><th>잠금</th><th>상태</th><th></th></tr></thead><tbody>${body}</tbody></table></div>${mobileCards(memberCards)}</div>`;
   }
 
   function renderNotifications() {

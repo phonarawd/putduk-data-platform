@@ -1226,9 +1226,9 @@
     const w = frame.width;
     const h = frame.height;
     const t = easeWork(frame.workLocal);
-    const zoom = cut === "lock" ? 1.02 + t * 0.05 : cut === "submit" ? 1.01 + t * 0.04 : cut === "demote" ? 1.02 + t * 0.03 : 1.02;
-    const panX = cut === "submit" ? w * 0.018 * Math.sin(t * Math.PI) : 0;
-    const panY = cut === "lock" ? -h * 0.02 * t : cut === "demote" ? h * 0.025 * t : 0;
+    const zoom = cut === "lock" ? 1.06 + t * 0.14 : cut === "submit" ? 1.05 + t * 0.12 : cut === "demote" ? 1.08 + t * 0.1 : 1.04 + t * 0.06;
+    const panX = cut === "submit" ? w * 0.05 * Math.sin(t * Math.PI) : cut === "lock" ? -w * 0.02 * t : 0;
+    const panY = cut === "lock" ? -h * 0.06 * t : cut === "demote" ? h * 0.06 * t : 0;
     ctx.translate(w / 2 + panX, h / 2 + panY);
     ctx.scale(zoom, zoom);
     ctx.translate(-w / 2, -h / 2);
@@ -1321,13 +1321,17 @@
   }
   function drawDemoteCut(ctx, frame) {
     const { width: w, height: h, workLocal: t, color } = frame;
-    ctx.fillStyle = `rgba(4,10,14,${0.28 + t * 0.25})`;
+    ctx.fillStyle = `rgba(4,10,14,${0.1 + t * 0.18})`;
     ctx.fillRect(0, 0, w, h);
-    const bw = w * 0.36;
-    const bh = h * 0.52;
+    const gate = t * w * 0.18;
+    ctx.fillStyle = "rgba(12,18,22,0.42)";
+    ctx.fillRect(0, 0, gate, h);
+    ctx.fillRect(w - gate, 0, gate, h);
+    const bw = w * 0.34;
+    const bh = h * 0.48;
     const x = (w - bw) / 2;
-    const y = Math.max(20, h * 0.12) + t * h * 0.18;
-    drawIdBadge(ctx, x, y, bw, bh, "#1a2430", (0.1 + t * 0.62) * bh, mixHex(color, "#6b7280", t), 0.08 * t);
+    const y = Math.max(18, h * 0.16) + t * h * 0.22;
+    drawIdBadge(ctx, x, y, bw, bh, "#1a2430", (0.08 + t * 0.7) * bh, mixHex(color, "#6b7280", t), 0.06 * t);
   }
   function drawValueSlab(ctx, x, y, w, h, amount, color, alpha) {
     ctx.save();
