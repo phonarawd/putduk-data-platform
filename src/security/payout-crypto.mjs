@@ -1,6 +1,6 @@
 // 지급정보(계좌·USDT) 애플리케이션 암호화. 원문은 Edge에서만 잠깐 복호화한다.
 // 형식: enc.v1.{iv_b64url}.{ciphertext_b64url}  (AES-256-GCM)
-// 키가 없거나 예전 평문 행은 읽기 폴백. 키 이름은 PUTDUK_PAYOUT_SECRET.
+// 예전 평문 행은 읽기만 폴백. 새로 저장할 때 키가 없으면 중단한다. 키 이름은 PUTDUK_PAYOUT_SECRET.
 
 export const PAYOUT_CIPHER_PREFIX = 'enc.v1.';
 
@@ -22,11 +22,18 @@ async function importPayoutKey(secret) {
   return crypto.subtle.importKey('raw', digest, { name: 'AES-GCM' }, false, ['encrypt', 'decrypt']);
 }
 
+function missingPayoutSecret() {
+  const error = new Error('입금 안내를 잠시 열지 못했어요. 운영자에게 알려 주세요.');
+  error.status = 503;
+  error.code = 'PAYOUT_SECRET_MISSING';
+  throw error;
+}
+
 export async function encryptPayoutSecret(plain, secret) {
   const text = String(plain ?? '').trim();
   if (!text) return null;
   if (isPayoutCiphertext(text)) return text;
-  if (!String(secret || '').trim()) return text;
+  if (!String(secret || '').trim()) missingPayoutSecret();
   const key = await importPayoutKey(secret);
   const iv = crypto.getRandomValues(new Uint8Array(12));
   const cipher = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, new TextEncoder().encode(text));

@@ -1,50 +1,108 @@
 name: Supabase 배포
 
 on:
-  workflow_dispatch:
   push:
     branches: [main]
-    paths:
-      - "supabase/migrations/**"
-      - "supabase/functions/**"
-      - ".github/workflows/supabase-deploy.yml"
+  workflow_dispatch:
+    inputs:
+      reencrypt_payout:
+        description: 지급정보 재암호화 유틸 실행
+        required: false
+        default: false
+        type: boolean
+  workflow_call:
+    inputs:
+      reencrypt_payout:
+        required: false
+        default: false
+        type: boolean
+    secrets:
+      SUPABASE_ACCESS_TOKEN:
+        required: true
+      SUPABASE_PROJECT_REF:
+        required: true
+      PUTDUK_PAYOUT_SECRET:
+        required: true
+      SUPABASE_DB_PASSWORD:
+        required: false
 
 permissions:
   contents: read
 
 concurrency:
-  group: putduk-supabase-deploy
+  group: putduk-supabase-production
   cancel-in-progress: false
+
+env:
+  PUTDUK_EXPECTED_PROJECT_REF: gaugwamwceqdnqdqrxqg
+  SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+  SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+  PUTDUK_PAYOUT_SECRET: ${{ secrets.PUTDUK_PAYOUT_SECRET }}
+  SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
 
 jobs:
   deploy:
     name: 마이그레이션·Edge Function 배포
     runs-on: ubuntu-latest
-    env:
-      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
-      SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
     steps:
       - name: 저장소 가져오기
         uses: actions/checkout@v4
 
+      - name: Secret 사전 검사
+        run: bash tooling/supabase/preflight-secrets.sh
+
+      - name: Node.js 준비
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+
       - name: Supabase CLI 준비
         uses: supabase/setup-cli@v1
         with:
-          version: latest
+          version: 2.113.0
+
+      - name: Edge import graph 검사
+        run: node tooling/supabase/verify-functions-graph.mjs
 
       - name: 프로젝트 연결
         run: supabase link --project-ref "$SUPABASE_PROJECT_REF"
 
-      - name: 데이터베이스 마이그레이션
-        run: supabase db push
+      - name: Migration drift 검사
+        id: drift
+        run: |
+          set +e
+          node tooling/supabase/verify-migrations.mjs
+          status=$?
+          set -e
+          if [ "$status" -eq 1 ]; then
+            exit 1
+          fi
+          echo "status=$status" >> "$GITHUB_OUTPUT"
 
-      - name: Edge Function 시크릿 반영
+      - name: 데이터베이스 마이그레이션
+        run: supabase db push --linked --yes
+
+      - name: Migration 적용 검증
+        run: node tooling/supabase/verify-migrations.mjs
+
+      - name: PUTDUK_PAYOUT_SECRET 동기화
+        run: |
+          TMPDIR=$(mktemp -d)
+          trap 'rm -rf "$TMPDIR"' EXIT
+          umask 077
+          printf 'PUTDUK_PAYOUT_SECRET=%s\n' "$PUTDUK_PAYOUT_SECRET" > "$TMPDIR/payout.env"
+          supabase secrets set --project-ref "$SUPABASE_PROJECT_REF" --env-file "$TMPDIR/payout.env"
+
+      - name: 허용 origin 시크릿 반영
         env:
           PUTDUK_ALLOWED_ORIGINS: ${{ secrets.PUTDUK_ALLOWED_ORIGINS }}
         run: |
-          if [ -n "$PUTDUK_ALLOWED_ORIGINS" ]; then
-            supabase secrets set PUTDUK_ALLOWED_ORIGINS="$PUTDUK_ALLOWED_ORIGINS" --project-ref "$SUPABASE_PROJECT_REF"
+          if [ -n "${PUTDUK_ALLOWED_ORIGINS:-}" ]; then
+            TMPDIR=$(mktemp -d)
+            trap 'rm -rf "$TMPDIR"' EXIT
+            umask 077
+            printf 'PUTDUK_ALLOWED_ORIGINS=%s\n' "$PUTDUK_ALLOWED_ORIGINS" > "$TMPDIR/origins.env"
+            supabase secrets set --project-ref "$SUPABASE_PROJECT_REF" --env-file "$TMPDIR/origins.env"
           fi
 
       - name: Edge Function 배포
@@ -52,7 +110,20 @@ jobs:
           supabase functions deploy admin-control --project-ref "$SUPABASE_PROJECT_REF"
           supabase functions deploy member-finance --project-ref "$SUPABASE_PROJECT_REF"
 
-      - name: 헬스체크
-        run: node scripts/automation/health-check.mjs
+      - name: Edge 버전·인증 스모크
         env:
-          SUPABASE_URL: https://${{ secrets.SUPABASE_PROJECT_REF }}.supabase.co
+          SUPABASE_URL: https://${{ env.PUTDUK_EXPECTED_PROJECT_REF }}.supabase.co
+        run: node tooling/supabase/verify-edge.mjs
+
+      - name: DB 무결성 검사
+        run: node tooling/supabase/verify-integrity.mjs
+
+      - name: Security Advisor 검사
+        run: node tooling/supabase/verify-security.mjs
+
+      - name: 지급정보 재암호화
+        if: ${{ inputs.reencrypt_payout == true }}
+        env:
+          SUPABASE_URL: https://${{ env.PUTDUK_EXPECTED_PROJECT_REF }}.supabase.co
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: node tooling/supabase/reencrypt-payout.mjs

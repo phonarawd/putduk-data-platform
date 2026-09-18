@@ -1,0 +1,96 @@
+name: Cloudflare 배포
+
+on:
+  workflow_dispatch:
+  workflow_run:
+    workflows: ["Supabase 배포"]
+    types: [completed]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: putduk-cloudflare-production
+  cancel-in-progress: false
+
+env:
+  CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+  CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+  CLOUDFLARE_PAGES_PROJECT: ${{ vars.CLOUDFLARE_PAGES_PROJECT || secrets.CLOUDFLARE_PAGES_PROJECT }}
+  MEMBER_DOMAIN: ${{ vars.MEMBER_DOMAIN || 'app.hiptk.app' }}
+  OPS_DOMAIN: ${{ vars.OPS_DOMAIN || 'ops.hiptk.app' }}
+  PUTDUK_EXPECTED_PROJECT_REF: gaugwamwceqdnqdqrxqg
+
+jobs:
+  deploy:
+    name: Pages 배포·스모크
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: 저장소 가져오기
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+      - name: Cloudflare Secret 사전 검사
+        run: bash tooling/cloudflare/preflight-secrets.sh
+
+      - name: pnpm 준비
+        uses: pnpm/action-setup@v4
+        with:
+          version: 12.4.2
+
+      - name: Node.js 준비
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: 의존성 설치
+        run: pnpm install --frozen-lockfile
+
+      - name: 출시 파일 확인
+        run: pnpm verify
+
+      - name: 산출물 존재 확인
+        run: |
+          test -s dist/index.html
+          test -s dist/admin/index.html
+          test -s dist/assets/app.js
+          test -s dist/assets/app.css
+          test -s dist/manifest.webmanifest
+          test -s dist/sw.js
+
+      - name: 번들 비밀 누출 검사
+        run: |
+          if grep -R -n -E "service_role|SUPABASE_SERVICE_ROLE_KEY|PUTDUK_PAYOUT_SECRET|CLOUDFLARE_API_TOKEN|SUPABASE_ACCESS_TOKEN|sb_secret_" dist >/tmp/leak || true; then
+            if [ -s /tmp/leak ]; then
+              echo "::error::Secret leak scan failed"
+              exit 1
+            fi
+          fi
+          echo "Secret leak scan: PASS"
+
+      - name: Cloudflare Pages 배포
+        run: |
+          pnpm exec wrangler pages deploy dist \
+            --project-name="$CLOUDFLARE_PAGES_PROJECT" \
+            --branch=main \
+            --commit-hash="${GITHUB_SHA}"
+        env:
+          GITHUB_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+      - name: 운영 URL 스모크
+        env:
+          MEMBER_URL: https://${{ env.MEMBER_DOMAIN }}
+          OPS_URL: https://${{ env.OPS_DOMAIN }}
+          GITHUB_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+        run: node tooling/cloudflare/verify-deployment.mjs
+
+      - name: 배포 보고
+        run: |
+          echo "Cloudflare deploy: PASS"
+          echo "project=${CLOUDFLARE_PAGES_PROJECT}"
+          echo "member=https://${MEMBER_DOMAIN}"
+          echo "ops=https://${OPS_DOMAIN}"
+          echo "commit=${{ github.event.workflow_run.head_sha || github.sha }}"

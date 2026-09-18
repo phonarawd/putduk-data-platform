@@ -18,3 +18,10 @@ test('예전 평문 행은 키가 있어도 그대로 읽고, 빈 값은 저장�
   const already = await encryptPayoutSecret('hello', secret);
   assert.equal(await encryptPayoutSecret(already, secret), already);
 });
+
+test('저장 키가 없으면 평문으로 저장하지 않고 중단한다', async () => {
+  await assert.rejects(
+    () => encryptPayoutSecret('110-123-456', ''),
+    (error) => error && error.code === 'PAYOUT_SECRET_MISSING' && error.status === 503
+  );
+});

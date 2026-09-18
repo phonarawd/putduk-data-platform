@@ -23,9 +23,21 @@
     "healthcheck": "node scripts/automation/health-check.mjs",
     "handoff:audit": "node scripts/automation/handoff-audit.mjs",
     "release:deploy": "node scripts/automation/release.mjs",
-    "release:notes": "node scripts/automation/create-release.mjs"
+    "release:notes": "node scripts/automation/create-release.mjs",
+    "ops:check-env": "node tooling/supabase/check-env.mjs",
+    "ops:check-auth": "node tooling/supabase/check-auth.mjs",
+    "ops:bootstrap": "node tooling/supabase/bootstrap.mjs",
+    "ops:sync-secrets": "node tooling/supabase/sync-secrets.mjs",
+    "ops:verify-migrations": "node tooling/supabase/verify-migrations.mjs",
+    "ops:verify-integrity": "node tooling/supabase/verify-integrity.mjs",
+    "ops:verify-edge": "node tooling/supabase/verify-edge.mjs",
+    "ops:verify-security": "node tooling/supabase/verify-security.mjs",
+    "ops:reencrypt-payout": "node tooling/supabase/reencrypt-payout.mjs",
+    "cf:bootstrap": "node tooling/cloudflare/bootstrap.mjs",
+    "cf:verify": "node tooling/cloudflare/verify-deployment.mjs"
   },
   "devDependencies": {
-    "turbo": "2.10.13"
+    "turbo": "2.10.13",
+    "wrangler": "4.38.0"
   }
 }

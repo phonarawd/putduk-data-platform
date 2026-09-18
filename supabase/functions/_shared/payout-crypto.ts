@@ -36,11 +36,21 @@ export function payoutSecretFromEnv() {
   return String(Deno.env.get("PUTDUK_PAYOUT_SECRET") || "").trim();
 }
 
+function missingPayoutSecret(): never {
+  const error = new Error("입금 안내를 잠시 열지 못했어요. 운영자에게 알려 주세요.") as Error & {
+    status?: number;
+    code?: string;
+  };
+  error.status = 503;
+  error.code = "PAYOUT_SECRET_MISSING";
+  throw error;
+}
+
 export async function encryptPayoutSecret(plain: unknown, secret: string) {
   const text = String(plain ?? "").trim();
   if (!text) return null;
   if (isPayoutCiphertext(text)) return text;
-  if (!String(secret || "").trim()) return text;
+  if (!String(secret || "").trim()) missingPayoutSecret();
   const key = await importPayoutKey(secret);
   const iv = crypto.getRandomValues(new Uint8Array(12));
   const cipher = await crypto.subtle.encrypt(

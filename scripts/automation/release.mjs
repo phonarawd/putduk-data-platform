@@ -54,6 +54,6 @@ if (missing.length) {
 }
 
 const project = process.env.CLOUDFLARE_PAGES_PROJECT;
-await run('Cloudflare Pages 배포', 'pnpm', ['dlx', 'wrangler', 'pages', 'deploy', 'dist', '--project-name', project], {
+await run('Cloudflare Pages 배포', 'pnpm', ['exec', 'wrangler', 'pages', 'deploy', 'dist', '--project-name', project, '--branch', 'main'], {
   shell: true
 });

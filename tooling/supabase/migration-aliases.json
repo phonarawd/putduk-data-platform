@@ -1,0 +1,17 @@
+{
+  "expected_project_ref": "gaugwamwceqdnqdqrxqg",
+  "note": "운영 MCP apply_migration 시각과 GitHub 파일 버전이 달랐던 이력. 자동 history rewrite는 하지 않는다. 버전 번호만 기록한다.",
+  "name_equivalent": {
+    "putduk_fk_indexes_ops_security": ["20260918073245", "20260918172000"],
+    "putduk_payout_destination_visibility": ["20260918073257", "20260918170000"],
+    "putduk_member_storage_path_ok": ["20260918073334", "20260918171000"],
+    "putduk_member_notice_and_assignment_visibility": ["20260918074110", "20260918180000"],
+    "putduk_payout_destination_delete": ["20260918075042", "20260918190000"],
+    "putduk_session_ip_and_adjust_bucket": ["20260918111416", "20260918200000"]
+  },
+  "remote_history_only": [
+    { "version": "20260918073323", "name": "putduk_payout_destination_upsert_keep" },
+    { "version": "20260918073354", "name": "putduk_member_submit_path_ok" },
+    { "version": "20260918073429", "name": "putduk_ops_usdt_destination_replace" }
+  ]
+}

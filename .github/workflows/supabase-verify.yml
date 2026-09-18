@@ -1,0 +1,60 @@
+name: Supabase 검증
+
+on:
+  workflow_dispatch:
+  workflow_call:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: putduk-supabase-verify
+  cancel-in-progress: false
+
+env:
+  PUTDUK_EXPECTED_PROJECT_REF: gaugwamwceqdnqdqrxqg
+  SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+  SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+  PUTDUK_PAYOUT_SECRET: ${{ secrets.PUTDUK_PAYOUT_SECRET }}
+  SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+
+jobs:
+  verify:
+    name: drift·무결성·Edge 검증
+    runs-on: ubuntu-latest
+    steps:
+      - name: 저장소 가져오기
+        uses: actions/checkout@v4
+
+      - name: Secret 사전 검사
+        run: bash tooling/supabase/preflight-secrets.sh
+
+      - name: Node.js 준비
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+
+      - name: Supabase CLI 준비
+        uses: supabase/setup-cli@v1
+        with:
+          version: 2.113.0
+
+      - name: 프로젝트 연결
+        run: supabase link --project-ref "$SUPABASE_PROJECT_REF"
+
+      - name: Edge import graph 검사
+        run: node tooling/supabase/verify-functions-graph.mjs
+
+      - name: Migration drift 검사
+        run: node tooling/supabase/verify-migrations.mjs
+
+      - name: Edge 버전·인증 스모크
+        env:
+          SUPABASE_URL: https://${{ env.PUTDUK_EXPECTED_PROJECT_REF }}.supabase.co
+        run: node tooling/supabase/verify-edge.mjs
+
+      - name: DB 무결성 검사
+        run: node tooling/supabase/verify-integrity.mjs
+
+      - name: Security Advisor 검사
+        run: node tooling/supabase/verify-security.mjs
