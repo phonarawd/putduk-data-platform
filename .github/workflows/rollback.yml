@@ -12,7 +12,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: putduk-supabase-deploy
+  group: putduk-supabase-production
   cancel-in-progress: false
 
 jobs:
@@ -31,7 +31,7 @@ jobs:
       - name: Supabase CLI 준비
         uses: supabase/setup-cli@v1
         with:
-          version: latest
+          version: 2.113.0
 
       - name: Edge Function 재배포
         run: |
@@ -39,4 +39,4 @@ jobs:
           supabase functions deploy member-finance --project-ref "$SUPABASE_PROJECT_REF"
 
       - name: 안내
-        run: echo "데이터베이스 롤백은 역방향 마이그레이션을 별도 적용해야 합니다."
+        run: echo "데이터베이스 롤백은 자동 수행하지 않습니다. DB는 forward-fix migration을 별도로 적용합니다."

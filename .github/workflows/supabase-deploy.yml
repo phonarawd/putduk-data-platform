@@ -1,64 +1,80 @@
-name: Supabase 배포
+name: Supabase 수동 배포
 
+# 운영 기본 경로는 MCP/CLI Path A입니다.
+# GitHub Actions는 계정 billing/spending limit 해소 후 보조 수동 경로로만 사용합니다.
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - "supabase/migrations/**"
-      - "supabase/functions/**"
-      - ".github/workflows/supabase-deploy.yml"
 
 permissions:
   contents: read
 
 concurrency:
-  group: putduk-supabase-deploy
+  group: putduk-supabase-production
   cancel-in-progress: false
+
+env:
+  PUTDUK_EXPECTED_PROJECT_REF: gaugwamwceqdnqdqrxqg
+  SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+  SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+  PUTDUK_PAYOUT_SECRET: ${{ secrets.PUTDUK_PAYOUT_SECRET }}
+  SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
 
 jobs:
   deploy:
-    name: 마이그레이션·Edge Function 배포
+    name: 마이그레이션·Edge Function 수동 배포
     runs-on: ubuntu-latest
-    env:
-      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
-      SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
     steps:
       - name: 저장소 가져오기
         uses: actions/checkout@v4
 
+      - name: Secret 사전 검사
+        run: bash tooling/supabase/preflight-secrets.sh
+
+      - name: Node.js 준비
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+
       - name: Supabase CLI 준비
         uses: supabase/setup-cli@v1
         with:
-          version: latest
+          version: 2.113.0
+
+      - name: Edge import graph 검사
+        run: node tooling/supabase/verify-functions-graph.mjs
 
       - name: 프로젝트 연결
         run: supabase link --project-ref "$SUPABASE_PROJECT_REF"
 
-      - name: 데이터베이스 마이그레이션
-        run: supabase db push
+      - name: Migration drift 사전 검사
+        run: node tooling/supabase/verify-migrations.mjs
 
-      - name: Edge Function 시크릿 반영
-        env:
-          PUTDUK_ALLOWED_ORIGINS: ${{ secrets.PUTDUK_ALLOWED_ORIGINS }}
-          PUTDUK_PAYOUT_SECRET: ${{ secrets.PUTDUK_PAYOUT_SECRET }}
+      - name: 데이터베이스 마이그레이션
+        run: supabase db push --linked --yes
+
+      - name: Migration 적용 검증
+        run: node tooling/supabase/verify-migrations.mjs
+
+      - name: 지급정보 Secret 동기화
         run: |
-          if [ -n "$PUTDUK_ALLOWED_ORIGINS" ]; then
-            supabase secrets set PUTDUK_ALLOWED_ORIGINS="$PUTDUK_ALLOWED_ORIGINS" --project-ref "$SUPABASE_PROJECT_REF"
-          fi
-          if [ -z "$PUTDUK_PAYOUT_SECRET" ]; then
-            echo "::error::PUTDUK_PAYOUT_SECRET GitHub Secret이 비어 있어 지급정보 암호화 배포를 중단합니다."
-            exit 1
-          fi
-          supabase secrets set PUTDUK_PAYOUT_SECRET="$PUTDUK_PAYOUT_SECRET" --project-ref "$SUPABASE_PROJECT_REF"
+          TMPDIR=$(mktemp -d)
+          trap 'rm -rf "$TMPDIR"' EXIT
+          umask 077
+          printf 'PUTDUK_PAYOUT_SECRET=%s\n' "$PUTDUK_PAYOUT_SECRET" > "$TMPDIR/payout.env"
+          supabase secrets set --project-ref "$SUPABASE_PROJECT_REF" --env-file "$TMPDIR/payout.env"
 
       - name: Edge Function 배포
         run: |
           supabase functions deploy admin-control --project-ref "$SUPABASE_PROJECT_REF"
           supabase functions deploy member-finance --project-ref "$SUPABASE_PROJECT_REF"
 
-      - name: 헬스체크
-        run: node scripts/automation/health-check.mjs
+      - name: Edge 인증 스모크
         env:
-          SUPABASE_URL: https://${{ secrets.SUPABASE_PROJECT_REF }}.supabase.co
+          SUPABASE_URL: https://${{ env.PUTDUK_EXPECTED_PROJECT_REF }}.supabase.co
+        run: node tooling/supabase/verify-edge.mjs
+
+      - name: DB 무결성 검사
+        run: node tooling/supabase/verify-integrity.mjs
+
+      - name: Security Advisor 검사
+        run: node tooling/supabase/verify-security.mjs
