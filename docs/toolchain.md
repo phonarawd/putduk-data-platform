@@ -1,67 +1,125 @@
-# 퍼뜩 기술 기준과 이관 순서
+# 퍼뜩 기술 기준과 최종 패치 순서
 
-## 버전 기준
+## 현재 기술 기준
 
-- 런타임: Node.js 24 LTS, CI 기준 `24.21.0` (로컬에서는 같은 24.x LTS 범위를 허용)
-- 패키지 관리자: pnpm `12.4.2`
-- 워크스페이스 실행기: Turborepo `2.10.13`
-- 웹 앱: Next.js 16 + TypeScript (이관 단계에서 호환되는 안정 버전을 고정)
-- 데이터·인증: 기존에 새로 만든 Supabase 프로젝트 하나만 사용
-- 배포 1단계: 현재 `dist/`와 이관 후 Next.js 정적 export를 Cloudflare Pages에 배포
-- 서버 기능: 잔액·작업·관리자 승인·KYC는 Supabase Edge Functions를 기본 경계로 사용
-- 배포 2단계(필요할 때): SSR·Server Actions가 필요해지면 Cloudflare Workers로 분리하고 호환성 점검 후 전환
+- Runtime: Node.js 24 LTS
+- Package manager: pnpm 12.4.2
+- Frontend: Vanilla ES6+ 정적 구조
+- UI: Tailwind CSS CDN, Lucide Icons, Chart.js
+- Data/Auth: Supabase
+- Server boundary: Supabase Edge Functions + RPC/DB transaction
+- Deploy: Cloudflare Pages Git Integration
+- PWA: `dist/manifest.webmanifest`, `dist/sw.js`
 
-## 현재 상태
+현재 최종 패치 범위에서는 Next.js, Turborepo, SSR, Server Actions로 이관하지 않는다.
 
-현재 `dist/`는 바로 배포 가능한 회원 화면·관리자 화면 셸이다. 이 파일을 먼저 없애지 않고, `apps/member`, `apps/admin`, `packages/ui`, `packages/contracts`를 추가해 화면과 서버 계약을 순서대로 옮긴다. 따라서 이관 기간에도 Cloudflare에서 접근 가능한 화면이 끊기지 않는다.
-
-## 목표 구조
+## 운영 구조
 
 ```text
 putduk-data-platform/
-├─ apps/
-│  ├─ member/             # 회원 가입·노드·작업내역·지갑·PWA
-│  └─ admin/              # 관리자 로그인·회원·업무·검수·입출금·감사
-├─ packages/
-│  ├─ ui/                 # 밝은 모드 기본, 넥서스 모드 선택형 디자인 시스템
-│  ├─ contracts/          # 작업·원장·KYC·알림의 공통 타입과 검증 스키마
-│  └─ config/             # TypeScript·ESLint·Tailwind 공통 설정
+├─ dist/                         # 회원/운영자 정적 production 산출물
+│  ├─ index.html
+│  ├─ admin/index.html
+│  ├─ assets/
+│  ├─ manifest.webmanifest
+│  └─ sw.js
+├─ src/                          # 보안/세션/UI/업무/지갑/모션 모듈
 ├─ supabase/
-│  ├─ migrations/         # RLS·권한·원장 불변성·스토리지 정책
-│  └─ seed/               # 운영자가 승인한 초기 설정만
-├─ dist/                  # 이관 중 유지하는 Cloudflare 정적 산출물
-├─ tooling/scripts/       # 배포 전 자동 확인
-├─ pnpm-workspace.yaml
-├─ turbo.json
+│  ├─ migrations/
+│  └─ functions/
+│     ├─ admin-control/
+│     └─ member-finance/
+├─ scripts/automation/
+├─ tooling/supabase/
+├─ tooling/cloudflare/
+├─ tests/
+├─ docs/
 └─ wrangler.toml
 ```
 
 ## 운영 원칙
 
-1. 브라우저에서 잔액·등급·관리자 권한을 직접 바꾸지 않는다. 모든 변경은 인증된 서버 함수와 불변 원장을 거친다.
-2. 관리자 화면은 `admin_roles`를 서버에서 확인하고, 모든 민감 조회·승인·차단·비밀번호 재설정은 감사 로그를 남긴다.
-3. 작업 타이머는 브라우저 연출이 아니라 서버의 `expected_completed_at`과 이벤트·체크포인트를 기준으로 복원한다.
-4. 기업명·로고·업무 카드는 운영자가 협력 확인 자료와 사용 승인을 등록한 경우에만 공개한다.
-5. 실제 데이터 원본·업무·보상 근거가 없는 항목은 회원에게 노출하지 않는다. 초기 화면값은 서버 연결 뒤 실데이터로 교체한다.
-6. Supabase `public` 노출 테이블과 `private` 민감 테이블 모두 RLS·최소 권한·스토리지 정책을 적용하고, `service_role` 키는 브라우저와 저장소에 넣지 않는다.
+1. 브라우저에서 잔액·보상·등급·운영자 권한을 직접 확정하지 않는다.
+2. 모든 민감 변경은 인증된 Edge/RPC와 DB transaction을 거친다.
+3. 지갑 변경은 ledger와 idempotency를 남긴다.
+4. 운영자 민감 작업은 audit log를 남긴다.
+5. 작업 타이머는 서버의 `expected_completed_at`과 canonical state를 기준으로 복원한다.
+6. 회원 노출/배정 업무는 operator catalog 조건을 통과해야 한다.
+7. service role/secret key는 브라우저와 정적 번들에 넣지 않는다.
+8. FOMO/live simulation 영역은 명시적 요청 없이는 수정하지 않는다.
 
-## 단계별 이관
+## 최종 패치 순서
 
-1. 이 저장소의 버전 고정·CI·정적 출시 검사를 통과시킨다.
-2. 회원 화면을 `apps/member`로 옮기고, 기존 `dist/`와 픽셀 단위로 비교한다.
-3. 관리자 화면을 `apps/admin`으로 옮기고 서버 권한 경계를 먼저 붙인다.
-4. 공통 UI와 타입·검증 스키마를 패키지로 분리한다.
-5. 작업 실행·체크포인트·검수·불변 원장·입출금 요청·KYC·감사 로그를 서버 함수와 RLS에 연결한다.
-6. Supabase Auth 리디렉션과 Cloudflare 도메인을 설정한 뒤 모바일·데스크톱·오프라인 복원 시나리오를 점검한다.
-7. 기존 `dist/`를 새 정적 export 산출물로 교체하고, CI가 통과할 때만 Cloudflare Pages에 배포한다.
+```text
+1. 운영 기준선/문서 정렬
+2. operator catalog + manual assignment 백엔드 재검증
+3. Admin 회원/업무 실제 DB 연결
+4. 입금/출금 E2E
+5. KYC E2E
+6. 추천/지원금 E2E
+7. 회원 UI와 canonical state 정렬
+8. 토스트/UX 정리
+9. motion 성능 보완
+10. RLS/DB performance 보완
+11. 전수 QA
+12. release freeze
+```
 
-Cloudflare의 현재 안내도 정적 Next.js export는 Pages에, 서버 렌더링·Server Actions·route handler가 필요한 전체 앱은 Workers 경로에 두도록 구분한다. Workers 전환 시에는 호환성 점검을 통과한 뒤에만 진행한다.
+한 번에 여러 Phase를 섞지 않는다.
 
-## AI 기능 배치
+## 테스트 기준
 
-AI는 회원 브라우저가 아니라 인증된 서버 함수에서 선택적으로 사용한다.
+가능한 경우 다음을 순서대로 사용한다.
 
-- 업무 안내·제출 형식 점검: 민감정보를 제거한 입력만 AI에 보내고, 구조화된 결과·신뢰도·프롬프트 버전을 저장한다.
-- 보상·입출금·차단 결정: AI가 단독으로 확정하지 않고 규칙 엔진과 운영자 검수를 거친다.
-- 장애·한도 초과: AI 없이도 작업 제출과 운영자 처리가 가능한 폴백을 둔다.
-- 키·비용·속도: 공급자 키는 서버 비밀로만 보관하고 회원별 호출 한도·비용 상한·감사 로그를 둔다.
+```text
+pnpm typecheck
+pnpm test
+pnpm test:e2e
+pnpm test:a11y
+pnpm security:scan
+pnpm verify
+pnpm healthcheck
+```
+
+GitHub Actions billing 제한 때문에 Actions 성공 여부를 production 배포의 필수 조건으로 사용하지 않는다. 로컬/CLI/MCP 검증 결과와 실제 운영 smoke test를 기준으로 한다.
+
+## Supabase 변경 절차
+
+```text
+작업 브랜치
+→ migration/Edge 변경
+→ drift 확인
+→ MCP/CLI Path A 적용
+→ Edge ACTIVE/JWT 확인
+→ integrity 확인
+→ security advisor 확인
+→ main 반영
+```
+
+운영 DB reset과 migration history rewrite는 금지한다. rollback보다 forward-fix를 우선한다.
+
+## Cloudflare 변경 절차
+
+```text
+프론트 검증
+→ main push
+→ putduk-git-preview Git Integration
+→ production 자동배포
+→ app.hiptk.app / ops.hiptk.app smoke test
+```
+
+`wrangler pages deploy` 또는 GitHub Actions를 Cloudflare production 필수 경로로 사용하지 않는다.
+
+## 향후 프레임워크 이관
+
+정적 구조가 기능·금융·운영자 E2E까지 완성된 뒤에만 별도 프로젝트로 검토한다. 프레임워크 이관은 현재 출시 차단 이슈가 아니다.
+
+## AI 기능
+
+AI는 참고·보조 기능으로만 둔다.
+
+- 자동 지급 승인 금지
+- 자동 출금 승인 금지
+- 자동 KYC 승인 금지
+- 운영자 최종 승인 유지
+- 모델/프롬프트 버전과 감사 근거를 남길 수 있을 때만 운영 기능에 연결

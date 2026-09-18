@@ -1,58 +1,120 @@
-# 퍼뜩 Cloudflare Pages 배포 안내
+# 퍼뜩 Cloudflare Pages 운영 배포 기준
 
-## GitHub 연결
+## Production 연결
 
-- 저장소: `phonarawd/putduk-data-platform`
-- 운영 브랜치: `main`
-- 프레임워크 preset: `None`
-- 빌드 명령: 없음
-- 출력 디렉터리: `dist`
+- Pages project: `putduk-git-preview`
+- Repository: `phonarawd/putduk-data-platform`
+- Production branch: `main`
+- Framework preset: `None`
+- Build command: 없음
+- Output directory: `dist`
 
-저장소의 `wrangler.toml`, `dist/_headers`, `dist/_redirects`가 정적 배포 설정을 포함합니다.
+Cloudflare Pages Git Integration이 `main` push를 직접 감지해 production 배포한다.
 
-회원 화면과 운영자 화면은 정적 Pages에서 제공하고, 권한·검수·보상처럼 비밀 키가 필요한 변경은 Supabase Edge Functions에서 처리합니다. 현재 업무 검수 경로는 `/functions/v1/admin-control`의 `list_reviews`와 `review_task` 액션으로 연결되어 있습니다.
+GitHub Actions 또는 `wrangler pages deploy`는 production 필수 경로가 아니다.
 
-## 도메인 연결 후 확인할 주소
+예전 Direct Upload 프로젝트 `putduk-data-platform`은 롤백 참고용으로 보존하되 운영 custom domain은 연결하지 않는다.
 
-회원 화면과 운영자 화면은 **서로 다른 origin**으로 연다. 같은 주소의 `/`와 `/admin/`을 같이 쓰면 브라우저 Auth 세션이 섞인다.
+## 운영 도메인
 
-- 회원 화면: `https://app.hiptk.app/` 또는 `https://hiptk.app/`
-- 운영자 화면: `https://ops.hiptk.app/admin/`
-- 로컬: 회원 `http://127.0.0.1:4173/` , 운영자 `http://127.0.0.1:4174/admin/`
-- PWA 매니페스트: `/manifest.webmanifest`
-- 서비스 워커: `/sw.js`
-- 파비콘: `/favicon.svg`
-- 설치 아이콘: `/icons/icon-180.png`, `/icons/icon-192.png`, `/icons/icon-512.png`
+- 회원: `https://app.hiptk.app/`
+- 운영자: `https://ops.hiptk.app/admin/`
+- 루트: `https://hiptk.app/`
+- www: `https://www.hiptk.app/`
+- go: `https://go.hiptk.app/`
 
-PWA 설치는 HTTPS가 적용된 도메인에서 확인합니다. iPhone·iPad에서는 Safari의 공유 메뉴에서 **홈 화면에 추가**를 선택합니다.
+`app.hiptk.app/admin/`은 운영자 origin으로 보내는 리디렉션 정책을 유지한다.
 
-## Supabase 인증 주소
+회원과 운영자는 서로 다른 origin을 사용해 브라우저 세션·권한 경계를 명확히 한다.
 
-Supabase Auth의 Site URL과 Redirect URLs에 운영 도메인을 등록합니다.
+## 배포 순서
+
+프론트 전용 변경:
+
+```text
+작업 브랜치 검증
+→ main 반영
+→ Cloudflare Git Integration 자동배포
+→ 운영 URL smoke test
+```
+
+백엔드 포함 변경:
+
+```text
+Supabase MCP/CLI Path A 적용
+→ migration/Edge/integrity/security 검증
+→ main 반영
+→ Cloudflare Git Integration 자동배포
+→ 운영 URL smoke test
+```
+
+## 정적 산출물
+
+운영에 필요한 기본 파일:
+
+```text
+dist/index.html
+dist/admin/index.html
+dist/_headers
+dist/_redirects
+dist/assets/*
+dist/manifest.webmanifest
+dist/sw.js
+dist/favicon.svg
+dist/icons/icon-180.png
+dist/icons/icon-192.png
+dist/icons/icon-512.png
+```
+
+## 배포 후 검증
+
+반드시 실제 production URL로 확인한다.
+
+1. `app.hiptk.app` HTTP 200 및 회원 title/본문 확인
+2. `ops.hiptk.app/admin/` HTTP 200 및 운영자 title/본문 확인
+3. 회원 origin의 `/admin/` 리디렉션 확인
+4. PWA manifest/service worker/icon 응답 확인
+5. 정적 번들 Secret leak scan
+6. 변경 기능의 실제 서버 state와 UI 일치 확인
+
+`pnpm cf:verify` 또는 동등한 외부 HTTP smoke test를 사용한다.
+
+## Supabase Auth 주소
+
+운영 Auth redirect는 실제 production origin을 기준으로 유지한다.
 
 ```text
 https://app.hiptk.app/
 https://ops.hiptk.app/admin/
-http://127.0.0.1:4173/
-http://127.0.0.1:4174/admin/
 ```
 
-브라우저에는 publishable key만 사용합니다. `service_role` 또는 secret key는 HTML, GitHub, Cloudflare Pages 환경변수에 넣지 않습니다.
+로컬 개발 URL은 개발 환경에서만 사용한다.
 
-## 배포 전 확인
+브라우저에는 publishable key만 사용한다. service role 또는 secret key는 정적 HTML/JS/Cloudflare Pages client bundle에 넣지 않는다.
 
-0. **app origin과 ops origin이 실제로 다른 호스트인지** 브라우저 주소창과 HTML `<title>`로 확인합니다. `app.hiptk.app`은 회원(`퍼뜩 · 라인 근무`), `ops.hiptk.app`은 운영자(`퍼뜩 · 운영자 관리센터`)여야 합니다. 같은 셸이 두 호스트에 올라가면 배포하지 않습니다.
+## DNS 보호
 
-1. 이메일 인증 메일의 발신자와 리디렉션 주소를 확인합니다.
-2. 운영자 Auth 계정을 만들고 `private.admin_roles`에 역할을 등록합니다.
-3. 협력 자료·로고를 승인하고 공개 업무 카드를 하나 이상 등록합니다.
-4. 실제 회원 계정으로 업무 시작 → 완료 제출 → 운영자 검수 완료 → 회원 검수 완료·지갑·알림 반영을 확인합니다.
-5. 화면을 닫고 복귀했을 때 서버 시각 기준으로 작업이 복원되는지 확인합니다.
-6. KYC·입출금·추천 보상 API를 연결하기 전에는 관련 UI에서 잔액을 변경하지 않는지 확인합니다.
+프론트 배포나 롤백 과정에서 다음 레코드를 임의 수정하지 않는다.
 
-## Next.js 이관 후 Pages 설정
+- MX
+- SPF
+- DKIM
+- Resend TXT
 
-- 루트 디렉터리: 저장소 루트
-- 빌드 명령: `corepack pnpm@12.4.2 build`
-- 출력 디렉터리: 이관 단계에서 고정한 정적 export 경로
-- 서버 비밀: Pages 환경변수와 정적 번들에 `service_role` 키를 넣지 않음
+custom domain을 예전 Direct Upload 프로젝트로 임의 복귀시키지 않는다.
+
+## 롤백
+
+배포 이상 시 DNS를 흔들지 않는다.
+
+```text
+마지막 정상 Git commit 확인
+→ 명시적 revert 또는 forward-fix
+→ main 반영
+→ Git Integration 재배포
+→ smoke test
+```
+
+## FOMO 보호
+
+Cloudflare/정적 배포 정리 과정에서 FOMO/live simulation 코드를 수정하지 않는다. 관련 diff는 0이어야 한다.
