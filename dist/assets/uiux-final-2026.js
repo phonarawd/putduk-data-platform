@@ -94,9 +94,7 @@
       node = walker.nextNode();
     }
 
-    if (scope.querySelectorAll) {
-      scope.querySelectorAll('[aria-label], [title]').forEach(normalizeAttributes);
-    }
+    if (scope.querySelectorAll) scope.querySelectorAll('[aria-label], [title]').forEach(normalizeAttributes);
     ensureMatchingTab(scope);
   }
 
@@ -120,13 +118,7 @@
   }
 
   const observer = new MutationObserver((records) => {
-    for (const record of records) {
-      if (record.type === 'characterData') {
-        queue(record.target);
-        continue;
-      }
-      record.addedNodes.forEach(queue);
-    }
+    for (const record of records) record.addedNodes.forEach(queue);
   });
 
   function start() {
@@ -134,8 +126,7 @@
     ensureMatchingTab(document);
     observer.observe(document.body || document.documentElement, {
       childList: true,
-      subtree: true,
-      characterData: true
+      subtree: true
     });
   }
 
