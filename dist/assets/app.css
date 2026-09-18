@@ -363,6 +363,7 @@ table.record-table td {
 .field.full { grid-column:1/-1; }
 .field label { color:var(--muted); font-size:12px; font-weight:800; }
 .field input, .field select, .field textarea { width:100%; padding:12px 13px; color:var(--text); border:1px solid var(--line); border-radius:12px; outline:none; background:var(--surface); font-size:14px; }
+.field input[type="checkbox"] { width:auto; padding:0; border:0; border-radius:0; box-shadow:none; background:transparent; }
 .field input:focus, .field select:focus, .field textarea:focus { border-color:var(--emerald); box-shadow:0 0 0 3px color-mix(in srgb, var(--emerald) 15%, transparent); }
 .check-row { display:flex; align-items:flex-start; gap:9px; margin-top:14px; color:var(--muted); font-size:12px; line-height:1.5; }
 .check-row input { margin-top:2px; accent-color:var(--emerald); }
