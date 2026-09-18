@@ -46,7 +46,7 @@ export function overlayBodyToken(state = {}, helpers = {}) {
   if (key === 'modal:deposit') {
     const list = Array.isArray(state.depositDestinations) ? state.depositDestinations : [];
     const revealed = Array.isArray(state.depositReveal) ? state.depositReveal.length : 0;
-    return `${list.length}:${state.depositPinSet ? 1 : 0}:${revealed}:${state.depositDestinationsError ? 1 : 0}:${state.depositPresetAmount || ''}`;
+    return `${list.length}:${state.depositPinSet ? 1 : 0}:${revealed}:${state.depositDestinationsError ? 1 : 0}:${state.depositPresetAmount || ''}:${state.depositMethod || ''}`;
   }
   if (key.startsWith('review:')) return String(state.reviewWait?.status || '');
   if (key === 'modal:member-detail') {
