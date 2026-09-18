@@ -217,7 +217,7 @@
     const target = event.target instanceof Element ? event.target.closest('[data-action]') : null;
     if (!target) return;
     if (['back-deposit', 'close-modal', 'logout'].includes(target.dataset.action || '')) {
-      if (!document.getElementById('depositJumpForm')) highPending = null;
+      highPending = null;
     }
   }, true);
 
