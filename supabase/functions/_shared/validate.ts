@@ -8,7 +8,10 @@ export const REFERRAL_REWARD_KRW = 5000;
 export const SIGNED_URL_SECONDS = 60;
 export const PRIVATE_BUCKET = "putduk-private";
 export const ALLOWED_UPLOAD_TYPES = ["image/jpeg", "image/png", "image/webp", "application/pdf"];
+export const KYC_SELFIE_UPLOAD_TYPES = ["image/jpeg", "image/png", "image/webp"];
 export const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
+
+const KYC_DOCUMENT_KINDS = new Set(["identity_front", "identity_back", "selfie"]);
 
 export function isUuid(value: unknown): boolean {
   return UUID_PATTERN.test(String(value || "").trim());
@@ -47,6 +50,18 @@ export function isOwnStoragePath(userId: string, path: unknown): boolean {
 
 export function isAllowedUploadType(value: unknown): boolean {
   return ALLOWED_UPLOAD_TYPES.includes(String(value || "").toLowerCase());
+}
+
+export function isAllowedKycUploadType(contentType: unknown, documentKind: unknown): boolean {
+  const type = String(contentType || "").toLowerCase();
+  const kind = String(documentKind || "").trim().toLowerCase();
+  if (kind === "selfie") {
+    return KYC_SELFIE_UPLOAD_TYPES.includes(type);
+  }
+  if (KYC_DOCUMENT_KINDS.has(kind)) {
+    return ALLOWED_UPLOAD_TYPES.includes(type);
+  }
+  return isAllowedUploadType(type);
 }
 
 export function maskAccount(bankName: string, accountNumber: string): string {

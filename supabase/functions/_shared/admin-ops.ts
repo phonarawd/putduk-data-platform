@@ -4,7 +4,7 @@ import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.57.0
 import { HttpError, rpcMessage, type JsonRecord } from "./http.ts";
 import { isOwnStoragePath, maskAccount, maskUsdt, PRIVATE_BUCKET, SIGNED_URL_SECONDS } from "./validate.ts";
 import { listSecurityPinAudit, resetSecurityPin } from "./deposit-info.ts";
-import { encryptPayoutSecret, payoutSecretFromEnv } from "./payout-crypto.ts";
+import { decryptPayoutSecret, encryptPayoutSecret, payoutSecretFromEnv } from "./payout-crypto.ts";
 import { assertPrivatePreviewAccess } from "./private-file-preview.ts";
 
 const memberRoles = ["super_admin", "member_support"] as const;
@@ -157,7 +157,7 @@ function isMissingColumn(error: { message?: string } | null): boolean {
 }
 
 const WITHDRAWAL_SELECT_BASIC =
-  "id,public_id,user_id,currency,amount,destination_type,destination_label,destination_masked,status,transaction_reference,rejection_reason,created_at,reviewed_at";
+  "id,public_id,user_id,currency,amount,destination_type,destination_label,destination_masked,destination_id,status,transaction_reference,rejection_reason,created_at,reviewed_at";
 const WITHDRAWAL_SELECT_FULL =
   `${WITHDRAWAL_SELECT_BASIC},include_principal,principal_included,principal_amount,stipend_amount,note,completed_at,completed_by,demotion_applied,previous_member_tier,new_member_tier,line_closed`;
 
@@ -1376,30 +1376,68 @@ export async function adjustMemberBalance(admin: AdminClient, userId: string, pa
   return data;
 }
 
+function normalizeKycStatus(status: unknown): string {
+  const raw = String(status || "");
+  if (raw === "submitted") return "review_pending";
+  return raw;
+}
+
 export async function listKyc(admin: AdminClient, userId: string) {
   await requireRole(admin, userId, kycRoles);
   const { data, error } = await admin
     .from("profiles")
-    .select("id,public_id,display_name,kyc_status,status,created_at")
-    .neq("kyc_status", "pending")
+    .select("id,public_id,display_name,kyc_status,status,created_at,updated_at")
+    .in("kyc_status", ["review_pending", "submitted", "approved", "rejected"])
     .order("updated_at", { ascending: false })
     .limit(120);
   if (error) throw new HttpError(503, "본인확인 목록을 불러오지 못했습니다.");
-  return data || [];
+  const profiles = Array.isArray(data) ? data : [];
+  const memberIds = profiles.map((row) => String(row.id || "")).filter(Boolean);
+  if (!memberIds.length) return [];
+
+  const { data: docs, error: docsError } = await admin
+    .schema("private")
+    .from("kyc_documents")
+    .select("user_id,document_kind,status,reviewed_at,updated_at")
+    .in("user_id", memberIds)
+    .in("document_kind", ["identity_front", "identity_back", "selfie"]);
+  if (docsError) throw new HttpError(503, "본인확인 서류 목록을 불러오지 못했습니다.");
+
+  const docsByUser = new Map<string, JsonRecord[]>();
+  for (const row of docs || []) {
+    const uid = String((row as JsonRecord).user_id || "");
+    if (!uid) continue;
+    const list = docsByUser.get(uid) || [];
+    list.push({
+      kind: row.document_kind,
+      status: row.status,
+      reviewed_at: row.reviewed_at,
+      updated_at: row.updated_at
+    });
+    docsByUser.set(uid, list);
+  }
+
+  return profiles.map((row) => ({
+    ...row,
+    kyc_status: normalizeKycStatus(row.kyc_status),
+    documents: docsByUser.get(String(row.id || "")) || []
+  }));
 }
 
 export async function reviewKyc(admin: AdminClient, userId: string, payload: JsonRecord) {
   await requireRole(admin, userId, kycRoles);
   const memberId = assertUuid(payload.user_id || payload.member_id || payload.document_id, "회원");
   const decision = textValue(payload.decision, "처리 결과", 20);
+  const reason = textValue(payload.reason, "사유", 500, false);
   const data = await callRpc<string>(admin, "putduk_admin_review_kyc", {
     p_admin_id: userId,
     p_user_id: memberId,
     p_decision: decision,
-    p_reason: textValue(payload.reason, "사유", 500, false)
+    p_reason: reason
   }, "본인확인 처리를 저장하지 못했습니다.");
-  await appendAudit(admin, userId, "본인확인 처리", "kyc", memberId, textValue(payload.reason, "사유", 500, false), null, { decision: data });
-  return { kyc_status: data };
+  const auditAction = decision === "approved" ? "KYC approved" : "KYC rejected";
+  await appendAudit(admin, userId, auditAction, "kyc", memberId, reason, null, { decision: data });
+  return { kyc_status: data === "approved" || data === "rejected" ? data : normalizeKycStatus(data) };
 }
 
 export async function previewPrivateFile(admin: AdminClient, userId: string, payload: JsonRecord, _roles?: readonly string[]) {
@@ -1418,7 +1456,116 @@ export async function previewPrivateFile(admin: AdminClient, userId: string, pay
     console.error("signed url failed", error);
     throw new HttpError(404, "파일을 찾을 수 없습니다.");
   }
+
+  const auditAction = access.family === "kyc" ? "KYC preview" : "입금 증빙 preview";
+  await appendAudit(
+    admin,
+    userId,
+    auditAction,
+    access.family === "kyc" ? "kyc" : "deposit_proof",
+    access.memberId || null,
+    null,
+    null,
+    { purpose: String(payload.purpose || access.family || ""), family: access.family }
+  );
+
   return { signed_url: data.signedUrl, expires_in: SIGNED_URL_SECONDS };
+}
+
+export async function previewKycDocument(admin: AdminClient, userId: string, payload: JsonRecord) {
+  await requireRole(admin, userId, kycRoles);
+  const memberId = assertUuid(payload.user_id || payload.member_id, "회원");
+  const kind = String(payload.document_kind || payload.kind || "").trim().toLowerCase();
+  if (!["identity_front", "identity_back", "selfie"].includes(kind)) {
+    throw new HttpError(400, "본인확인 파일 종류를 확인해 주세요.");
+  }
+
+  const { data: doc, error } = await admin
+    .schema("private")
+    .from("kyc_documents")
+    .select("storage_path")
+    .eq("user_id", memberId)
+    .eq("document_kind", kind)
+    .maybeSingle();
+  if (error || !doc?.storage_path) {
+    throw new HttpError(404, "본인확인 파일을 찾을 수 없습니다.");
+  }
+
+  return previewPrivateFile(admin, userId, {
+    path: doc.storage_path,
+    purpose: "kyc"
+  });
+}
+
+export async function revealWithdrawalDestination(admin: AdminClient, userId: string, payload: JsonRecord) {
+  await requireRole(admin, userId, financeRoles);
+  const withdrawalId = assertUuid(payload.withdrawal_id || payload.id, "출금");
+  const secret = payoutSecretFromEnv();
+  if (!secret) {
+    throw new HttpError(503, "지급정보 복호화 키가 설정되지 않아 열 수 없습니다.", "PAYOUT_SECRET_MISSING");
+  }
+
+  const { data: withdrawal, error: withdrawalError } = await admin
+    .from("withdrawal_requests")
+    .select("id,user_id,destination_id,destination_type,destination_masked")
+    .eq("id", withdrawalId)
+    .maybeSingle();
+  if (withdrawalError || !withdrawal) {
+    throw new HttpError(404, "출금 요청을 찾을 수 없습니다.");
+  }
+  if (!withdrawal.destination_id) {
+    throw new HttpError(404, "연결된 지급정보가 없습니다.");
+  }
+
+  const { data: destination, error: destError } = await admin
+    .schema("private")
+    .from("member_payout_destinations")
+    .select("id,user_id,destination_type,bank_name,account_holder,account_number,usdt_network,usdt_address,masked_value")
+    .eq("id", withdrawal.destination_id)
+    .maybeSingle();
+  if (destError || !destination) {
+    throw new HttpError(404, "지급정보를 찾을 수 없습니다.");
+  }
+  if (String(destination.user_id || "") !== String(withdrawal.user_id || "")) {
+    throw new HttpError(403, "출금 요청과 지급정보가 일치하지 않습니다.");
+  }
+
+  let accountHolder = "";
+  let accountNumber = "";
+  let usdtAddress = "";
+  try {
+    accountHolder = await decryptPayoutSecret(destination.account_holder, secret);
+    accountNumber = await decryptPayoutSecret(destination.account_number, secret);
+    usdtAddress = await decryptPayoutSecret(destination.usdt_address, secret);
+  } catch (error) {
+    throw new HttpError(503, error instanceof Error ? error.message : "지급정보를 열지 못했습니다.", "PAYOUT_SECRET_INVALID");
+  }
+
+  await appendAudit(
+    admin,
+    userId,
+    "출금 지급정보 reveal",
+    "withdrawal_request",
+    withdrawalId,
+    null,
+    null,
+    {
+      destination_id: destination.id,
+      destination_type: destination.destination_type,
+      masked: withdrawal.destination_masked || destination.masked_value || null
+    }
+  );
+
+  return {
+    withdrawal_id: withdrawalId,
+    destination_type: destination.destination_type,
+    bank_name: destination.bank_name || null,
+    account_holder: accountHolder || null,
+    account_number: accountNumber || null,
+    usdt_network: destination.usdt_network || null,
+    usdt_address: usdtAddress || null,
+    expires_in: 60
+  };
 }
 
 export async function listReferrals(admin: AdminClient, userId: string) {
@@ -1767,6 +1914,12 @@ export async function handleOpsAction(
   }
   if (action === "preview_private_file") {
     return { body: { ok: true, ...(await previewPrivateFile(admin, user.id, payload)) } };
+  }
+  if (action === "preview_kyc_document" || action === "kyc_preview") {
+    return { body: { ok: true, ...(await previewKycDocument(admin, user.id, payload)) } };
+  }
+  if (action === "reveal_withdrawal_destination" || action === "reveal_payout_destination") {
+    return { body: { ok: true, ...(await revealWithdrawalDestination(admin, user.id, payload)) } };
   }
   if (action === "referrals" || action === "list_referrals") {
     return { body: { ok: true, referrals: await listReferrals(admin, user.id) } };

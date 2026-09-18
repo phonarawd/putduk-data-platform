@@ -133,6 +133,8 @@
     adminFinanceLoading: false,
     adminFinanceError: null,
     adminFinanceContract: null,
+    adminKycPreview: null,
+    adminWithdrawalReveal: null,
     adminCampaigns: [],
     adminCampaignsError: null,
     adminCampaignsContract: null,
@@ -1001,8 +1003,9 @@
 
   function kycStatusLabel(status) {
     return ({
-      pending: '대기',
+      pending: '미제출',
       submitted: '검수 대기',
+      review_pending: '검수 대기',
       checking: '확인 중',
       approved: '확인 완료',
       rejected: '반려'
@@ -3510,8 +3513,10 @@
   }
 
   function renderKycModal() {
-    const slot = (id, title) => `<label class="kyc-slot"><span class="kyc-slot-title">${title}</span><span class="kyc-file-btn">사진 고르기</span><input class="kyc-file-input" type="file" id="${id}" accept="image/*" /><small class="kyc-file-name">아직 고르지 않았어요</small></label>`;
-    return `<div class="modal-backdrop" data-modal="kyc"><div class="modal"><div class="modal-head"><div><h2>본인확인 자료 제출</h2><p>신분증 앞면·뒷면·셀카를 올리면 운영자가 검수합니다.</p></div><button class="icon-button" data-action="close-modal" aria-label="KYC 창 닫기">${icon('x',18)}</button></div><div class="modal-body"><form id="kycForm"><div class="notice"><span style="color:var(--gold)">${icon('file-lock-2',17)}</span><div>원본 파일 주소는 회원 화면에 공개하지 않습니다. 짧은 확인 주소만 운영자가 봅니다.</div></div><div class="kyc-slots" style="margin-top:16px">${slot('kycFront', '신분증 앞면')}${slot('kycBack', '신분증 뒷면')}${slot('kycSelfie', '셀카')}</div><div class="modal-actions"><button class="secondary-button" type="button" data-action="close-modal">나중에</button><button class="primary-button" type="submit">검수 요청</button></div></form></div></div></div>`;
+    const slot = (id, title, accept) => `<label class="kyc-slot"><span class="kyc-slot-title">${title}</span><span class="kyc-file-btn">파일 고르기</span><input class="kyc-file-input" type="file" id="${id}" accept="${accept}" /><small class="kyc-file-name">아직 고르지 않았어요</small></label>`;
+    const idAccept = 'image/jpeg,image/png,image/webp,application/pdf';
+    const selfieAccept = 'image/jpeg,image/png,image/webp';
+    return `<div class="modal-backdrop" data-modal="kyc"><div class="modal"><div class="modal-head"><div><h2>본인확인 자료 제출</h2><p>신분증 앞면·뒷면·셀카를 올리면 운영자가 검수합니다.</p></div><button class="icon-button" data-action="close-modal" aria-label="KYC 창 닫기">${icon('x',18)}</button></div><div class="modal-body"><form id="kycForm"><div class="notice"><span style="color:var(--gold)">${icon('file-lock-2',17)}</span><div>원본 파일 주소는 회원 화면에 공개하지 않습니다. 운영자만 짧은 확인 주소로 봅니다.</div></div><div class="kyc-slots" style="margin-top:16px">${slot('kycFront', '신분증 앞면', idAccept)}${slot('kycBack', '신분증 뒷면', idAccept)}${slot('kycSelfie', '셀카', selfieAccept)}</div><div class="modal-actions"><button class="secondary-button" type="button" data-action="close-modal">나중에</button><button class="primary-button" type="submit">검수 요청</button></div></form></div></div></div>`;
   }
 
   function renderDepositJumpConfirm() {
@@ -4559,6 +4564,8 @@
     if (state.modal !== 'deposit-jump') state.depositJump = null;
     state.depositPresetAmount = null;
     state.depositMethod = '';
+    state.adminKycPreview = null;
+    state.adminWithdrawalReveal = null;
     state.modal = null;
     state.modalPayload = null;
     render();
@@ -4827,6 +4834,8 @@
     }
     if (target.dataset.financeTab) {
       state.adminFinanceTab = target.dataset.financeTab;
+      state.adminKycPreview = null;
+      state.adminWithdrawalReveal = null;
       saveState();
       render();
       return;
@@ -5527,15 +5536,90 @@
     }
   }
 
+  const KYC_ID_ALLOWED = new Set(['image/jpeg', 'image/png', 'image/webp', 'application/pdf']);
+  const KYC_SELFIE_ALLOWED = new Set(['image/jpeg', 'image/png', 'image/webp']);
+  const KYC_MAX_BYTES = 10 * 1024 * 1024;
+
+  function assertKycFile(file, kind) {
+    if (!file) throw new Error('파일을 모두 선택해 주세요.');
+    const type = String(file.type || '').toLowerCase();
+    const allowed = kind === 'selfie' ? KYC_SELFIE_ALLOWED : KYC_ID_ALLOWED;
+    if (!allowed.has(type)) {
+      throw new Error(kind === 'selfie' ? '셀카는 JPG, PNG, WEBP만 올릴 수 있어요.' : 'JPG, PNG, WEBP, PDF만 올릴 수 있어요.');
+    }
+    if (!Number.isFinite(file.size) || file.size <= 0 || file.size > KYC_MAX_BYTES) {
+      throw new Error('파일은 10MB 이하만 올릴 수 있어요.');
+    }
+    return file;
+  }
+
+  async function uploadKycDocument(file, documentKind) {
+    const ticket = await memberFinanceRequest('request_upload', {
+      purpose: 'kyc',
+      document_kind: documentKind,
+      file_name: file.name,
+      content_type: file.type
+    });
+    const upload = ticket?.upload;
+    if (!upload?.bucket || !upload?.path || !upload?.token) {
+      throw new Error('본인확인 업로드 주소를 만들지 못했어요.');
+    }
+    if (!supabaseClient) throw new Error('서버 연결을 확인해 주세요.');
+    const result = await supabaseClient.storage
+      .from(upload.bucket)
+      .uploadToSignedUrl(upload.path, upload.token, file, {
+        contentType: file.type,
+        upsert: false
+      });
+    if (result.error) throw new Error('본인확인 파일을 올리지 못했어요.');
+    return upload.path;
+  }
+
+  function setKycFormBusy(form, busy) {
+    if (!form) return;
+    form.dataset.kycBusy = busy ? '1' : '0';
+    const button = form.querySelector('button[type="submit"]');
+    if (!button) return;
+    if (!button.dataset.kycLabel) button.dataset.kycLabel = button.textContent || '검수 요청';
+    button.disabled = busy;
+    button.textContent = busy ? '자료 올리는 중…' : button.dataset.kycLabel;
+  }
+
   async function submitKycForm(event) {
     event.preventDefault();
+    const form = event.target;
     if (!authState.session) { showToast('로그인 후 본인확인 자료를 제출할 수 있어요.', 'info'); return; }
+    if (form?.dataset?.kycBusy === '1') return;
+    const frontFile = document.getElementById('kycFront')?.files?.[0] || null;
+    const backFile = document.getElementById('kycBack')?.files?.[0] || null;
+    const selfieFile = document.getElementById('kycSelfie')?.files?.[0] || null;
     try {
-      await edgeRequest('submit_kyc', { has_front: Boolean(document.getElementById('kycFront')?.files?.[0]), has_back: Boolean(document.getElementById('kycBack')?.files?.[0]), has_selfie: Boolean(document.getElementById('kycSelfie')?.files?.[0]) });
+      assertKycFile(frontFile, 'identity_front');
+      assertKycFile(backFile, 'identity_back');
+      assertKycFile(selfieFile, 'selfie');
+    } catch (error) {
+      showToast(error?.message || '본인확인 파일을 확인해 주세요.', 'warning');
+      return;
+    }
+    setKycFormBusy(form, true);
+    try {
+      const frontPath = await uploadKycDocument(frontFile, 'identity_front');
+      const backPath = await uploadKycDocument(backFile, 'identity_back');
+      const selfiePath = await uploadKycDocument(selfieFile, 'selfie');
+      if (![frontPath, backPath, selfiePath].every((path) => String(path || '').trim())) {
+        throw new Error('본인확인 파일 경로를 확인해 주세요.');
+      }
+      await memberFinanceRequest('submit_kyc', {
+        front_path: frontPath,
+        back_path: backPath,
+        selfie_path: selfiePath
+      });
       closeModal();
-      showToast('본인확인 자료를 접수했어요. 운영자가 확인해요 🪪', 'success');
+      showToast('🪪 본인확인 자료를 접수했어요. 운영자가 확인해요.', 'success');
     } catch (error) {
       showToast(friendlyAdminError(error), isUnsupportedAction(error) ? 'warning' : 'error');
+    } finally {
+      setKycFormBusy(form, false);
     }
   }
 

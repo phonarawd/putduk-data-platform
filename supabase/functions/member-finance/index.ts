@@ -5,16 +5,20 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.0";
 import { clientIp, corsHeaders, HttpError, jsonResponse, rpcMessage, userFromVerifiedJwt, type JsonRecord } from "../_shared/http.ts";
 import {
   ALLOWED_UPLOAD_TYPES,
+  isAllowedKycUploadType,
   isAllowedUploadType,
   isAmountInRange,
   isOwnStoragePath,
   isSixDigitPin,
   isSupportedCurrency,
   isUuid,
+  maskAccount,
+  maskUsdt,
   MAX_UPLOAD_BYTES,
   PRIVATE_BUCKET,
   SIGNED_URL_SECONDS
 } from "../_shared/validate.ts";
+import { encryptPayoutSecret, payoutSecretFromEnv } from "../_shared/payout-crypto.ts";
 import {
   challengeDepositInfo,
   lockDepositInfo,
@@ -70,7 +74,19 @@ async function requestUpload(userId: string, payload: JsonRecord) {
   }
   const fileName = textValue(payload.file_name, "파일 이름", 80);
   const contentType = String(payload.content_type || "").toLowerCase();
-  if (!isAllowedUploadType(contentType)) {
+  const documentKind = purpose === "kyc"
+    ? String(payload.document_kind || payload.kind || "").trim().toLowerCase()
+    : "";
+  if (purpose === "kyc") {
+    if (!["identity_front", "identity_back", "selfie"].includes(documentKind)) {
+      throw new HttpError(400, "본인확인 파일 종류를 확인해 주세요.");
+    }
+    if (!isAllowedKycUploadType(contentType, documentKind)) {
+      throw new HttpError(400, documentKind === "selfie"
+        ? "셀카는 JPG, PNG, WEBP만 올릴 수 있어요."
+        : "이미지 또는 PDF 파일만 올릴 수 있습니다.");
+    }
+  } else if (!isAllowedUploadType(contentType)) {
     throw new HttpError(400, "이미지 또는 PDF 파일만 올릴 수 있습니다.");
   }
 
@@ -264,18 +280,59 @@ async function submitWithdrawal(userId: string, payload: JsonRecord) {
   const includePrincipal = payload.include_principal === true
     || ["1", "true", "yes", "원금포함", "원금", "include_principal", "principal"].includes(String(payload.include_principal ?? payload.kind ?? "").trim().toLowerCase());
 
+  const destinationType = textValue(payload.destination_type, "출금 방법", 20);
+  const secret = payoutSecretFromEnv();
+  if (!secret) {
+    throw new HttpError(503, "지급정보 암호화 키가 설정되지 않아 출금을 접수할 수 없습니다.", "PAYOUT_SECRET_MISSING");
+  }
+
+  const bankName = textValue(payload.bank_name, "은행명", 80, false);
+  const accountHolderPlain = textValue(payload.account_holder, "예금주", 80, false);
+  const accountNumberPlain = textValue(payload.account_number, "계좌번호", 80, false);
+  const usdtNetwork = textValue(payload.usdt_network, "USDT 네트워크", 40, false);
+  const usdtAddressPlain = textValue(payload.usdt_address, "USDT 주소", 200, false);
+
+  let accountHolderEnc: string | null = null;
+  let accountNumberEnc: string | null = null;
+  let usdtAddressEnc: string | null = null;
+  let maskedValue: string | null = null;
+  let destinationLabel: string | null = null;
+
+  try {
+    if (destinationType === "bank") {
+      accountHolderEnc = await encryptPayoutSecret(accountHolderPlain, secret);
+      accountNumberEnc = await encryptPayoutSecret(accountNumberPlain, secret);
+      maskedValue = maskAccount(String(bankName || ""), String(accountNumberPlain || ""));
+      destinationLabel = `${String(bankName || "").trim()} ${String(accountHolderPlain || "").trim()}`.trim().slice(0, 80);
+    } else if (destinationType === "usdt") {
+      usdtAddressEnc = await encryptPayoutSecret(usdtAddressPlain, secret);
+      maskedValue = maskUsdt(String(usdtAddressPlain || ""));
+      destinationLabel = `USDT ${String(usdtNetwork || "").trim()}`.slice(0, 80);
+    }
+  } catch (error) {
+    const status = error && typeof error === "object" && "status" in error
+      ? Number((error as { status?: number }).status || 503)
+      : 503;
+    const code = error && typeof error === "object" && "code" in error
+      ? String((error as { code?: string }).code || "PAYOUT_SECRET_MISSING")
+      : "PAYOUT_SECRET_MISSING";
+    throw new HttpError(status, error instanceof Error ? error.message : "출금 지급정보를 저장하지 못했습니다.", code);
+  }
+
   const { data, error } = await admin.rpc("putduk_member_withdraw_request", {
     p_user_id: userId,
     p_currency: currency,
     p_amount: Number(payload.amount),
     p_pin: String(payload.pin),
-    p_destination_type: textValue(payload.destination_type, "출금 방법", 20),
+    p_destination_type: destinationType,
     p_include_principal: includePrincipal,
-    p_bank_name: textValue(payload.bank_name, "은행명", 80, false),
-    p_account_holder: textValue(payload.account_holder, "예금주", 80, false),
-    p_account_number: textValue(payload.account_number, "계좌번호", 80, false),
-    p_usdt_network: textValue(payload.usdt_network, "USDT 네트워크", 40, false),
-    p_usdt_address: textValue(payload.usdt_address, "USDT 주소", 200, false)
+    p_bank_name: bankName,
+    p_account_holder: accountHolderEnc,
+    p_account_number: accountNumberEnc,
+    p_usdt_network: usdtNetwork,
+    p_usdt_address: usdtAddressEnc,
+    p_masked_value: maskedValue,
+    p_destination_label: destinationLabel
   });
   if (error || !data) throw new HttpError(400, rpcMessage(error, "출금 요청을 접수하지 못했습니다."));
   return data;

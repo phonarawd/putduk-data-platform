@@ -158,7 +158,7 @@ test('390 회원 시트는 탭바 위에 뜨고 원금·고액 확인이 있다'
   assert.match(appJs, /deposit-jump/);
   assert.match(appJs, /HIGH_JUMP_MIN = 3000000/);
   assert.match(appJs, /밀어 확정/);
-  assert.match(appJs, /사진 고르기/);
+  assert.match(appJs, /파일 고르기|사진 고르기/);
   assert.match(appJs, /formatChartTick/);
   assert.equal(appJs.includes('Math.round(value/1000)}k'), false);
 });
