@@ -1,7 +1,7 @@
 {
-  "name": "퍼뜩 · 라인 근무",
+  "name": "퍼뜩",
   "short_name": "퍼뜩",
-  "description": "협력사 라인에서 근무하고 확인하는 퍼뜩",
+  "description": "퍼뜩",
   "id": "/",
   "start_url": "/",
   "scope": "/",
