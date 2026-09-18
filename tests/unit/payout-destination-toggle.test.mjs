@@ -6,7 +6,7 @@ test('운영자 입금 안내 목록에서 회원 표시를 바로 켜고 끌 �
   const adminJs = await readRepo('dist', 'admin', 'admin.js');
   const adminOps = await readRepo('supabase', 'functions', '_shared', 'admin-ops.ts');
   const listSql = await readRepo('supabase', 'migrations', '20260918080000_putduk_deposit_pin_gate.sql');
-  const toggleSql = await readRepo('supabase', 'migrations', '20260918170000_putduk_payout_destination_visibility.sql');
+  const toggleSql = await readRepo('supabase', 'migrations', '20260918073257_putduk_payout_destination_visibility.sql');
   assert.match(adminJs, /data-action="toggle-payout-destination"/);
   assert.match(adminJs, /aria-label="\$\{label\}"/);
   assert.match(adminJs, /회원에게 숨기기/);

@@ -61,6 +61,10 @@ test('admin preview·reveal은 saveState/localStorage에 저장하지 않는다'
   assert.match(appJs, /state\.adminKycPreview = null/);
   assert.match(appJs, /state\.adminWithdrawalReveal = null/);
 
+  assert.match(appJs, /sanitizeAdminFinanceForStorage/);
+  assert.match(appJs, /scrubPersistedStatePayload/);
+  assert.match(appJs, /scrubLegacyAdminFinanceStorage/);
+
   const saveBlock = appJs.slice(appJs.indexOf('function saveState()'), appJs.indexOf('function switchToUserState'));
   for (const needle of ['adminKycPreview', 'adminWithdrawalReveal', 'signed_url', 'account_holder', 'account_number', 'usdt_address']) {
     assert.doesNotMatch(saveBlock, new RegExp(`safe[^;]*${needle}`));
@@ -70,6 +74,12 @@ test('admin preview·reveal은 saveState/localStorage에 저장하지 않는다'
     theme: 'dark',
     adminKycPreview: { signed_url: 'https://secret', kind: 'identity_front' },
     adminWithdrawalReveal: { account_holder: '홍길동', account_number: '1234567890', usdt_address: '0xabc' },
+    adminFinance: {
+      deposits: [],
+      withdrawals: [],
+      kyc: [],
+      destinations: [{ id: '1', account_holder: '홍길동', bank_name: '국민은행' }]
+    },
     wallet: { available: 1000 }
   };
   const {
@@ -77,10 +87,12 @@ test('admin preview·reveal은 saveState/localStorage에 저장하지 않는다'
     depositReveal, depositRevealExpiresAt, depositRevealToken, ...rest
   } = sample;
   const safe = { ...rest, toast: null, modal: null, modalPayload: null, adminMemberDetail: null, depositReveal: null, depositRevealExpiresAt: null, depositRevealToken: null };
+  if (safe.adminFinance) safe.adminFinance = { ...safe.adminFinance, destinations: [] };
   const serialized = JSON.stringify(safe);
-  for (const forbidden of ['signed_url', 'account_holder', 'account_number', 'usdt_address', 'adminKycPreview', 'adminWithdrawalReveal']) {
+  for (const forbidden of ['signed_url', 'account_holder', 'account_number', 'usdt_address', 'adminKycPreview', 'adminWithdrawalReveal', '국민은행', '홍길동']) {
     assert.doesNotMatch(serialized, new RegExp(forbidden));
   }
+  assert.deepEqual(JSON.parse(serialized).adminFinance.destinations, []);
 });
 
 test('theme toggle saveState 트리거 후에도 지급정보 plaintext가 localStorage payload에 없다', async () => {
