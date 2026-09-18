@@ -1,0 +1,4 @@
+-- Historical production migration marker: putduk_payout_destination_upsert_keep.
+-- The final canonical upsert definition is consolidated into the preceding
+-- 20260918073257_putduk_payout_destination_visibility.sql for clean rebuilds.
+-- No-op by design; keep this file so repository migration history matches production.

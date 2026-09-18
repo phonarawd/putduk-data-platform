@@ -1,0 +1,4 @@
+-- Historical production data hotfix marker: putduk_ops_usdt_destination_replace.
+-- This production-only data repair does not belong in a clean schema rebuild because fresh
+-- environments have no legacy payout-destination row to replace. No-op by design.
+-- Keep this file so repository migration history matches production without replaying production data.

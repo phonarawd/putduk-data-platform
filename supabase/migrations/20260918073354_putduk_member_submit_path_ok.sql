@@ -1,0 +1,4 @@
+-- Historical production migration marker: putduk_member_submit_path_ok.
+-- The final member deposit/KYC path validation definitions are consolidated into the preceding
+-- 20260918073334_putduk_member_storage_path_ok.sql for clean rebuilds.
+-- No-op by design; keep this file so repository migration history matches production.
