@@ -1,9 +1,12 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
+import { loadEnvFiles } from '../../tooling/supabase/lib/load-env.mjs';
 
 const execFileAsync = promisify(execFile);
 const root = process.cwd();
 const deployRequested = process.argv.includes('--deploy');
+
+loadEnvFiles(root);
 
 async function run(name, command, args, options = {}) {
   console.log(`\n▶ ${name}`);
@@ -44,8 +47,7 @@ if (!deployRequested) {
 
 const required = [
   'CLOUDFLARE_API_TOKEN',
-  'CLOUDFLARE_ACCOUNT_ID',
-  'CLOUDFLARE_PAGES_PROJECT'
+  'CLOUDFLARE_ACCOUNT_ID'
 ];
 const missing = required.filter((name) => !process.env[name]);
 if (missing.length) {
@@ -53,7 +55,12 @@ if (missing.length) {
   process.exit(1);
 }
 
-const project = process.env.CLOUDFLARE_PAGES_PROJECT;
+const project = process.env.CLOUDFLARE_PAGES_PROJECT
+  || process.env.CLOUDFLARE_MEMBER_PROJECT
+  || 'putduk-data-platform';
+process.env.CLOUDFLARE_PAGES_PROJECT = project;
+
 await run('Cloudflare Pages 배포', 'pnpm', ['exec', 'wrangler', 'pages', 'deploy', 'dist', '--project-name', project, '--branch', 'main'], {
   shell: true
 });
+await run('Cloudflare 운영 URL 검증', node, ['tooling/cloudflare/verify-deployment.mjs']);
