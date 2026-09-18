@@ -175,16 +175,24 @@ html[data-mode="admin"] th {
   }
   .mobile-topbar .brand-name { font-size: 18px; letter-spacing: -.028em; }
   html[data-mode="member"] .member-tabbar {
+    grid-template-columns: repeat(6, minmax(0, 1fr)) !important;
     min-height: calc(68px + env(safe-area-inset-bottom));
     padding-bottom: env(safe-area-inset-bottom);
     border-top: 1px solid var(--line);
     box-shadow: 0 -8px 24px rgba(13, 63, 47, .07);
   }
   html[data-mode="member"] .member-tab {
+    min-width: 0;
     min-height: 58px;
-    padding: 7px 4px 6px;
-    font-size: 11px;
+    padding: 7px 2px 6px;
+    font-size: 10.5px;
     line-height: 1.18;
+  }
+  html[data-mode="member"] .member-tab-label {
+    max-width: 100%;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: clip;
   }
   html[data-mode="member"] .main {
     padding-bottom: calc(92px + env(safe-area-inset-bottom));
@@ -228,6 +236,11 @@ html[data-mode="admin"] th {
   .wallet-slot { min-height: 88px; padding: 14px; }
   .modal-backdrop { padding-left: 8px; padding-right: 8px; }
   .modal { border-radius: 18px; }
+}
+
+@media (max-width: 359px) {
+  html[data-mode="member"] .member-tab { font-size: 10px; padding-inline: 1px; }
+  html[data-mode="member"] .member-tab-icon svg { width: 18px; height: 18px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
