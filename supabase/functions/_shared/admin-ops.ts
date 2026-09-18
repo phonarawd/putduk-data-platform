@@ -1,6 +1,6 @@
 // 운영자 회원·입출금·KYC·추천·배정 처리. JWT 역할은 호출 전에 확인한다.
 
-import type { SupabaseClient, User } from "https://esm.sh/@supabase/supabase-js@2.57.0";
+import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.57.0";
 import { HttpError, rpcMessage, type JsonRecord } from "./http.ts";
 import { isOwnStoragePath, maskAccount, maskUsdt, PRIVATE_BUCKET, SIGNED_URL_SECONDS } from "./validate.ts";
 import { listSecurityPinAudit, resetSecurityPin } from "./deposit-info.ts";
@@ -246,15 +246,16 @@ const allKnownAdminRoles = [
   "content"
 ];
 
-async function loadAdminRoles(admin: AdminClient, userId: string): Promise<string[]> {
-  const checks = await Promise.all(allKnownAdminRoles.map(async (role) => {
-    const { data, error } = await admin.rpc("putduk_admin_has_role", {
-      p_user_id: userId,
-      p_roles: [role]
-    });
-    return error ? null : data === true ? role : null;
-  }));
-  return checks.filter((role): role is string => Boolean(role));
+export async function loadAdminRoles(admin: AdminClient, userId: string): Promise<string[]> {
+  const { data, error } = await admin.schema("private").from("admin_roles").select("role").eq("user_id", userId);
+  if (error) {
+    console.error("admin roles load failed", error);
+    throw new HttpError(503, "운영자 권한을 확인하지 못했습니다.");
+  }
+  const known = new Set<string>(allKnownAdminRoles);
+  return ((data || []) as JsonRecord[])
+    .map((row) => String(row.role || ""))
+    .filter((role) => known.has(role));
 }
 
 function canRevealMemberPii(roles: string[]): boolean {
@@ -1631,7 +1632,7 @@ export async function listAuditLogs(admin: AdminClient, userId: string, payload:
 
 export async function handleOpsAction(
   admin: AdminClient,
-  user: User,
+  user: { id: string },
   action: string,
   payload: JsonRecord
 ): Promise<{ body: JsonRecord; status?: number } | null> {

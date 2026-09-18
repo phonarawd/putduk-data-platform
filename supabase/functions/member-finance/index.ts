@@ -2,7 +2,7 @@
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.0";
-import { corsHeaders, HttpError, jsonResponse, rpcMessage, type JsonRecord } from "../_shared/http.ts";
+import { corsHeaders, HttpError, jsonResponse, rpcMessage, userFromVerifiedJwt, type JsonRecord } from "../_shared/http.ts";
 import {
   ALLOWED_UPLOAD_TYPES,
   isAllowedUploadType,
@@ -35,13 +35,8 @@ const admin = createClient(supabaseUrl, serviceRoleKey, {
   auth: { persistSession: false, autoRefreshToken: false }
 });
 
-async function authenticate(request: Request) {
-  const header = request.headers.get("authorization") || "";
-  const token = header.replace(/^Bearer\s+/i, "").trim();
-  if (!token) throw new HttpError(401, "로그인이 필요합니다.");
-  const { data, error } = await admin.auth.getUser(token);
-  if (error || !data.user) throw new HttpError(401, "세션이 만료됐습니다.");
-  return data.user;
+function authenticate(request: Request) {
+  return userFromVerifiedJwt(request);
 }
 
 async function parseRequest(request: Request): Promise<JsonRecord> {

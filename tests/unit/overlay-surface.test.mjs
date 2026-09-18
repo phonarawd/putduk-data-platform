@@ -33,7 +33,7 @@ test('클래스 목록을 깨지 않고 data-surface를 붙인다', () => {
   assert.match(stamped, /data-overlay-body="inspect:1:5:0"/);
 });
 
-test('같은 표면은 패치하고 부트는 클라이언트 없을 때만 바로 그린다', () => {
+test('같은 표면은 패치하고 부트는 바로 그린다', () => {
   assert.deepEqual(overlayPaintPlan({
     nextKey: 'run:1',
     existingKey: 'run:1',
@@ -60,6 +60,6 @@ test('같은 표면은 패치하고 부트는 클라이언트 없을 때만 바�
     hasExisting: true,
     hasShell: true
   }).releaseCanvases, true);
-  assert.equal(shouldPaintBootImmediately(true), false);
+  assert.equal(shouldPaintBootImmediately(true), true);
   assert.equal(shouldPaintBootImmediately(false), true);
 });

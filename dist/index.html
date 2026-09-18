@@ -21,19 +21,27 @@
     <meta property="og:description" content="협력사 라인에서 근무하고 확인하는 퍼뜩" />
     <meta name="twitter:card" content="summary" />
     <title>퍼뜩 · 라인 근무</title>
-    <script src="./assets/origin-split.js?v=20260918-pin1"></script>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-      tailwind.config = { theme: { extend: { fontFamily: { sans: ['Pretendard', 'Noto Sans KR', 'Apple SD Gothic Neo', 'sans-serif'] } } } };
-    </script>
-    <link rel="stylesheet" href="./assets/app.css?v=20260918-notice1" />
+    <script src="./assets/origin-split.js?v=20260918-perf1"></script>
+    <link rel="stylesheet" href="./assets/app.css?v=20260918-perf1" />
     <link rel="stylesheet" href="./assets/overlay-surface.css?v=20260918-flash2" />
-    <script src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.0/dist/umd/supabase.min.js"></script>
   </head>
   <body>
-    <div id="app"></div>
+    <div id="app">
+      <div class="app-shell" data-boot-shell="1">
+        <aside class="sidebar">
+          <div class="brand-mark">
+            <div class="brand-symbol">퍼</div>
+            <div><div class="brand-name">퍼뜩</div><div class="brand-kicker">협력사 라인 근무</div></div>
+          </div>
+        </aside>
+        <main class="main">
+          <section class="empty-state" style="max-width:560px;margin:72px auto;text-align:center">
+            <h1 class="page-title">근무 화면을 열고 있어요</h1>
+            <p class="page-copy">🙂 오늘 라인 자리를 확인하고 있어요. 바로 이어서 보여 드릴게요.</p>
+          </section>
+        </main>
+      </div>
+    </div>
     <script>
       window.PUTDUK_CONFIG = {
         supabaseUrl: 'https://gaugwamwceqdnqdqrxqg.supabase.co',
@@ -44,8 +52,10 @@
         opsOrigin: 'https://ops.hiptk.app'
       };
     </script>
-    <script src="./assets/motion-runtime.js?v=20260918-ux1"></script>
-    <script src="./assets/overlay-surface.js?v=20260918-ux2"></script>
-    <script src="./assets/app.js?v=20260918-finance1"></script>
+    <script defer src="./assets/vendor/supabase.min.js?v=20260918-perf1"></script>
+    <script defer src="./assets/ui-icons.js?v=20260918-perf1"></script>
+    <script defer src="./assets/motion-runtime.js?v=20260918-ux1"></script>
+    <script defer src="./assets/overlay-surface.js?v=20260918-perf1"></script>
+    <script defer src="./assets/app.js?v=20260918-perf1"></script>
   </body>
 </html>

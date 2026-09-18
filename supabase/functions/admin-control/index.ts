@@ -1,6 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.0";
-import { handleOpsAction, upsertWorkNode } from "../_shared/admin-ops.ts";
+import { handleOpsAction, loadAdminRoles, upsertWorkNode } from "../_shared/admin-ops.ts";
+import { userFromVerifiedJwt } from "../_shared/http.ts";
 
 type JsonRecord = Record<string, unknown>;
 
@@ -23,15 +24,6 @@ if (!supabaseUrl || !serviceRoleKey) {
 const admin = createClient(supabaseUrl, serviceRoleKey, {
   auth: { persistSession: false, autoRefreshToken: false }
 });
-
-const allAdminRoles = [
-  "super_admin",
-  "member_support",
-  "kyc_review",
-  "finance",
-  "work_review",
-  "content"
-] as const;
 
 const contentRoles = ["super_admin", "content"];
 const reviewRoles = ["super_admin", "work_review"];
@@ -252,14 +244,8 @@ function withWorkSpec<T extends JsonRecord>(row: T): T & { work_spec: WorkSpec |
   return { ...row, work_spec: has || fromJson ? spec : null };
 }
 
-async function authenticate(request: Request) {
-  const header = request.headers.get("authorization") || "";
-  const token = header.replace(/^Bearer\s+/i, "").trim();
-  if (!token) throw new HttpError(401, "운영자 로그인이 필요합니다.");
-
-  const { data, error } = await admin.auth.getUser(token);
-  if (error || !data.user) throw new HttpError(401, "운영자 세션이 만료됐습니다.");
-  return data.user;
+function authenticate(request: Request) {
+  return userFromVerifiedJwt(request, "운영자 로그인이 필요합니다.");
 }
 
 async function requireRole(userId: string, roles: readonly string[]) {
@@ -737,14 +723,7 @@ async function updateNodeStatus(userId: string, payload: JsonRecord, status: "pu
 }
 
 async function listAdminRoles(userId: string) {
-  const checks = await Promise.all(allAdminRoles.map(async (role) => {
-    const { data, error } = await admin.rpc("putduk_admin_has_role", {
-      p_user_id: userId,
-      p_roles: [role]
-    });
-    return error ? null : data === true ? role : null;
-  }));
-  return checks.filter((role): role is string => Boolean(role));
+  return loadAdminRoles(admin, userId);
 }
 
 Deno.serve(async (request: Request) => {

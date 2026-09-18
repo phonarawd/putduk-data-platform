@@ -137,9 +137,6 @@
     const refresh = () => {
       const title = form.querySelector('[name="title_ko"]')?.value || '';
       box.innerHTML = previewHtml(readFormSpec(form), title);
-      if (window.lucide && typeof window.lucide.createIcons === 'function') {
-        window.lucide.createIcons({ attrs: { 'stroke-width': 1.8 } });
-      }
     };
     if (form.dataset.previewBound === '1') {
       refresh();
@@ -152,9 +149,6 @@
       if (assign && event.target.value === '초고액') assign.checked = true;
     });
     refresh();
-    if (window.lucide && typeof window.lucide.createIcons === 'function') {
-      window.lucide.createIcons({ attrs: { 'stroke-width': 1.8 } });
-    }
   }
 
   function localMotion() {
@@ -1285,9 +1279,9 @@
   let hydrateTimer = 0;
   function scheduleHydrate() {
     hydrateMemberDetail();
+    if (currentMemberPack()) return;
     window.clearTimeout(hydrateTimer);
-    const delays = [80, 250, 700, 1400];
-    delays.forEach((ms) => window.setTimeout(hydrateMemberDetail, ms));
+    hydrateTimer = window.setTimeout(hydrateMemberDetail, 180);
   }
 
   function hydrateMemberDetail() {
@@ -1466,9 +1460,6 @@
           api.patchState({ _pickingMembers: false });
         });
       }
-      if (window.lucide && typeof window.lucide.createIcons === 'function') {
-        window.lucide.createIcons({ attrs: { 'stroke-width': 1.8 } });
-      }
     },
     async refreshPage() {
       const api = wrapCore();
@@ -1481,9 +1472,6 @@
           api.patchState({ adminMemberCopy: result.copy || DEFAULT_MEMBER_COPY });
         } catch (_) {}
         await loadTierDailyLimits({ silent: true });
-      }
-      if (page === 'notifications' || page === 'members') {
-        if (typeof api.loadAdminMembers === 'function') await api.loadAdminMembers({ silent: true });
       }
     },
     handleClick(_event, target) {

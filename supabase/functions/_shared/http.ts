@@ -1,6 +1,9 @@
-// Edge Function 공통 응답·권한 처리
+// Edge Function 공통 응답·권한 처리. JWT는 게이트웨이 verify_jwt 이후 페이로드만 읽는다.
+
+import { isUuid } from "./validate.ts";
 
 export type JsonRecord = Record<string, unknown>;
+export type AuthUser = { id: string; email: string | null };
 
 export class HttpError extends Error {
   status: number;
@@ -43,6 +46,26 @@ export function jsonResponse(request: Request, body: JsonRecord, status = 200): 
       "Cache-Control": "no-store"
     }
   });
+}
+
+export function userFromVerifiedJwt(request: Request, loginCopy = "로그인이 필요합니다."): AuthUser {
+  const header = request.headers.get("authorization") || "";
+  const token = header.replace(/^Bearer\s+/i, "").trim();
+  if (!token) throw new HttpError(401, loginCopy);
+  const parts = token.split(".");
+  if (parts.length < 2) throw new HttpError(401, "세션이 만료됐습니다.");
+  try {
+    const padded = parts[1].replace(/-/g, "+").replace(/_/g, "/").padEnd(Math.ceil(parts[1].length / 4) * 4, "=");
+    const payload = JSON.parse(atob(padded)) as { sub?: string; email?: string; exp?: number };
+    if (!payload.sub || !isUuid(payload.sub)) throw new HttpError(401, "세션이 만료됐습니다.");
+    if (typeof payload.exp === "number" && payload.exp * 1000 < Date.now() - 5000) {
+      throw new HttpError(401, "세션이 만료됐습니다.");
+    }
+    return { id: payload.sub, email: payload.email || null };
+  } catch (error) {
+    if (error instanceof HttpError) throw error;
+    throw new HttpError(401, "세션이 만료됐습니다.");
+  }
 }
 
 export function rpcMessage(error: { message?: string } | null, fallback: string): string {

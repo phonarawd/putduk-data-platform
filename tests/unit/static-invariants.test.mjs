@@ -10,6 +10,10 @@ const requiredFiles = [
   'dist/assets/overlay-surface.css',
   'dist/assets/overlay-surface.js',
   'dist/assets/origin-split.js',
+  'dist/assets/ui-icons.js',
+  'dist/assets/vendor/supabase.min.js',
+  'dist/assets/vendor/chart.umd.min.js',
+  'dist/assets/vendor/qrcode.min.js',
   'dist/manifest.webmanifest',
   'dist/sw.js',
   'dist/_headers',
@@ -199,7 +203,7 @@ test('근무 제출은 서버로 답을 보내고 검수에 고른 보기가 있
   assert.match(adminJs, /문제 사진도 제출 보기도 없으면/);
 });
 
-test('같은 오버레이는 다시 페이드하지 않고 부트는 한 번만 그린다', async () => {
+test('같은 오버레이는 다시 페이드하지 않고 부트는 인증 전에 바로 그린다', async () => {
   const { appJs, appCss, memberHtml, adminHtml } = await readLaunchFiles();
   const overlaySrc = await readRepo('src', 'ui', 'overlay-surface.mjs');
   const overlayCss = await readRepo('src', 'ui', 'overlay-surface.css');
@@ -223,12 +227,19 @@ test('같은 오버레이는 다시 페이드하지 않고 부트는 한 번만 
   assert.match(appJs, /overlayDismissed/);
   assert.match(appCss, /\.player-backdrop \.player-sheet \{ animation: none/);
   assert.match(overlayCss, /\.player-backdrop \.player-sheet \{ animation: none/);
+  assert.match(appJs, /data-boot-shell="1"/);
   assert.match(appJs, /initializeAuth\(\)\.then\(\(\) => render\(\)\)/);
+  assert.match(appJs, /PutdukIcons/);
+  assert.equal(appJs.includes('data-lucide'), false);
+  assert.equal(appJs.includes("memberFinanceRequest('lock_stake'"), false);
+  assert.match(appJs, /hydrateSession\(data\.session\)/);
+  assert.match(appJs, /chart\.umd\.min\.js/);
   assert.equal(appJs.includes('initializeAuth().then(() => render());\n  render();'), false);
   assert.equal(appJs.includes("motion.playWorkPhase(canvas, motionPartner(node), 'lock'"), false);
   assert.match(appJs, /document\.hidden\)[\s\S]{0,180}stopWorkPhase/);
   const motionEngine = await readRepo('src', 'motion', 'motion-engine.ts');
   const browserApi = await readRepo('src', 'motion', 'browser-api.ts');
+  assert.match(motionEngine, /lastRect/);
   assert.match(motionEngine, /hints\.hidden \|\| !this\.visible/);
   assert.match(browserApi, /if \(document\.hidden\) stopWorkPhase/);
 });
@@ -237,13 +248,39 @@ test('배포 헤더에 CSP가 있고 자동 정산 플래그는 꺼져 있다', 
   const headers = await readRepo('dist', '_headers');
   const { memberHtml, adminHtml } = await readLaunchFiles();
   assert.match(headers, /Content-Security-Policy:/);
-  assert.match(headers, /cdn\.tailwindcss\.com/);
-  assert.match(headers, /unpkg\.com/);
-  assert.match(headers, /cdn\.jsdelivr\.net/);
+  assert.match(headers, /script-src 'self' 'unsafe-inline'/);
+  assert.doesNotMatch(headers, /cdn\.tailwindcss\.com/);
+  assert.doesNotMatch(headers, /unpkg\.com/);
+  assert.doesNotMatch(headers, /cdn\.jsdelivr\.net/);
+  assert.doesNotMatch(headers, /unsafe-eval/);
   assert.match(headers, /gaugwamwceqdnqdqrxqg\.supabase\.co/);
   assert.match(headers, /worker-src 'self' blob:/);
   assert.match(memberHtml, /enableFinanceApi:\s*false/);
   assert.doesNotMatch(memberHtml, /enableFinanceApi:\s*true/);
   assert.match(adminHtml, /enableFinanceApi:\s*false/);
   assert.equal(await existsRepo('supabase', 'migrations', '20260918172000_putduk_fk_indexes_ops_security.sql'), true);
+});
+
+test('회원·운영 셸은 자체 스크립트와 캐시 우선 서비스워커를 쓴다', async () => {
+  const { memberHtml, adminHtml, appJs } = await readLaunchFiles();
+  const sw = await readRepo('dist', 'sw.js');
+  const http = await readRepo('supabase', 'functions', '_shared', 'http.ts');
+  const adminOps = await readRepo('supabase', 'functions', '_shared', 'admin-ops.ts');
+  const memberFinance = await readRepo('supabase', 'functions', 'member-finance', 'index.ts');
+  const adminControl = await readRepo('supabase', 'functions', 'admin-control', 'index.ts');
+  assert.match(memberHtml, /vendor\/supabase\.min\.js/);
+  assert.match(memberHtml, /ui-icons\.js/);
+  assert.match(memberHtml, /data-boot-shell/);
+  assert.doesNotMatch(memberHtml, /cdn\.tailwindcss/);
+  assert.doesNotMatch(memberHtml, /unpkg\.com/);
+  assert.doesNotMatch(adminHtml, /cdn\.tailwindcss/);
+  assert.match(adminHtml, /vendor\/supabase\.min\.js/);
+  assert.match(sw, /staleWhileRevalidate/);
+  assert.match(sw, /putduk-shell-v14/);
+  assert.match(http, /userFromVerifiedJwt/);
+  assert.doesNotMatch(memberFinance, /auth\.getUser/);
+  assert.doesNotMatch(adminControl, /auth\.getUser/);
+  assert.match(adminOps, /from\("admin_roles"\)/);
+  assert.match(appJs, /memberFinanceRequest\('record_session'/);
+  assert.match(appJs, /hydrateSession\([^)]*\{ light: true \}/);
 });

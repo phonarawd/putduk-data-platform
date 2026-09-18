@@ -79,6 +79,8 @@ export class MotionEngine {
   private observer: IntersectionObserver | null = null;
   visible = true;
   private lastDraw = 0;
+  private lastRect = { width: 0, height: 0, ts: 0 };
+  private lastQualityKey = '';
   private quality: QualityProfile;
 
   constructor(canvas: HTMLCanvasElement, workerUrl?: string) {
@@ -92,7 +94,11 @@ export class MotionEngine {
 
   frame(input: EngineInput): void {
     const hints = readBrowserQualityHints();
-    this.quality = this.refreshQuality();
+    const qualityKey = `${hints.hidden ? 1 : 0}:${hints.saveData ? 1 : 0}:${hints.reducedMotion ? 1 : 0}:${this.lost ? 1 : 0}`;
+    if (qualityKey !== this.lastQualityKey) {
+      this.quality = this.refreshQuality();
+      this.lastQualityKey = qualityKey;
+    }
     const workCut = readWorkCut(input);
     if (hints.hidden || !this.visible) return;
 
@@ -101,7 +107,13 @@ export class MotionEngine {
     if (now - this.lastDraw < minDelta && this.quality.level !== 'static' && !workCut) return;
     this.lastDraw = now;
 
-    const rect = this.canvas.getBoundingClientRect();
+    const rect = now - this.lastRect.ts < 250 && this.lastRect.width
+      ? this.lastRect
+      : (() => {
+          const box = this.canvas.getBoundingClientRect();
+          this.lastRect = { width: box.width, height: box.height, ts: now };
+          return this.lastRect;
+        })();
     const dpr = clampDpr(this.quality.dpr * (typeof devicePixelRatio === 'number' ? Math.min(devicePixelRatio, 1.5) / (devicePixelRatio || 1) : 1) * (devicePixelRatio || 1));
     const width = Math.max(1, Math.floor(rect.width * dpr));
     const height = Math.max(1, Math.floor(rect.height * dpr));
@@ -285,11 +297,9 @@ export class MotionEngine {
       color[index * 3 + 2] = gold ? 0.42 : 0.76;
     });
 
-    this.buffers.forEach((buffer) => gl.deleteBuffer(buffer));
-    this.buffers = [];
-    bindAttrib(gl, program, 'a_pos', pos, 2, this.buffers);
-    bindAttrib(gl, program, 'a_size', size, 1, this.buffers);
-    bindAttrib(gl, program, 'a_color', color, 3, this.buffers);
+    bindAttrib(gl, program, 'a_pos', pos, 2, this.buffers, 0);
+    bindAttrib(gl, program, 'a_size', size, 1, this.buffers, 1);
+    bindAttrib(gl, program, 'a_color', color, 3, this.buffers, 2);
     gl.uniform2f(gl.getUniformLocation(program, 'u_res'), frame.width, frame.height);
     gl.drawArrays(gl.POINTS, 0, count);
     return true;
@@ -356,16 +366,21 @@ function bindAttrib(
   name: string,
   data: Float32Array,
   size: number,
-  store: WebGLBuffer[]
+  store: WebGLBuffer[],
+  index = 0
 ): void {
   const loc = gl.getAttribLocation(program, name);
-  const buffer = gl.createBuffer();
-  if (!buffer || loc < 0) return;
+  if (loc < 0) return;
+  let buffer = store[index];
+  if (!buffer) {
+    buffer = gl.createBuffer();
+    if (!buffer) return;
+    store[index] = buffer;
+  }
   gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
   gl.bufferData(gl.ARRAY_BUFFER, data, gl.DYNAMIC_DRAW);
   gl.enableVertexAttribArray(loc);
   gl.vertexAttribPointer(loc, size, gl.FLOAT, false, 0, 0);
-  store.push(buffer);
 }
 
 export function createMotionEngine(canvas: HTMLCanvasElement, workerUrl?: string): MotionEngine {

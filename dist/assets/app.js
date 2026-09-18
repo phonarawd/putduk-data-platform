@@ -150,6 +150,7 @@
   let state = loadState();
   let runFrame = null;
   let chartInstance = null;
+  let chartLoading = null;
   let syncTimer = null;
   let fomoClockBound = false;
   let noticesHydrated = false;
@@ -1417,63 +1418,64 @@
     if (state.modal === 'notifications') render();
   }
 
-  async function hydrateSession(session) {
+  async function hydrateSession(session, options = {}) {
+    const light = options.light === true;
     const previousHistory = Array.isArray(state.history) ? state.history : [];
     const previousHistoryMap = new Map(previousHistory.map((item) => [item.id, item.status]));
     authState.session = session || null;
-    authState.profile = null;
     authState.error = null;
     if (!session) {
       noticesHydrated = false;
       stopMemberLive();
       authState.loading = false;
+      authState.profile = null;
       activeStorageKey = storageKey;
       state = loadState(storageKey);
-      await hydrateCrewPulse({ force: true });
+      if (!isAdmin) await hydrateCrewPulse({ force: true });
       return;
     }
+    const sameUser = activeStorageKey === `${storageKey}:${session.user.id}`;
     switchToUserState(session.user.id);
+    if (isAdmin) {
+      authState.loading = false;
+      return;
+    }
     startMemberLive(session.user.id);
-    state.wallet = { support: null, work: null, task: null, referral: null, available: null, held: null };
-    state.dailyTaskQuota = null;
-    state.history = [];
-    state.referrals = [];
-    state.deposits = [];
-    state.withdrawals = [];
+    if (!sameUser) {
+      state.wallet = { support: null, work: null, task: null, referral: null, available: null, held: null };
+      state.dailyTaskQuota = null;
+      state.history = [];
+      state.referrals = [];
+      state.deposits = [];
+      state.withdrawals = [];
+    }
     if (!supabaseClient) { authState.loading = false; return; }
-    authState.loading = true;
     try {
-      const profileResult = await supabaseClient
-        .from('profiles')
-        .select('public_id,display_name,member_tier,status,referral_code,trial_consumed_at')
-        .eq('id', session.user.id)
-        .maybeSingle();
+      const [profileResult, walletResult, runResult] = await Promise.all([
+        supabaseClient
+          .from('profiles')
+          .select('public_id,display_name,member_tier,status,referral_code,trial_consumed_at')
+          .eq('id', session.user.id)
+          .maybeSingle(),
+        supabaseClient
+          .from('wallet_accounts')
+          .select('bucket,currency,available_amount,held_amount')
+          .eq('user_id', session.user.id)
+          .eq('currency', 'KRW'),
+        supabaseClient
+          .from('task_runs')
+          .select('id,public_id,node_id,status,reward_amount,reward_status,started_at,created_at,completed_at,expected_completed_at,motion_variant,motion_seed,updated_at')
+          .eq('user_id', session.user.id)
+          .order('created_at', { ascending: false })
+          .limit(50),
+        light && nodes.length ? Promise.resolve() : hydratePublishedCatalog(),
+        hydrateCrewPulse({ force: !light })
+      ]);
       if (profileResult.error) throw profileResult.error;
       authState.profile = profileResult.data || null;
-      await hydratePublishedCatalog();
-      await hydrateCrewPulse({ force: true });
-
-      const walletResult = await supabaseClient
-        .from('wallet_accounts')
-        .select('bucket,currency,available_amount,held_amount')
-        .eq('user_id', session.user.id)
-        .eq('currency', 'KRW');
       if (!walletResult.error && Array.isArray(walletResult.data) && walletResult.data.length) {
         applyWalletRows(walletResult.data);
       }
-
-      state.dailyTaskQuota = null;
-      try {
-        const quotaResult = await memberFinanceRequest('daily_task_quota');
-        state.dailyTaskQuota = quotaResult.quota || null;
-      } catch (_) {}
-
-      const runResult = await supabaseClient
-        .from('task_runs')
-        .select('id,public_id,node_id,status,reward_amount,reward_status,started_at,created_at,completed_at,expected_completed_at,motion_variant,motion_seed,updated_at')
-        .eq('user_id', session.user.id)
-        .order('created_at', { ascending: false })
-        .limit(50);
       if (!runResult.error && Array.isArray(runResult.data)) {
         state.history = runResult.data.map((row) => ({
           id: row.public_id,
@@ -1594,38 +1596,43 @@
         }
       }
 
-      await refreshMemberNotices({ toastNew: true });
-
-      const [referralResult, depositResult, withdrawalResult] = await Promise.all([
-        supabaseClient
-          .from('referral_relations')
-          .select('id,invitee_id,status,created_at,updated_at')
-          .eq('referrer_id', session.user.id)
-          .order('created_at', { ascending: false })
-          .limit(50),
-        supabaseClient
-          .from('deposit_requests')
-          .select('id,public_id,currency,amount,status,note,created_at,updated_at')
-          .eq('user_id', session.user.id)
-          .order('created_at', { ascending: false })
-          .limit(20),
-        supabaseClient
-          .from('withdrawal_requests')
-          .select('id,public_id,currency,amount,destination_type,status,transaction_reference,created_at,updated_at')
-          .eq('user_id', session.user.id)
-          .order('created_at', { ascending: false })
-          .limit(20)
-      ]);
-      if (!referralResult.error && Array.isArray(referralResult.data)) {
-        state.referrals = referralResult.data.map((row, index) => ({
-          id: row.id,
-          label: `추천 회원 ${index + 1}`,
-          status: row.status,
-          createdAt: row.created_at
-        }));
+      void memberFinanceRequest('daily_task_quota').then((quotaResult) => {
+        state.dailyTaskQuota = quotaResult.quota || null;
+      }).catch(() => {});
+      void refreshMemberNotices({ toastNew: !light }).catch(() => {});
+      if (!light) {
+        void Promise.all([
+          supabaseClient
+            .from('referral_relations')
+            .select('id,invitee_id,status,created_at,updated_at')
+            .eq('referrer_id', session.user.id)
+            .order('created_at', { ascending: false })
+            .limit(50),
+          supabaseClient
+            .from('deposit_requests')
+            .select('id,public_id,currency,amount,status,note,created_at,updated_at')
+            .eq('user_id', session.user.id)
+            .order('created_at', { ascending: false })
+            .limit(20),
+          supabaseClient
+            .from('withdrawal_requests')
+            .select('id,public_id,currency,amount,destination_type,status,transaction_reference,created_at,updated_at')
+            .eq('user_id', session.user.id)
+            .order('created_at', { ascending: false })
+            .limit(20)
+        ]).then(([referralResult, depositResult, withdrawalResult]) => {
+          if (!referralResult.error && Array.isArray(referralResult.data)) {
+            state.referrals = referralResult.data.map((row, index) => ({
+              id: row.id,
+              label: `추천 회원 ${index + 1}`,
+              status: row.status,
+              createdAt: row.created_at
+            }));
+          }
+          if (!depositResult.error && Array.isArray(depositResult.data)) state.deposits = depositResult.data;
+          if (!withdrawalResult.error && Array.isArray(withdrawalResult.data)) state.withdrawals = withdrawalResult.data;
+        }).catch(() => {});
       }
-      if (!depositResult.error && Array.isArray(depositResult.data)) state.deposits = depositResult.data;
-      if (!withdrawalResult.error && Array.isArray(withdrawalResult.data)) state.withdrawals = withdrawalResult.data;
     } catch (error) {
       authState.error = error;
     } finally {
@@ -1673,7 +1680,8 @@
     if (!authState.session || sessionRecorded) return;
     sessionRecorded = true;
     try {
-      await edgeRequest('record_session', {});
+      if (isAdmin) await edgeRequest('record_session', {});
+      else await memberFinanceRequest('record_session', {});
     } catch (_) {
       sessionRecorded = false;
     }
@@ -1911,7 +1919,7 @@
       if (!window.qrcode) {
         await new Promise((resolve, reject) => {
           const script = document.createElement('script');
-          script.src = 'https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js';
+          script.src = isAdmin ? '../assets/vendor/qrcode.min.js?v=20260918-perf1' : './assets/vendor/qrcode.min.js?v=20260918-perf1';
           script.onload = resolve;
           script.onerror = reject;
           document.head.appendChild(script);
@@ -2126,10 +2134,21 @@
 
   async function refreshAdminPageData({ silent = true } = {}) {
     if (!isAdmin || !authState.adminAuthorized) return;
-    const jobs = [loadAdminReviews({ silent: true }), loadAdminCatalog({ silent: true })];
-    if (state.adminPage === 'overview' || state.adminPage === 'members' || state.adminPage === 'finance') jobs.push(loadAdminMembers({ silent: true }));
-    if (state.adminPage === 'overview' || state.adminPage === 'finance') jobs.push(loadAdminFinance({ silent: true }));
-    if (state.adminPage === 'settings') jobs.push(loadAdminCampaigns({ silent: true }));
+    const page = state.adminPage || 'overview';
+    const jobs = [];
+    if (page === 'overview') {
+      jobs.push(loadAdminReviews({ silent: true }), loadAdminCatalog({ silent: true }), loadAdminMembers({ silent: true }), loadAdminFinance({ silent: true }));
+    } else if (page === 'reviews') {
+      jobs.push(loadAdminReviews({ silent: true }));
+    } else if (page === 'companies' || page === 'nodes') {
+      jobs.push(loadAdminCatalog({ silent: true }));
+    } else if (page === 'members' || page === 'notifications') {
+      jobs.push(loadAdminMembers({ silent: true }));
+    } else if (page === 'finance') {
+      jobs.push(loadAdminFinance({ silent: true }));
+    } else if (page === 'settings') {
+      jobs.push(loadAdminCampaigns({ silent: true }));
+    }
     if (window.PUTDUK_ADMIN && typeof window.PUTDUK_ADMIN.refreshPage === 'function') {
       jobs.push(window.PUTDUK_ADMIN.refreshPage());
     }
@@ -2152,9 +2171,14 @@
     try {
       const { data, error } = await supabaseClient.auth.getSession();
       if (error) throw error;
-      await hydrateCrewPulse({ force: true });
+      authState.loading = false;
+      if (data.session) {
+        authState.session = data.session;
+        switchToUserState(data.session.user.id);
+      }
+      render();
       await hydrateSession(data.session);
-      if (authState.session) await recordOwnSession();
+      if (authState.session) recordOwnSession();
       if (authState.session && !isAdmin) queueOnboarding();
       if (isAdmin) {
         await hydrateAdminAuthorization();
@@ -2169,7 +2193,7 @@
         }
         window.setTimeout(async () => {
           await hydrateSession(session);
-          if (authState.session) await recordOwnSession();
+          if (authState.session) recordOwnSession();
           if (isAdmin) {
             await hydrateAdminAuthorization();
             if (authState.adminAuthorized) {
@@ -2195,8 +2219,11 @@
             }
             return;
           }
-          await hydrateSession(authState.session);
-          if (isAdmin && authState.adminAuthorized) await refreshAdminPageData({ silent: true });
+          if (isAdmin) {
+            if (authState.adminAuthorized) await refreshAdminPageData({ silent: true });
+          } else {
+            await hydrateSession(authState.session, { light: true });
+          }
           if (document.hidden) return;
           render();
         }, 30000);
@@ -2233,7 +2260,9 @@
   }
 
   function icon(name, size = 17) {
-    return `<i data-lucide="${name}" width="${size}" height="${size}" aria-hidden="true"></i>`;
+    if (window.PutdukIcons && typeof window.PutdukIcons.svg === 'function') return window.PutdukIcons.svg(name, size);
+    const px = Number(size) || 17;
+    return `<svg xmlns="http://www.w3.org/2000/svg" width="${px}" height="${px}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"></svg>`;
   }
 
   function uiLead(name, label, size = 15) {
@@ -2248,7 +2277,6 @@
   }
 
   function refreshIcons() {
-    if (window.lucide && typeof window.lucide.createIcons === 'function') window.lucide.createIcons({ attrs: { 'stroke-width': 1.8 } });
   }
 
   function companyById(id) {
@@ -2518,11 +2546,23 @@
       return;
     }
     const crowd = document.getElementById('fomoCrowd');
-    if (crowd) crowd.innerHTML = `${renderFomoMetricValue(pulse.crowd)}<small>명</small>`;
+    if (crowd) {
+      const nextCrowd = `${renderFomoMetricValue(pulse.crowd)}<small>명</small>`;
+      if (crowd.innerHTML !== nextCrowd) crowd.innerHTML = nextCrowd;
+    }
     const burn = document.getElementById('fomoBurn');
-    if (burn) burn.innerHTML = `${renderFomoMetricValue(pulse.burn)}<small>칸/분</small>`;
+    if (burn) {
+      const nextBurn = `${renderFomoMetricValue(pulse.burn)}<small>칸/분</small>`;
+      if (burn.innerHTML !== nextBurn) burn.innerHTML = nextBurn;
+    }
     const feed = document.getElementById('fomoFeed');
-    if (feed) feed.innerHTML = renderFomoFeedItems(pulse);
+    if (feed) {
+      const nextFeed = renderFomoFeedItems(pulse);
+      if (feed.getAttribute('data-fomo') !== nextFeed) {
+        feed.innerHTML = nextFeed;
+        feed.setAttribute('data-fomo', nextFeed);
+      }
+    }
     document.querySelectorAll('[data-fomo-slot]').forEach((el) => {
       const node = nodeById(el.getAttribute('data-fomo-slot'));
       el.textContent = `${fomoSlotsLeft(node).toLocaleString('ko-KR')}자리 남음`;
@@ -2533,6 +2573,7 @@
     if (isAdmin || fomoClockBound) return;
     fomoClockBound = true;
     fomoTimer = setInterval(() => {
+      if (document.hidden) return;
       hydrateCrewPulse().then(() => patchFomoDom()).catch(() => patchFomoDom());
     }, 4000);
   }
@@ -3787,6 +3828,7 @@
     document.documentElement.dataset.theme = state.theme;
     const app = document.getElementById('app');
     if (!app) return;
+    if (authState.loading && !authState.session && app.querySelector('[data-boot-shell="1"]')) return;
     const existingType = app.querySelector('[data-modal]')?.getAttribute('data-modal');
     const nextKey = overlaySurfaceKey();
     const existing = app.querySelector('[data-surface]');
@@ -3848,29 +3890,67 @@
     return { labels, data };
   }
 
+  function chartScriptSrc() {
+    return isAdmin ? '../assets/vendor/chart.umd.min.js?v=20260918-perf1' : './assets/vendor/chart.umd.min.js?v=20260918-perf1';
+  }
+
+  function ensureChart() {
+    if (window.Chart) return Promise.resolve(window.Chart);
+    if (chartLoading) return chartLoading;
+    chartLoading = new Promise((resolve, reject) => {
+      const script = document.createElement('script');
+      script.src = chartScriptSrc();
+      script.onload = () => resolve(window.Chart);
+      script.onerror = () => {
+        chartLoading = null;
+        reject(new Error('차트를 불러오지 못했어요.'));
+      };
+      document.head.appendChild(script);
+    });
+    return chartLoading;
+  }
+
   function drawMemberChart() {
     const canvas = document.getElementById('earningsChart');
-    if (!canvas || !window.Chart) return;
-    if (chartInstance) chartInstance.destroy();
-    const week = weekEarnings();
-    chartInstance = new Chart(canvas, { type: 'line', data: { labels: week.labels, datasets: [{ data: week.data, borderColor: '#0d9f76', backgroundColor: 'rgba(13,159,118,.12)', fill: true, tension: .42, pointRadius: 3, pointBackgroundColor: '#0d9f76', pointBorderWidth: 0 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display:false }, tooltip: { displayColors:false, callbacks:{ label:(ctx)=>` ${Number(ctx.parsed.y).toLocaleString('ko-KR')}원` } } }, scales:{ x:{ grid:{display:false}, ticks:{color:'#7d8c86',font:{size:11}} }, y:{ min:0, grid:{color:'rgba(120,140,130,.12)'}, ticks:{color:'#7d8c86',font:{size:10},callback:(value)=> Number.isInteger(Number(value)) ? formatChartTick(value) : '' } } } } });
+    if (!canvas) return;
+    ensureChart().then((Chart) => {
+      if (document.getElementById('earningsChart') !== canvas || !Chart) return;
+      const week = weekEarnings();
+      if (chartInstance && chartInstance.canvas === canvas && chartInstance.config?.type === 'line') {
+        chartInstance.data.labels = week.labels;
+        chartInstance.data.datasets[0].data = week.data;
+        chartInstance.update('none');
+        return;
+      }
+      if (chartInstance) chartInstance.destroy();
+      chartInstance = new Chart(canvas, { type: 'line', data: { labels: week.labels, datasets: [{ data: week.data, borderColor: '#0d9f76', backgroundColor: 'rgba(13,159,118,.12)', fill: true, tension: .42, pointRadius: 3, pointBackgroundColor: '#0d9f76', pointBorderWidth: 0 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display:false }, tooltip: { displayColors:false, callbacks:{ label:(ctx)=>` ${Number(ctx.parsed.y).toLocaleString('ko-KR')}원` } } }, scales:{ x:{ grid:{display:false}, ticks:{color:'#7d8c86',font:{size:11}} }, y:{ min:0, grid:{color:'rgba(120,140,130,.12)'}, ticks:{color:'#7d8c86',font:{size:10},callback:(value)=> Number.isInteger(Number(value)) ? formatChartTick(value) : '' } } } } });
+    }).catch(() => {});
   }
 
   function drawAdminChart() {
     const canvas = document.getElementById('adminChart');
-    if (!canvas || !window.Chart) return;
-    if (chartInstance) chartInstance.destroy();
-    const reviews = Array.isArray(state.adminReviews) ? state.adminReviews : [];
-    const labels = ['09시','12시','15시','18시','21시','현재'];
-    const done = labels.map(() => 0);
-    const wait = labels.map(() => 0);
-    reviews.forEach((item) => {
-      const hour = new Date(item.updated_at || item.created_at || Date.now()).getHours();
-      const bucket = hour < 12 ? 0 : hour < 15 ? 1 : hour < 18 ? 2 : hour < 21 ? 3 : hour < 23 ? 4 : 5;
-      if (item.status === 'approved') done[bucket] += 1;
-      if (['submitted', 'review_pending'].includes(item.status)) wait[bucket] += 1;
-    });
-    chartInstance = new Chart(canvas, { type: 'bar', data: { labels, datasets:[{label:'검수 완료',data:done,backgroundColor:'rgba(13,159,118,.75)',borderRadius:8},{label:'검수 대기',data:wait,backgroundColor:'rgba(193,138,45,.72)',borderRadius:8}]}, options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{color:'#7d8c86',boxWidth:10,font:{size:11}}}},scales:{x:{grid:{display:false},ticks:{color:'#7d8c86'}},y:{grid:{color:'rgba(120,140,130,.12)'},ticks:{color:'#7d8c86'}}}}});
+    if (!canvas) return;
+    ensureChart().then((Chart) => {
+      if (document.getElementById('adminChart') !== canvas || !Chart) return;
+      const reviews = Array.isArray(state.adminReviews) ? state.adminReviews : [];
+      const labels = ['09시','12시','15시','18시','21시','현재'];
+      const done = labels.map(() => 0);
+      const wait = labels.map(() => 0);
+      reviews.forEach((item) => {
+        const hour = new Date(item.updated_at || item.created_at || Date.now()).getHours();
+        const bucket = hour < 12 ? 0 : hour < 15 ? 1 : hour < 18 ? 2 : hour < 21 ? 3 : hour < 23 ? 4 : 5;
+        if (item.status === 'approved') done[bucket] += 1;
+        if (['submitted', 'review_pending'].includes(item.status)) wait[bucket] += 1;
+      });
+      if (chartInstance && chartInstance.canvas === canvas && chartInstance.config?.type === 'bar') {
+        chartInstance.data.datasets[0].data = done;
+        chartInstance.data.datasets[1].data = wait;
+        chartInstance.update('none');
+        return;
+      }
+      if (chartInstance) chartInstance.destroy();
+      chartInstance = new Chart(canvas, { type: 'bar', data: { labels, datasets:[{label:'검수 완료',data:done,backgroundColor:'rgba(13,159,118,.75)',borderRadius:8},{label:'검수 대기',data:wait,backgroundColor:'rgba(193,138,45,.72)',borderRadius:8}]}, options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{color:'#7d8c86',boxWidth:10,font:{size:11}}}},scales:{x:{grid:{display:false},ticks:{color:'#7d8c86'}},y:{grid:{color:'rgba(120,140,130,.12)'},ticks:{color:'#7d8c86'}}}}});
+    }).catch(() => {});
   }
 
   function showToast(text, kind = 'info', fromRender = false, action = null) {
@@ -3976,13 +4056,6 @@
         _submitted: false
       };
       state.player = { nodeId: state.run.nodeId, choice: null, question: playerQuestion(node), photo, bundle: initBundleForNode(node, company, state.run), listing: {} };
-      try {
-        await memberFinanceRequest('lock_stake', { task_run_id: data.id });
-      } catch (error) {
-        if (!isUnsupportedAction(error) && !/지원하지 않는|찾을 수/.test(String(error?.message || ''))) {
-          showToast(friendlyAdminError(error), 'warning');
-        }
-      }
       await refreshMemberWallet();
       try {
         const quotaResult = await memberFinanceRequest('daily_task_quota');
@@ -5600,7 +5673,7 @@
         }
         return;
       }
-      hydrateSession(authState.session).then(async () => {
+      hydrateSession(authState.session, { light: true }).then(async () => {
         if (isAdmin && authState.adminAuthorized) {
           await refreshAdminPageData({ silent: true });
         }

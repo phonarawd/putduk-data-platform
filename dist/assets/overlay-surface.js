@@ -1,7 +1,7 @@
 (() => {
   'use strict';
 // 같은 오버레이는 #app 전체를 갈아끼우지 않고 data-surface로 유지한다.
-// 근무 시트는 CSS fade를 쓰지 않는다. 부트는 인증 준비 후 한 번만 그린다.
+// 근무 시트는 CSS fade를 쓰지 않는다. 부트는 인증을 기다리지 않고 바로 그린다.
 
 const REPLAY_LOCK_CUE_AFTER_START = false;
 const WAIT_FOR_SUBMIT_CUT = false;
@@ -105,8 +105,8 @@ function overlayPaintPlan(input = {}) {
   };
 }
 
-function shouldPaintBootImmediately(hasSupabaseClient) {
-  return !hasSupabaseClient;
+function shouldPaintBootImmediately(_hasSupabaseClient) {
+  return true;
 }
   window.PutdukOverlaySurface = { overlaySurfaceKey, overlayBodyToken, escapeOverlayAttr, stampOverlayMarkup, overlayPaintPlan, shouldPaintBootImmediately, REPLAY_LOCK_CUE_AFTER_START, WAIT_FOR_SUBMIT_CUT, OVERLAY_SURFACE_CSS };
 })();
