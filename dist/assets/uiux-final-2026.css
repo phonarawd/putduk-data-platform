@@ -21,7 +21,6 @@ body {
   letter-spacing: var(--uiux-letter-body);
   font-kerning: normal;
   font-synthesis: none;
-  text-rendering: optimizeLegibility;
 }
 
 button, input, select, textarea {
@@ -106,18 +105,14 @@ textarea:focus-visible, [tabindex]:focus-visible {
 .wallet-slot strong { line-height: 1.18; }
 .wallet-slot p, .wallet-slot span { line-height: 1.5; }
 .wallet-toolbar, .withdraw-actions { gap: 10px; }
-.deposit-dest, .pin-gate, .kyc-slot {
-  line-height: 1.58;
-}
+.deposit-dest, .pin-gate, .kyc-slot { line-height: 1.58; }
 
 .notice {
   line-height: 1.62;
   border-radius: 14px;
 }
 
-.empty-state {
-  max-width: 620px;
-}
+.empty-state { max-width: 620px; }
 .empty-state .page-copy, .empty-state p { line-height: 1.7; }
 
 .modal-backdrop {
@@ -138,9 +133,7 @@ textarea:focus-visible, [tabindex]:focus-visible {
   overscroll-behavior: contain;
   scrollbar-gutter: stable;
 }
-.modal-actions {
-  gap: 10px;
-}
+.modal-actions { gap: 10px; }
 
 .table-wrap {
   scrollbar-width: thin;
@@ -149,14 +142,10 @@ textarea:focus-visible, [tabindex]:focus-visible {
 
 html[data-mode="admin"] .admin-card,
 html[data-mode="admin"] .review-card,
-html[data-mode="admin"] .member-history {
-  min-width: 0;
-}
+html[data-mode="admin"] .member-history { min-width: 0; }
 html[data-mode="admin"] .history-row,
 html[data-mode="admin"] td,
-html[data-mode="admin"] th {
-  line-height: 1.5;
-}
+html[data-mode="admin"] th { line-height: 1.5; }
 
 @media (max-width: 1199px) {
   .benefit-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -165,6 +154,10 @@ html[data-mode="admin"] th {
 @media (max-width: 840px) {
   :root { --uiux-touch: 46px; }
   body { font-size: 15px; line-height: 1.64; }
+  .sidebar {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
   .main {
     padding-left: max(16px, env(safe-area-inset-left));
     padding-right: max(16px, env(safe-area-inset-right));
@@ -201,9 +194,7 @@ html[data-mode="admin"] th {
   .hero-title { font-size: clamp(24px, 7vw, 30px); line-height: 1.16; }
   .hero-copy { font-size: 15px; }
   .section-heading { margin-bottom: 14px; }
-  .modal-backdrop {
-    padding-inline: 10px;
-  }
+  .modal-backdrop { padding-inline: 10px; }
   .modal {
     width: min(100%, 560px);
     max-width: 100%;
@@ -230,9 +221,7 @@ html[data-mode="admin"] th {
     width: 100%;
   }
   .hero-actions > button, .hero-actions > a,
-  .wallet-toolbar > button, .withdraw-actions > button {
-    width: 100%;
-  }
+  .wallet-toolbar > button, .withdraw-actions > button { width: 100%; }
   .wallet-slot { min-height: 88px; padding: 14px; }
   .modal-backdrop { padding-left: 8px; padding-right: 8px; }
   .modal { border-radius: 18px; }
