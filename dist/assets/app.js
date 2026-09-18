@@ -79,6 +79,7 @@
     reviewWait: null,
     history: [],
     notifications: [],
+    assignments: [],
     referrals: [],
     deposits: [],
     withdrawals: [],
@@ -151,6 +152,9 @@
   let chartInstance = null;
   let syncTimer = null;
   let fomoClockBound = false;
+  let noticesHydrated = false;
+  let memberLiveChannel = null;
+  let memberLiveUserId = null;
   const toastRecent = new Map();
   const toastTimers = new Set();
   let overlayDismissed = false;
@@ -316,10 +320,23 @@
     return `${Math.round(n).toLocaleString('ko-KR')}원`;
   }
 
+  function assignedNodeIds() {
+    return new Set((state.assignments || []).map((row) => String(row.node_id || '')).filter(Boolean));
+  }
+
+  function nodeIsAssigned(node) {
+    return Boolean(node?.assigned) || assignedNodeIds().has(String(node?.id || ''));
+  }
+
+  function ultraNeedsAssign(node) {
+    return isUltraNode(node) && !nodeIsAssigned(node);
+  }
+
   function memberCatalogNodes() {
     const work = Number(state.wallet.work || 0);
     const support = Number(state.wallet.support || 0);
     const trialDone = Boolean(authState.profile?.trial_consumed_at);
+    const assignedIds = assignedNodeIds();
     const completedStakes = new Set(
       (state.history || [])
         .filter((item) => item.status === '검수 완료')
@@ -329,6 +346,7 @@
     const maxDone = Math.max(0, ...completedStakes);
     return nodes
       .filter((node) => {
+        if (assignedIds.has(String(node.id)) || node.assigned) return true;
         if (node.enabled === false) return false;
         const stake = nodeStake(node);
         if (node.requiresAssign || node.tierBand === '초고액' || stake >= 30000000) return false;
@@ -339,6 +357,8 @@
         return maxDone >= prev || work >= prev;
       })
       .sort((a, b) => {
+        const assignedDelta = Number(nodeIsAssigned(b)) - Number(nodeIsAssigned(a));
+        if (assignedDelta) return assignedDelta;
         const trialDelta = Number(Boolean(b.isTrial)) - Number(Boolean(a.isTrial));
         if (trialDelta) return trialDelta;
         return nodeStake(a) - nodeStake(b);
@@ -378,8 +398,8 @@
   }
 
   function canAttendNode(node) {
-    if (!node || node.enabled === false) return false;
-    if (isUltraNode(node)) return false;
+    if (!node || (node.enabled === false && !nodeIsAssigned(node))) return false;
+    if (ultraNeedsAssign(node)) return false;
     if (nodeDailyRemaining(node) <= 0) return false;
     return canStartNode(node);
   }
@@ -417,14 +437,14 @@
     const lineNodes = nodes.filter((node) => String(node.companyId) === String(company.id) && node.enabled !== false);
     if (!lineNodes.length) return { ok: false, label: '오늘 라인 대기' };
     if (lineNodes.some((node) => canAttendNode(node))) return { ok: true, label: '출근 가능' };
-    if (lineNodes.every(isUltraNode)) return { ok: false, label: '운영자 확인 후 열림' };
+    if (lineNodes.length && lineNodes.every(ultraNeedsAssign)) return { ok: false, label: '운영자 확인 후 열림' };
     const work = Number(state.wallet.work || 0);
     const support = Number(state.wallet.support || 0);
-    const trialOpen = lineNodes.some((node) => node.isTrial && support > 0 && !isUltraNode(node) && nodeDailyRemaining(node) > 0);
+    const trialOpen = lineNodes.some((node) => node.isTrial && support > 0 && !ultraNeedsAssign(node) && nodeDailyRemaining(node) > 0);
     if (!trialOpen && work <= 0) return { ok: false, label: '잔액 모으면 출근' };
-    const anySeat = lineNodes.some((node) => !isUltraNode(node) && nodeDailyRemaining(node) > 0);
+    const anySeat = lineNodes.some((node) => !ultraNeedsAssign(node) && nodeDailyRemaining(node) > 0);
     if (!anySeat) return { ok: false, label: '오늘 라인 대기' };
-    const paidLine = lineNodes.filter((node) => !isUltraNode(node) && !node.isTrial);
+    const paidLine = lineNodes.filter((node) => !ultraNeedsAssign(node) && !node.isTrial);
     if (paidLine.length && paidLine.every((node) => work < nodeStake(node))) return { ok: false, label: '잔액 모으면 출근' };
     return { ok: false, label: '오늘 라인 대기' };
   }
@@ -1018,39 +1038,28 @@
     return `${year}-${digits.slice(2, 4)}-${digits.slice(4, 6)}`;
   }
 
-  async function hydratePublishedCatalog() {
-    if (isAdmin || !supabaseClient || !authState.session) return;
-    const brandSelectWithPhoto = 'id,slug,display_name_ko,category,description_ko,verification_status,logo_usage_status,logo_asset_path,photo_asset_path,published';
-    const brandSelect = 'id,slug,display_name_ko,category,description_ko,verification_status,logo_usage_status,logo_asset_path,published';
-    const nodeSelectWithStake = 'id,public_id,partner_brand_id,title_ko,description_ko,node_family,difficulty,estimated_seconds,reward_min,reward_max,stake_krw,stipend_krw,is_trial,tier_band,requires_assign,question_prompt_ko,question_image_path,choice_a_ko,choice_b_ko,daily_cap,daily_capacity,motion_profile,motion_version,enabled,catalog_status';
-    const nodeSelect = 'id,public_id,partner_brand_id,title_ko,description_ko,node_family,difficulty,estimated_seconds,reward_min,reward_max,daily_capacity,motion_profile,motion_version,enabled,catalog_status';
-    let brandQuery = supabaseClient.from('partner_brands').select(brandSelectWithPhoto).order('display_name_ko', { ascending: true });
-    const [brandFirst, nodeFirst] = await Promise.all([
-      brandQuery,
-      supabaseClient.from('nodes').select(nodeSelectWithStake).order('created_at', { ascending: false })
-    ]);
-    let brandResult = brandFirst;
-    let nodeResult = nodeFirst;
-    if (brandResult.error && /photo_asset_path/i.test(String(brandResult.error.message || brandResult.error))) {
-      brandResult = await supabaseClient.from('partner_brands').select(brandSelect).order('display_name_ko', { ascending: true });
-    }
-    if (nodeResult.error && /stake_krw|stipend_krw|is_trial|tier_band|requires_assign|question_prompt_ko/i.test(String(nodeResult.error.message || nodeResult.error))) {
-      nodeResult = await supabaseClient.from('nodes').select(nodeSelect).order('created_at', { ascending: false });
-    }
-    if (brandResult.error || nodeResult.error) {
-      authState.error = brandResult.error || nodeResult.error;
-      return;
-    }
-    const brandRows = Array.isArray(brandResult.data) ? brandResult.data : [];
-    const nodeRows = Array.isArray(nodeResult.data) ? nodeResult.data : [];
-    const palette = ['#0d9f76', '#d49a17', '#5d4fb2', '#0a7180', '#c85b27', '#2b5da7', '#bc2039', '#78502c'];
-    companies = brandRows.map((row, index) => ({
+  function formatDuration(seconds) {
+    const total = Math.max(1, Math.round(Number(seconds || 60)));
+    if (total < 60) return `${total}초`;
+    const minutes = Math.floor(total / 60);
+    const remainder = total % 60;
+    return remainder ? `${minutes}분 ${remainder}초` : `${minutes}분`;
+  }
+
+  const CATALOG_BRAND_SELECT_PHOTO = 'id,slug,display_name_ko,category,description_ko,verification_status,logo_usage_status,logo_asset_path,photo_asset_path,published';
+  const CATALOG_BRAND_SELECT = 'id,slug,display_name_ko,category,description_ko,verification_status,logo_usage_status,logo_asset_path,published';
+  const CATALOG_NODE_SELECT_STAKE = 'id,public_id,partner_brand_id,title_ko,description_ko,node_family,difficulty,estimated_seconds,reward_min,reward_max,stake_krw,stipend_krw,is_trial,tier_band,requires_assign,question_prompt_ko,question_image_path,choice_a_ko,choice_b_ko,daily_cap,daily_capacity,motion_profile,motion_version,enabled,catalog_status';
+  const CATALOG_NODE_SELECT = 'id,public_id,partner_brand_id,title_ko,description_ko,node_family,difficulty,estimated_seconds,reward_min,reward_max,daily_capacity,motion_profile,motion_version,enabled,catalog_status';
+  const BRAND_PALETTE = ['#0d9f76', '#d49a17', '#5d4fb2', '#0a7180', '#c85b27', '#2b5da7', '#bc2039', '#78502c'];
+
+  function mapPublishedBrand(row, index) {
+    return {
       id: row.id,
       slug: row.slug,
       name: row.display_name_ko,
       label: row.category,
       mark: String(row.display_name_ko || 'PD').slice(0, 3),
-      color: palette[index % palette.length],
+      color: BRAND_PALETTE[index % BRAND_PALETTE.length],
       status: '공개 승인',
       category: row.category,
       copy: row.description_ko || '',
@@ -1060,9 +1069,11 @@
       photoUrl: brandAssetSrc(row.photo_asset_path, row.slug, 'photo'),
       verified: true,
       published: true
-    }));
-    const companyColors = Object.fromEntries(companies.map((company) => [company.id, company.color]));
-    nodes = nodeRows.map((row) => ({
+    };
+  }
+
+  function mapPublishedNode(row, companyColors) {
+    return {
       id: row.id,
       publicId: row.public_id,
       companyId: row.partner_brand_id,
@@ -1088,18 +1099,112 @@
       question: row.question_prompt_ko || '',
       questionImage: row.question_image_path || '',
       choiceA: row.choice_a_ko || '맞아요',
-      choiceB: row.choice_b_ko || '달라요'
-    }));
+      choiceB: row.choice_b_ko || '달라요',
+      assigned: false
+    };
+  }
+
+  function applyAssignmentOverlay(assignment) {
+    const node = nodes.find((item) => String(item.id) === String(assignment.node_id));
+    if (!node) return;
+    node.assigned = true;
+    node.assignmentId = assignment.id;
+    node.enabled = true;
+    if (assignment.reward_amount != null && assignment.reward_amount !== '') {
+      const pay = Number(assignment.reward_amount);
+      if (Number.isFinite(pay) && pay >= 0) {
+        node.reward = pay;
+        node.stipend = pay;
+      }
+    }
+    if (assignment.estimated_seconds != null) {
+      const seconds = Number(assignment.estimated_seconds);
+      if (seconds >= 30) {
+        node.time = seconds;
+        node.minutes = formatDuration(seconds);
+      }
+    }
+  }
+
+  async function hydrateMemberAssignments() {
+    if (isAdmin || !supabaseClient || !authState.session) {
+      state.assignments = [];
+      return;
+    }
+    const result = await supabaseClient
+      .from('task_assignments')
+      .select('id,node_id,partner_brand_id,reward_amount,estimated_seconds,reason,status,visible_from,visible_until')
+      .eq('user_id', authState.session.user.id)
+      .eq('status', 'active');
+    if (result.error || !Array.isArray(result.data)) return;
+    state.assignments = result.data;
+    const missingNodeIds = result.data
+      .map((row) => row.node_id)
+      .filter((id) => id && !nodes.some((node) => String(node.id) === String(id)));
+    if (missingNodeIds.length) {
+      let extraNodes = await supabaseClient.from('nodes').select(CATALOG_NODE_SELECT_STAKE).in('id', missingNodeIds);
+      if (extraNodes.error && /stake_krw|stipend_krw|is_trial|tier_band|requires_assign|question_prompt_ko/i.test(String(extraNodes.error.message || extraNodes.error))) {
+        extraNodes = await supabaseClient.from('nodes').select(CATALOG_NODE_SELECT).in('id', missingNodeIds);
+      }
+      if (!extraNodes.error && Array.isArray(extraNodes.data)) {
+        const companyColors = Object.fromEntries(companies.map((company) => [company.id, company.color]));
+        extraNodes.data.forEach((row) => {
+          if (nodes.some((node) => String(node.id) === String(row.id))) return;
+          nodes.push(mapPublishedNode(row, companyColors));
+        });
+      }
+    }
+    const missingBrandIds = result.data
+      .map((row) => row.partner_brand_id)
+      .filter((id) => id && !companies.some((company) => String(company.id) === String(id)));
+    if (missingBrandIds.length) {
+      let extraBrands = await supabaseClient.from('partner_brands').select(CATALOG_BRAND_SELECT_PHOTO).in('id', missingBrandIds);
+      if (extraBrands.error && /photo_asset_path/i.test(String(extraBrands.error.message || extraBrands.error))) {
+        extraBrands = await supabaseClient.from('partner_brands').select(CATALOG_BRAND_SELECT).in('id', missingBrandIds);
+      }
+      if (!extraBrands.error && Array.isArray(extraBrands.data)) {
+        extraBrands.data.forEach((row) => {
+          if (companies.some((company) => String(company.id) === String(row.id))) return;
+          companies.push(mapPublishedBrand(row, companies.length));
+        });
+        const companyColors = Object.fromEntries(companies.map((company) => [company.id, company.color]));
+        nodes.forEach((node) => {
+          if (!node.color || node.color === '#0d9f76') node.color = companyColors[node.companyId] || node.color;
+        });
+      }
+    }
+    result.data.forEach(applyAssignmentOverlay);
     state.companies = companies;
     state.nodeEnabled = Object.fromEntries(nodes.map((node) => [node.id, node.enabled !== false]));
   }
 
-  function formatDuration(seconds) {
-    const total = Math.max(1, Math.round(Number(seconds || 60)));
-    if (total < 60) return `${total}초`;
-    const minutes = Math.floor(total / 60);
-    const remainder = total % 60;
-    return remainder ? `${minutes}분 ${remainder}초` : `${minutes}분`;
+  async function hydratePublishedCatalog() {
+    if (isAdmin || !supabaseClient || !authState.session) return;
+    let brandQuery = supabaseClient.from('partner_brands').select(CATALOG_BRAND_SELECT_PHOTO).order('display_name_ko', { ascending: true });
+    const [brandFirst, nodeFirst] = await Promise.all([
+      brandQuery,
+      supabaseClient.from('nodes').select(CATALOG_NODE_SELECT_STAKE).order('created_at', { ascending: false })
+    ]);
+    let brandResult = brandFirst;
+    let nodeResult = nodeFirst;
+    if (brandResult.error && /photo_asset_path/i.test(String(brandResult.error.message || brandResult.error))) {
+      brandResult = await supabaseClient.from('partner_brands').select(CATALOG_BRAND_SELECT).order('display_name_ko', { ascending: true });
+    }
+    if (nodeResult.error && /stake_krw|stipend_krw|is_trial|tier_band|requires_assign|question_prompt_ko/i.test(String(nodeResult.error.message || nodeResult.error))) {
+      nodeResult = await supabaseClient.from('nodes').select(CATALOG_NODE_SELECT).order('created_at', { ascending: false });
+    }
+    if (brandResult.error || nodeResult.error) {
+      authState.error = brandResult.error || nodeResult.error;
+      return;
+    }
+    const brandRows = Array.isArray(brandResult.data) ? brandResult.data : [];
+    const nodeRows = Array.isArray(nodeResult.data) ? nodeResult.data : [];
+    companies = brandRows.map((row, index) => mapPublishedBrand(row, index));
+    const companyColors = Object.fromEntries(companies.map((company) => [company.id, company.color]));
+    nodes = nodeRows.map((row) => mapPublishedNode(row, companyColors));
+    state.companies = companies;
+    state.nodeEnabled = Object.fromEntries(nodes.map((node) => [node.id, node.enabled !== false]));
+    await hydrateMemberAssignments();
   }
 
   function motionProfileOf(node) {
@@ -1120,6 +1225,198 @@
     return { label: '검수 대기·동기화', copy: '보상은 운영자 검수 후 확정돼요.' };
   }
 
+  function formatNoticeTime(value) {
+    const at = new Date(value || Date.now());
+    if (Number.isNaN(at.getTime())) return '';
+    return at.toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+  }
+
+  function mapNoticeRow(row) {
+    const body = sanitizeMemberNotice(row?.body);
+    const title = sanitizeMemberNotice(row?.title);
+    return {
+      id: row?.id,
+      title: title || '안내',
+      text: body || title || '📬 새 안내가 도착했어요.',
+      time: formatNoticeTime(row?.created_at),
+      type: row?.notification_type || 'info',
+      read: Boolean(row?.read_at)
+    };
+  }
+
+  function unreadNoticeCount() {
+    return (state.notifications || []).filter((item) => item && !item.read).length;
+  }
+
+  function noticeBellLabel() {
+    const unread = unreadNoticeCount();
+    return unread ? `알림, 안 읽은 안내 ${unread}건` : '알림';
+  }
+
+  function noticeBellButtonHtml() {
+    const unread = unreadNoticeCount();
+    const badge = unread > 0 ? `<span class="notice-badge">${unread > 99 ? '99+' : unread}</span>` : '';
+    return `<button class="icon-button notice-bell" data-notification aria-label="알림${unread ? `, 안 읽은 안내 ${unread}건` : ''}">${icon('bell', 17)}${badge}</button>`;
+  }
+
+  function paintNoticeBadge() {
+    document.querySelectorAll('[data-notification]').forEach((button) => {
+      const unread = unreadNoticeCount();
+      button.setAttribute('aria-label', noticeBellLabel());
+      let badge = button.querySelector('.notice-badge');
+      if (unread > 0) {
+        if (!badge) {
+          badge = document.createElement('span');
+          badge.className = 'notice-badge';
+          button.appendChild(badge);
+        }
+        badge.textContent = unread > 99 ? '99+' : String(unread);
+      } else if (badge) {
+        badge.remove();
+      }
+    });
+  }
+
+  function flushPendingToast() {
+    if (!state.toast) return;
+    const pending = state.toast;
+    state.toast = null;
+    showToast(pending.text, pending.kind, true, pending.action || null);
+  }
+
+  function arrivedNoticeToast(item) {
+    if (item?.type === 'work') return '📬 새 근무가 배정됐어요. 라인 찾기에서 확인해 주세요.';
+    return '📬 새 안내가 도착했어요. 종을 눌러 확인해 주세요.';
+  }
+
+  function ingestNoticeRow(row, { toast = false } = {}) {
+    if (!row?.id) return;
+    const mapped = mapNoticeRow(row);
+    const list = Array.isArray(state.notifications) ? state.notifications.slice() : [];
+    const index = list.findIndex((item) => item.id === mapped.id);
+    if (index >= 0) list[index] = { ...list[index], ...mapped };
+    else list.unshift(mapped);
+    state.notifications = list.slice(0, 50);
+    if (toast && !mapped.read && state.modal !== 'notifications') {
+      state.toast = { text: arrivedNoticeToast(mapped), kind: 'info', action: { id: 'open-notices', label: '확인' } };
+    }
+  }
+
+  async function refreshMemberNotices({ toastNew = false } = {}) {
+    if (!supabaseClient || !authState.session) return state.notifications || [];
+    const previousIds = new Set((state.notifications || []).map((item) => item.id).filter(Boolean));
+    const noticeResult = await supabaseClient
+      .from('notifications')
+      .select('id,title,body,notification_type,created_at,read_at')
+      .eq('user_id', authState.session.user.id)
+      .order('created_at', { ascending: false })
+      .limit(50);
+    if (noticeResult.error || !Array.isArray(noticeResult.data)) return state.notifications || [];
+    const mapped = noticeResult.data.map(mapNoticeRow);
+    const arrived = toastNew && noticesHydrated
+      ? mapped.find((item) => item.id && !item.read && !previousIds.has(item.id))
+      : null;
+    state.notifications = mapped;
+    noticesHydrated = true;
+    if (arrived && state.modal !== 'notifications') {
+      state.toast = { text: arrivedNoticeToast(arrived), kind: 'info', action: { id: 'open-notices', label: '확인' } };
+    }
+    return mapped;
+  }
+
+  async function markNoticesRead(ids) {
+    const unique = [...new Set((ids || []).filter(Boolean))];
+    if (!unique.length || !supabaseClient || !authState.session) return;
+    const now = new Date().toISOString();
+    const { error } = await supabaseClient
+      .from('notifications')
+      .update({ read_at: now })
+      .in('id', unique)
+      .is('read_at', null);
+    if (error) {
+      showToast('읽음으로 바꾸지 못했어요. 잠시 후 다시 눌러 주세요.', 'info');
+      return;
+    }
+    state.notifications = (state.notifications || []).map((item) => unique.includes(item.id) ? { ...item, read: true } : item);
+  }
+
+  function stopMemberLive() {
+    if (memberLiveChannel && supabaseClient) {
+      try { supabaseClient.removeChannel(memberLiveChannel); } catch (_) {}
+    }
+    memberLiveChannel = null;
+    memberLiveUserId = null;
+  }
+
+  function startMemberLive(userId) {
+    if (isAdmin || !supabaseClient || !userId) {
+      stopMemberLive();
+      return;
+    }
+    if (memberLiveUserId === userId && memberLiveChannel) return;
+    stopMemberLive();
+    memberLiveUserId = userId;
+    memberLiveChannel = supabaseClient
+      .channel(`member-live:${userId}`)
+      .on('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'notifications',
+        filter: `user_id=eq.${userId}`
+      }, (payload) => {
+        ingestNoticeRow(payload.new, { toast: true });
+        const work = payload.new?.notification_type === 'work';
+        const job = work ? hydrateMemberAssignments() : Promise.resolve();
+        job.then(() => {
+          if (state.modal === 'notifications' || work || !state.modal) render();
+          else {
+            paintNoticeBadge();
+            flushPendingToast();
+          }
+        }).catch(() => {});
+      })
+      .on('postgres_changes', {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'notifications',
+        filter: `user_id=eq.${userId}`
+      }, (payload) => {
+        ingestNoticeRow(payload.new, { toast: false });
+        if (state.modal === 'notifications') render();
+        else paintNoticeBadge();
+      })
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'task_assignments',
+        filter: `user_id=eq.${userId}`
+      }, () => {
+        hydrateMemberAssignments().then(() => {
+          if (!state.modal) render();
+        }).catch(() => {});
+      })
+      .subscribe();
+  }
+
+  async function openNoticeItem(id) {
+    if (id) await markNoticesRead([id]);
+    const item = (state.notifications || []).find((row) => String(row.id) === String(id));
+    if (item?.type === 'work') {
+      state.memberPage = 'nodes';
+      await hydrateMemberAssignments();
+      closeModal();
+      showToast('✅ 배정된 라인을 라인 찾기에서 확인해요.', 'success');
+      return;
+    }
+    render();
+  }
+
+  async function openMemberNotices() {
+    openModal('notifications');
+    await refreshMemberNotices({ toastNew: false });
+    if (state.modal === 'notifications') render();
+  }
+
   async function hydrateSession(session) {
     const previousHistory = Array.isArray(state.history) ? state.history : [];
     const previousHistoryMap = new Map(previousHistory.map((item) => [item.id, item.status]));
@@ -1127,6 +1424,8 @@
     authState.profile = null;
     authState.error = null;
     if (!session) {
+      noticesHydrated = false;
+      stopMemberLive();
       authState.loading = false;
       activeStorageKey = storageKey;
       state = loadState(storageKey);
@@ -1134,10 +1433,10 @@
       return;
     }
     switchToUserState(session.user.id);
+    startMemberLive(session.user.id);
     state.wallet = { support: null, work: null, task: null, referral: null, available: null, held: null };
     state.dailyTaskQuota = null;
     state.history = [];
-    state.notifications = [];
     state.referrals = [];
     state.deposits = [];
     state.withdrawals = [];
@@ -1295,21 +1594,7 @@
         }
       }
 
-      const noticeResult = await supabaseClient
-        .from('notifications')
-        .select('id,title,body,notification_type,created_at,read_at')
-        .eq('user_id', session.user.id)
-        .order('created_at', { ascending: false })
-        .limit(20);
-      if (!noticeResult.error && Array.isArray(noticeResult.data)) {
-        state.notifications = noticeResult.data.map((row) => ({
-          id: row.id,
-          text: sanitizeMemberNotice(row.body || row.title),
-          time: new Date(row.created_at).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
-          type: row.notification_type || 'info',
-          read: Boolean(row.read_at)
-        })).filter((item) => item.text);
-      }
+      await refreshMemberNotices({ toastNew: true });
 
       const [referralResult, depositResult, withdrawalResult] = await Promise.all([
         supabaseClient
@@ -1896,6 +2181,15 @@
           if (!authState.session || document.hidden) return;
           if (state.modal) {
             if (isAdmin && authState.adminAuthorized) await refreshAdminPageData({ silent: true });
+            if (!isAdmin) {
+              await refreshMemberNotices({ toastNew: true });
+              await hydrateMemberAssignments();
+              if (state.modal === 'notifications') render();
+              else {
+                paintNoticeBadge();
+                flushPendingToast();
+              }
+            }
             return;
           }
           await hydrateSession(authState.session);
@@ -2302,7 +2596,7 @@
       ? `<div class="profile-chip"><span class="avatar">관</span><span>운영자 계정</span><button class="profile-logout" data-action="logout">로그아웃</button></div>`
       : `<button class="small-button" data-action="open-login">운영자 로그인</button>`;
     const installButton = !isAdmin ? `<button class="icon-button" data-action="install-app" aria-label="퍼뜩 앱 설치">${icon('download', 17)}</button>` : '';
-    const alertButton = `<button class="icon-button" data-notification aria-label="알림">${icon('bell', 17)}</button>`;
+    const alertButton = noticeBellButtonHtml();
     const mobileMenu = isAdmin
       ? `<button class="icon-button" data-menu="open" aria-label="메뉴 열기">${icon('menu', 19)}</button>`
       : '';
@@ -2449,7 +2743,7 @@
       ${renderPartnerGallery()}
       ${renderNextLadderHero()}
       <div class="section-heading"><div><h2>오늘 추천 근무</h2><p>잠금 금액과 끝나면 받을 수당을 먼저 봐요.</p></div><button class="text-link" data-nav="nodes">라인 더 보기 ${icon('arrow-right', 14)}</button></div>
-      <section class="node-grid">${memberCatalogNodes().slice(0, 3).map(renderNodeCard).join('') || `<div class="empty-state compact" style="grid-column:1/-1"><div class="empty-icon">${icon('waypoints', 22)}</div><strong>오늘 공개된 라인이 아직 없어요.</strong><p>로그인 후 운영자가 연 협력사 근무만 보여요.</p></div>`}</section>
+      <section class="node-grid">${memberCatalogNodes().slice(0, 3).map(renderNodeCard).join('') || `<div class="empty-state compact" style="grid-column:1/-1"><div class="empty-icon">${icon('waypoints', 22)}</div><strong>오늘 공개된 라인이 아직 없어요.</strong><p>운영자가 배정한 라인이나 공개된 근무가 여기에 보여요.</p></div>`}</section>
       <section class="dashboard-grid" style="margin-top:18px"><div class="panel"><div class="panel-head"><div><div class="panel-title">최근 근무</div><div class="panel-subtitle">제출·검수 상태가 여기에 쌓여요.</div></div><button class="text-link" data-nav="history">전체보기</button></div>${renderTimeline()}</div><div class="panel panel-pad"><div class="panel-title">처음 출근하는 분께</div><div class="notice" style="margin-top:14px"><span style="color:var(--gold)">${icon('lightbulb',17)}</span><div>한 화면에서 전표와 실물 번호 5건을 대조하고 제출하면 돼요. ${settleNote('span')}</div></div><button class="secondary-button" data-nav="support" style="width:100%;margin-top:13px">도움말 보기</button></div></section>
     `;
   }
@@ -2463,14 +2757,14 @@
     const mark = markSrc
       ? `<div class="company-mark has-image"><img src="${esc(markSrc)}" alt="${esc(company.name)} 로고" /></div>`
       : `<div class="company-mark">${esc(company.mark)}</div>`;
-    const badge = !enabled ? '잠시 쉼' : state.reviewWait ? '검수 대기' : ready ? '자리 있음' : (node.isTrial ? '지원금으로 출근' : '입금 후 출근');
+    const badge = node.assigned ? '운영자 배정' : !enabled ? '잠시 쉼' : state.reviewWait ? '검수 대기' : ready ? '자리 있음' : (node.isTrial ? '지원금으로 출근' : '입금 후 출근');
     const cta = !enabled ? '대기 중' : state.reviewWait ? '검수 대기 중' : ready ? '출근하기' : '입금 안내';
     const slotsLeft = fomoSlotsLeft(node);
     const quotaParts = dailyQuotaParts();
     const quotaMeta = (quotaParts.loaded && !quotaParts.unlimited)
       ? `<span${quotaParts.remaining <= 0 ? ' style="color:var(--danger)"' : ''}>${icon('clock-3', 12)} ${quotaParts.remaining <= 0 ? '오늘 소진' : `오늘 ${quotaParts.remaining}회`}</span>`
       : '';
-    return `<article class="node-card" data-level="${esc(node.level || '')}" style="--node-color:${node.color};opacity:${enabled ? 1 : .55}"><div class="node-accent"></div><div class="node-top">${mark}<span class="status-badge ${node.level === '전문 검수' ? 'gold' : ''}">${badge}</span></div><div class="node-company">${esc(company.name)} · ${esc(company.category)}</div><div class="node-title">${esc(node.title)}</div>${cardMoneyLines(node).html}<div class="node-bottom"><div class="node-meta"><span>${icon('clock-3', 12)} ${esc(node.minutes)}</span><span data-fomo-slot="${esc(node.id)}">${slotsLeft.toLocaleString('ko-KR')}자리 남음</span>${quotaMeta}</div><button class="small-button ${ready ? 'primary' : ''}" data-start-node="${node.id}" ${enabled && !state.reviewWait ? '' : 'disabled'}>${cta}</button></div></article>`;
+    return `<article class="node-card" data-level="${esc(node.level || '')}" style="--node-color:${node.color};opacity:${enabled ? 1 : .55}"><div class="node-accent"></div><div class="node-top">${mark}<span class="status-badge ${node.assigned || node.level === '전문 검수' ? 'gold' : ''}">${badge}</span></div><div class="node-company">${esc(company.name)} · ${esc(company.category)}</div><div class="node-title">${esc(node.title)}</div>${cardMoneyLines(node).html}<div class="node-bottom"><div class="node-meta"><span>${icon('clock-3', 12)} ${esc(node.minutes)}</span><span data-fomo-slot="${esc(node.id)}">${slotsLeft.toLocaleString('ko-KR')}자리 남음</span>${quotaMeta}</div><button class="small-button ${ready ? 'primary' : ''}" data-start-node="${node.id}" ${enabled && !state.reviewWait ? '' : 'disabled'}>${cta}</button></div></article>`;
   }
 
   function renderTimeline() {
@@ -2488,7 +2782,7 @@
   }
 
   function renderNodesPage() {
-    const grid = memberCatalogNodes().map(renderNodeCard).join('') || `<div class="empty-state compact" style="grid-column:1/-1"><div class="empty-icon">${icon('waypoints',22)}</div><strong>지금 공개된 업무가 없어요.</strong><p>운영자가 협력사와 업무 카드를 승인한 뒤에만 이곳에 나타납니다.</p></div>`;
+    const grid = memberCatalogNodes().map(renderNodeCard).join('') || `<div class="empty-state compact" style="grid-column:1/-1"><div class="empty-icon">${icon('waypoints',22)}</div><strong>지금 공개된 업무가 없어요.</strong><p>운영자가 배정한 라인이나 공개된 근무가 여기에 나타나요.</p></div>`;
     const quotaLine = authState.session
       ? `<div class="notice" style="margin-bottom:14px"><span style="color:var(--emerald)">${icon('clock-3', 17)}</span><div>${esc(dailyQuotaSummaryText())}</div></div>`
       : '';
@@ -2632,7 +2926,7 @@
     const timeline = rows.length
       ? rows.map((row) => `<div class="timeline-item"><div class="timeline-dot ${row.status === 'paid' ? '' : 'pending'}"></div><div class="timeline-content"><strong>${esc(row.label)}</strong><p>${esc(referralStatusLabel(row.status))} · 입금·업무 여부는 서버 상태값으로만 표시합니다.</p></div><div class="timeline-time">${row.status === 'paid' ? '+5,000원' : referralStatusLabel(row.status)}</div></div>`).join('')
       : `<div class="empty-state compact"><strong>아직 추천한 회원이 없어요.</strong><p>추천 코드로 가입한 회원이 생기면 단계가 여기에 나타납니다.</p></div>`;
-    return `<div class="section-heading" style="margin-top:0"><div><h1 class="page-title">추천인 혜택</h1><p class="page-copy">코드를 나눠 주고, 가입·입금·근무가 끝나면 보상이 확정돼요.</p></div><button class="primary-button" data-action="copy-referral">${icon('copy',16)} 추천 코드 복사</button></div><div class="grid-hero"><div class="hero-card" style="min-height:220px"><div class="eyebrow"><span class="pulse-dot"></span> 내 추천 코드</div><div style="display:flex;align-items:center;gap:13px;margin-top:18px"><div style="font-size:34px;font-weight:900;letter-spacing:.08em">${esc(referralCode())}</div><button class="icon-button" data-action="copy-referral">${icon('copy',16)}</button></div><p class="hero-copy" style="margin-top:14px">초대한 회원이 실제 입금과 유효한 업무를 완료하고 검수를 통과하면 추천 보상이 확정됩니다.</p><ol class="referral-funnel"><li>가입</li><li>입금</li><li>근무 완료</li><li>보상</li></ol></div><div class="panel panel-pad referral-stats"><div class="panel-title">추천 보상 현황</div><div class="wallet-balance" style="color:var(--text);margin:12px 0 18px">${money(state.wallet.referral)}</div><div class="wallet-row"><span>초대한 회원</span><strong>${rows.length}명</strong></div><div class="wallet-row"><span>조건 확인 중</span><strong>${pending}명</strong></div><div class="wallet-row"><span>보상 확정</span><strong>${paid}명</strong></div></div></div><div class="panel"><div class="panel-head"><div><div class="panel-title">추천 회원 단계</div><div class="panel-subtitle">개인정보는 보호된 상태로 표시됩니다.</div></div></div><div class="timeline">${timeline}</div></div>`;
+    return `<div class="section-heading" style="margin-top:0"><div><h1 class="page-title">추천인 혜택</h1><p class="page-copy">코드를 나눠 주고, 가입·입금·근무가 끝나면 보상이 확정돼요.</p></div><button class="primary-button" data-action="copy-referral" aria-label="추천 코드 복사">${icon('copy',16)} 추천 코드 복사</button></div><div class="grid-hero"><div class="hero-card" style="min-height:220px"><div class="eyebrow"><span class="pulse-dot"></span> 내 추천 코드</div><div style="display:flex;align-items:center;gap:13px;margin-top:18px"><div style="font-size:34px;font-weight:900;letter-spacing:.08em">${esc(referralCode())}</div><button class="icon-button" data-action="copy-referral" aria-label="추천 코드 복사">${icon('copy',16)}</button></div><p class="hero-copy" style="margin-top:14px">초대한 회원이 실제 입금과 유효한 업무를 완료하고 검수를 통과하면 추천 보상이 확정됩니다.</p><ol class="referral-funnel"><li>가입</li><li>입금</li><li>근무 완료</li><li>보상</li></ol></div><div class="panel panel-pad referral-stats"><div class="panel-title">추천 보상 현황</div><div class="wallet-balance" style="color:var(--text);margin:12px 0 18px">${money(state.wallet.referral)}</div><div class="wallet-row"><span>초대한 회원</span><strong>${rows.length}명</strong></div><div class="wallet-row"><span>조건 확인 중</span><strong>${pending}명</strong></div><div class="wallet-row"><span>보상 확정</span><strong>${paid}명</strong></div></div></div><div class="panel"><div class="panel-head"><div><div class="panel-title">추천 회원 단계</div><div class="panel-subtitle">개인정보는 보호된 상태로 표시됩니다.</div></div></div><div class="timeline">${timeline}</div></div>`;
   }
 
   function renderSupportPage() {
@@ -3188,7 +3482,7 @@
 
   function renderKycModal() {
     const slot = (id, title) => `<label class="kyc-slot"><span class="kyc-slot-title">${title}</span><span class="kyc-file-btn">사진 고르기</span><input class="kyc-file-input" type="file" id="${id}" accept="image/*" /><small class="kyc-file-name">아직 고르지 않았어요</small></label>`;
-    return `<div class="modal-backdrop" data-modal="kyc"><div class="modal"><div class="modal-head"><div><h2>본인확인 자료 제출</h2><p>신분증 앞면·뒷면·셀카를 올리면 운영자가 검수합니다.</p></div><button class="icon-button" data-action="close-modal">${icon('x',18)}</button></div><div class="modal-body"><form id="kycForm"><div class="notice"><span style="color:var(--gold)">${icon('file-lock-2',17)}</span><div>원본 파일 주소는 회원 화면에 공개하지 않습니다. 짧은 확인 주소만 운영자가 봅니다.</div></div><div class="kyc-slots" style="margin-top:16px">${slot('kycFront', '신분증 앞면')}${slot('kycBack', '신분증 뒷면')}${slot('kycSelfie', '셀카')}</div><div class="modal-actions"><button class="secondary-button" type="button" data-action="close-modal">나중에</button><button class="primary-button" type="submit">검수 요청</button></div></form></div></div></div>`;
+    return `<div class="modal-backdrop" data-modal="kyc"><div class="modal"><div class="modal-head"><div><h2>본인확인 자료 제출</h2><p>신분증 앞면·뒷면·셀카를 올리면 운영자가 검수합니다.</p></div><button class="icon-button" data-action="close-modal" aria-label="KYC 창 닫기">${icon('x',18)}</button></div><div class="modal-body"><form id="kycForm"><div class="notice"><span style="color:var(--gold)">${icon('file-lock-2',17)}</span><div>원본 파일 주소는 회원 화면에 공개하지 않습니다. 짧은 확인 주소만 운영자가 봅니다.</div></div><div class="kyc-slots" style="margin-top:16px">${slot('kycFront', '신분증 앞면')}${slot('kycBack', '신분증 뒷면')}${slot('kycSelfie', '셀카')}</div><div class="modal-actions"><button class="secondary-button" type="button" data-action="close-modal">나중에</button><button class="primary-button" type="submit">검수 요청</button></div></form></div></div></div>`;
   }
 
   function renderDepositJumpConfirm() {
@@ -3203,9 +3497,21 @@
   }
 
   function renderNotificationsModal() {
-    const items = (state.notifications || []).map((item) => `<div class="company-row"><div class="company-logo" style="background:var(--emerald)">${icon('bell',16)}</div><div class="company-info"><strong>${esc(item.text)}</strong><small>${esc(item.time)}</small></div></div>`).join('')
-      || `<div class="empty-state compact"><strong>새 알림이 없어요.</strong></div>`;
-    return `<div class="modal-backdrop" data-modal="alerts"><div class="modal"><div class="modal-head"><div><h2>알림</h2><p>서버에 저장된 안내만 보여줍니다.</p></div><button class="icon-button" data-action="close-modal">${icon('x',18)}</button></div><div class="modal-body">${items}</div></div></div>`;
+    const unread = unreadNoticeCount();
+    const hasItems = (state.notifications || []).length > 0;
+    const items = hasItems
+      ? (state.notifications || []).map((item) => {
+        const unreadMark = item.read ? '읽음' : '안 읽음';
+        return `<button type="button" class="notice-row ${item.read ? '' : 'is-unread'}" data-notice-id="${esc(item.id || '')}"><span class="notice-dot" aria-hidden="true"></span><div class="company-info"><strong>${esc(item.text)}</strong><small>${esc(item.time)} · ${unreadMark}</small></div></button>`;
+      }).join('')
+      : `<div class="empty-state compact"><strong>새 안내가 없어요.</strong><p>운영자가 보내면 종 숫자에 바로 보여요.</p></div>`;
+    const markAll = unread > 0
+      ? `<button class="text-link" type="button" data-action="mark-notices-read">모두 읽음</button>`
+      : '';
+    const toolbar = hasItems
+      ? `<div class="notice-toolbar">${unread ? `<span>📬 안 읽은 안내 ${unread}건</span>` : '<span>✅ 모두 확인했어요</span>'}${markAll}</div>`
+      : '';
+    return `<div class="modal-backdrop" data-modal="alerts"><div class="modal"><div class="modal-head"><div><h2>알림</h2><p>사원증으로 온 안내예요. 안 읽은 건 숫자에 보여요.</p></div><button class="icon-button" data-action="close-modal" aria-label="알림 창 닫기">${icon('x',18)}</button></div><div class="modal-body">${toolbar}<div class="notice-list">${items}</div></div></div></div>`;
   }
 
   function renderCompanyForm() {
@@ -3470,7 +3776,7 @@
     if (state.toast) {
       const pendingToast = state.toast;
       state.toast = null;
-      showToast(pendingToast.text, pendingToast.kind, true);
+      showToast(pendingToast.text, pendingToast.kind, true, pendingToast.action || null);
     }
   }
 
@@ -4241,6 +4547,8 @@
 
   async function signOut() {
     await lockDepositReveal({ silent: true });
+    noticesHydrated = false;
+    stopMemberLive();
     if (supabaseClient) {
       const { error } = await supabaseClient.auth.signOut();
       if (error) { showToast('로그아웃을 완료하지 못했어요. 잠시 후 다시 시도해 주세요.', 'info'); return; }
@@ -4429,7 +4737,7 @@
   }
 
   function handleClick(event) {
-    const target = event.target.closest('button, [data-nav], [data-start-node], [data-company-action], [data-toggle-node], [data-review-action], [data-brand-action], [data-catalog-node-action], [data-member-filter], [data-finance-action], [data-notification], [data-action]');
+    const target = event.target.closest('button, [data-nav], [data-start-node], [data-company-action], [data-toggle-node], [data-review-action], [data-brand-action], [data-catalog-node-action], [data-member-filter], [data-finance-action], [data-notification], [data-notice-id], [data-toast-action], [data-action]');
     if (!target) return;
     if (isAdmin && window.PUTDUK_ADMIN && typeof window.PUTDUK_ADMIN.handleClick === 'function' && window.PUTDUK_ADMIN.handleClick(event, target)) return;
     if (target.dataset.authMode) { state.authMode = target.dataset.authMode; render(); return; }
@@ -4483,7 +4791,15 @@
       confirmInspectChoice(target.dataset.choice);
       return;
     }
-    if (target.dataset.notification !== undefined) { openModal('notifications'); return; }
+    if (target.dataset.toastAction === 'open-notices') {
+      openMemberNotices();
+      return;
+    }
+    if (target.dataset.noticeId) {
+      openNoticeItem(target.dataset.noticeId);
+      return;
+    }
+    if (target.dataset.notification !== undefined) { openMemberNotices(); return; }
     if (target.dataset.menu === 'open') {
       if (!isAdmin) return;
       document.getElementById('sidebar')?.classList.add('open');
@@ -4502,6 +4818,10 @@
     if (action === 'logout') { signOut(); return; }
     if (action === 'lock-deposit-info') { lockDepositReveal({ silent: false }); showToast('🔒 입금 안내를 다시 잠갔어요.', 'info'); return; }
     if (action === 'install-app') { installApp(); return; }
+    if (action === 'mark-notices-read') {
+      markNoticesRead((state.notifications || []).filter((item) => !item.read).map((item) => item.id)).then(() => render());
+      return;
+    }
     if (action === 'close-modal') {
       if (['balance-adjust', 'member-tier', 'member-block', 'member-reset'].includes(state.modal) && state.adminMemberDetail) {
         openModal('member-detail', state.adminMemberDetail);
@@ -4972,7 +5292,7 @@
     try {
       await adminRequest(broadcast ? 'broadcast_notice' : 'notify_member', values);
       closeModal();
-      showToast('알림을 보냈어요.', 'success');
+      showToast('📬 안내를 보냈어요.', 'success');
     } catch (error) {
       showToast(friendlyAdminError(error), isUnsupportedAction(error) ? 'warning' : 'error');
     }
@@ -5072,7 +5392,7 @@
       });
       await refreshMemberWallet();
       closeModal();
-      showToast('⏳ 출금 신청이 접수됐어요. 지금은 처리 중이에요.', 'success');
+      showToast('⏳ 출금 신청을 접수했어요. 운영자가 확인하면 같은 날 지급 처리돼요.', 'success');
       if (kind === 'principal') showToast('⬇️ 등급과 라인이 내려가는 출금이에요. 돈은 바로 지급 처리돼요.', 'warning');
     } catch (error) {
       showToast(friendlyAdminError(error), isUnsupportedAction(error) ? 'warning' : 'error');
@@ -5278,6 +5598,15 @@
     if (authState.session) {
       if (state.modal) {
         if (isAdmin && authState.adminAuthorized) refreshAdminPageData({ silent: true }).catch(() => {});
+        if (!isAdmin) {
+          Promise.all([refreshMemberNotices({ toastNew: true }), hydrateMemberAssignments()]).then(() => {
+            if (state.modal === 'notifications') render();
+            else {
+              paintNoticeBadge();
+              flushPendingToast();
+            }
+          }).catch(() => {});
+        }
         return;
       }
       hydrateSession(authState.session).then(async () => {
