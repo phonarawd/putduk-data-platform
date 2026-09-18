@@ -395,7 +395,60 @@
   }
 
   function kycStatusLabel(status) {
-    return ({ pending: '대기', submitted: '검수 대기', checking: '확인 중', approved: '확인 완료', rejected: '반려', expired: '만료' })[status] || '확인 중';
+    return ({ pending: '미제출', submitted: '검수 대기', review_pending: '검수 대기', checking: '확인 중', approved: '확인 완료', rejected: '반려', expired: '만료' })[status] || '확인 중';
+  }
+
+  function kycDocLabel(kind) {
+    return ({ identity_front: '신분증 앞', identity_back: '신분증 뒤', selfie: '셀카' })[kind] || kind;
+  }
+
+  async function previewKycDocument(userId, documentKind) {
+    const api = core();
+    if (!api || !userId || !documentKind) return;
+    try {
+      const result = await api.adminRequest('preview_kyc_document', { user_id: userId, document_kind: documentKind });
+      api.patchState({ adminKycPreview: { user_id: userId, kind: documentKind, signed_url: result.signed_url || null, expires_in: result.expires_in || 60, preview_type: result.preview_type || 'image' } });
+      api.render();
+    } catch (error) {
+      api.showToast(api.friendlyAdminError(error), 'error');
+    }
+  }
+
+  async function reviewKycMember(userId, decision) {
+    const api = core();
+    if (!api || !userId) return;
+    const reason = decision === 'rejected' ? (window.prompt('반려 사유를 입력해 주세요.') || '') : null;
+    if (decision === 'rejected' && !String(reason || '').trim()) {
+      api.showToast('반려 사유를 적어 주세요.', 'warning');
+      return;
+    }
+    if (!window.confirm(decision === 'approved' ? '본인확인을 승인할까요?' : '본인확인을 반려할까요?')) return;
+    try {
+      await api.adminRequest('review_kyc', { user_id: userId, decision, reason });
+      api.patchState({ adminKycPreview: null });
+      await api.loadAdminFinance({ silent: true });
+      api.render();
+      api.showToast(decision === 'approved' ? '✅ 본인확인을 승인했어요.' : '본인확인을 반려했어요.', decision === 'approved' ? 'success' : 'warning');
+    } catch (error) {
+      api.showToast(api.friendlyAdminError(error), 'error');
+    }
+  }
+
+  async function revealWithdrawalDestination(withdrawalId) {
+    const api = core();
+    if (!api || !withdrawalId) return;
+    try {
+      const result = await api.adminRequest('reveal_withdrawal_destination', { withdrawal_id: withdrawalId });
+      api.patchState({ adminWithdrawalReveal: { withdrawal_id: withdrawalId, ...result } });
+      api.render();
+    } catch (error) {
+      api.showToast(api.friendlyAdminError(error), 'error');
+    }
+  }
+
+  function clearAdminSensitiveState(api) {
+    if (!api) return;
+    api.patchState({ adminKycPreview: null, adminWithdrawalReveal: null });
   }
 
   function financeStatusLabel(status) {
@@ -556,9 +609,10 @@
       const when = item.created_at || item.updated_at;
       const canComplete = ['submitted', 'checking', 'approved'].includes(item.status);
       const statusLabel = ({ submitted: '접수', checking: '확인 중', approved: '이체 대기', sent: '완료', completed: '완료', rejected: '반려', cancelled: '취소' })[item.status] || '처리 중';
+      const revealBtn = `<button type="button" class="small-button" data-action="reveal-withdrawal-destination" data-withdrawal-id="${esc(item.id)}">지급정보 보기</button>`;
       const actions = canComplete
-        ? `<div class="action-row"><button type="button" class="small-button primary" data-action="withdraw-complete" data-withdrawal-id="${esc(item.id)}">완료</button><button type="button" class="small-button" data-finance-action="review_withdrawal" data-finance-id="${esc(item.id)}" data-finance-decision="rejected">반려</button></div>`
-        : `<span style="color:var(--muted);font-size:12px">처리 끝</span>`;
+        ? `<div class="action-row">${revealBtn}<button type="button" class="small-button primary" data-action="withdraw-complete" data-withdrawal-id="${esc(item.id)}">완료</button><button type="button" class="small-button" data-finance-action="review_withdrawal" data-finance-id="${esc(item.id)}" data-finance-decision="rejected">반려</button></div>`
+        : `<div class="action-row">${revealBtn}<span style="color:var(--muted);font-size:12px">처리 끝</span></div>`;
       return `<tr>
         <td><span class="withdraw-kind">${kind}</span></td>
         <td><strong>${esc(amount)}</strong></td>
@@ -619,10 +673,42 @@
         : `<span style="color:var(--muted);font-size:12px">처리 끝</span>`;
       return `<article class="admin-mobile-card"><div class="admin-mobile-top"><strong>${esc(item.member_public_id || item.member_name || '-')}</strong><span class="pill ${item.status === 'approved' ? 'ok' : 'wait'}">${esc(item.status === 'approved' ? '확인' : item.status === 'rejected' ? '반려' : '대기')}</span></div><p>${money(item.amount)}</p>${actions}</article>`;
     }).join('');
+    const kycRows = (Array.isArray(finance.kyc) ? finance.kyc : []).map((item) => {
+      const docs = Array.isArray(item.documents) ? item.documents : [];
+      const docBtns = ['identity_front', 'identity_back', 'selfie'].map((kind) => {
+        const has = docs.some((doc) => doc.kind === kind);
+        return `<button type="button" class="small-button" ${has ? '' : 'disabled'} data-action="kyc-preview" data-kyc-user="${esc(item.id || item.user_id)}" data-kyc-kind="${kind}">${kycDocLabel(kind)}</button>`;
+      }).join('');
+      const pending = ['review_pending', 'submitted'].includes(String(item.kyc_status || ''));
+      const reviewActions = pending
+        ? `<div class="action-row"><button type="button" class="small-button primary" data-action="kyc-approve" data-kyc-user="${esc(item.id || item.user_id)}">승인</button><button type="button" class="small-button" data-action="kyc-reject" data-kyc-user="${esc(item.id || item.user_id)}">반려</button></div>`
+        : `<span style="color:var(--muted);font-size:12px">처리 끝</span>`;
+      const when = item.updated_at || item.created_at;
+      return `<tr>
+        <td><strong>${esc(item.public_id || item.member_public_id || '-')}</strong><br><span style="color:var(--muted);font-size:11px">${esc(item.display_name || item.member_name || '')}</span></td>
+        <td><span class="pill ${item.kyc_status === 'approved' ? 'ok' : item.kyc_status === 'rejected' ? 'wait' : 'wait'}">${esc(kycStatusLabel(item.kyc_status))}</span></td>
+        <td>${when ? new Date(when).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '-'}</td>
+        <td><div class="action-row">${docBtns}</div></td>
+        <td>${reviewActions}</td>
+      </tr>`;
+    }).join('') || `<tr><td colspan="5"><div class="empty-state compact"><strong>검수할 본인확인이 없어요.</strong></div></td></tr>`;
+    const kycPreview = state.adminKycPreview;
+    const kycPreviewPanel = kycPreview?.signed_url
+      ? `<div class="admin-card" style="margin-top:16px"><div class="admin-card-head"><div><h3>${esc(kycDocLabel(kycPreview.kind))} 미리보기</h3><p>짧은 확인 주소만 화면에 잠깐 보여요.</p></div><button type="button" class="small-button" data-action="close-kyc-preview">닫기</button></div><div style="margin-top:12px">${kycPreview.preview_type === 'pdf'
+        ? `<a class="primary-button" href="${esc(kycPreview.signed_url)}" target="_blank" rel="noopener noreferrer">📄 PDF 열기</a>`
+        : `<img src="${esc(kycPreview.signed_url)}" alt="${esc(kycDocLabel(kycPreview.kind))}" style="max-width:100%;border-radius:12px" />`}</div></div>`
+      : '';
+    const reveal = state.adminWithdrawalReveal;
+    const revealPanel = reveal
+      ? `<div class="admin-card" style="margin-top:16px"><div class="admin-card-head"><div><h3>지급정보 (송금용)</h3><p>화면을 닫으면 바로 지워져요.</p></div><button type="button" class="small-button" data-action="close-withdrawal-reveal">닫기</button></div><div class="detail-list" style="margin-top:12px">${reveal.destination_type === 'usdt'
+        ? `<div><span>네트워크</span><strong>${esc(reveal.usdt_network || '-')}</strong></div><div><span>USDT 주소</span><strong>${esc(reveal.usdt_address || '-')}</strong></div>`
+        : `<div><span>은행</span><strong>${esc(reveal.bank_name || '-')}</strong></div><div><span>예금주</span><strong>${esc(reveal.account_holder || '-')}</strong></div><div><span>계좌번호</span><strong>${esc(reveal.account_number || '-')}</strong></div>`}</div></div>`
+      : '';
     const tab = state.adminFinanceTab || 'payouts';
     const tabs = [
       { id: 'payouts', label: '출금' },
       { id: 'deposits', label: '입금' },
+      { id: 'kyc', label: '본인확인' },
       { id: 'krw', label: '원화' },
       { id: 'usdt', label: 'USDT' },
       { id: 'security', label: '보안기록' }
@@ -643,7 +729,12 @@
           <label class="check-row field full"><input type="checkbox" name="enabled" checked /> 회원 입금 화면에 바로 보여요</label>
           <div class="modal-actions field full"><button class="primary-button" type="submit">입금 안내 저장</button></div>
         </form>`;
-    const panel = tab === 'deposits'
+    const panel = tab === 'kyc'
+      ? `<div class="admin-card"><div class="admin-card-head"><div><h3>본인확인 검수</h3><p>원본 주소는 공개하지 않고, 문서 보기를 누를 때만 짧게 열어요.</p></div></div>
+        <div class="table-wrap"><table><thead><tr><th>사원번호</th><th>상태</th><th>제출 시각</th><th>문서</th><th></th></tr></thead><tbody>${kycRows}</tbody></table></div>
+        ${kycPreviewPanel}
+      </div>`
+      : tab === 'deposits'
       ? `<div class="admin-card"><div class="admin-card-head"><div><h3>입금 확인</h3><p>입금은 확인 후 회원 잔액에 반영돼요.</p></div></div>
         <div class="table-wrap"><table><thead><tr><th>사원번호</th><th>금액</th><th>상태</th><th></th></tr></thead><tbody>${depositRows}</tbody></table></div>${mobileCards(depositCards)}
       </div>`
@@ -667,7 +758,7 @@
         <div class="table-wrap" style="margin-top:16px"><table><thead><tr><th>기록</th><th>범위</th><th>시각</th></tr></thead><tbody>${pinRows}</tbody></table></div>
       </div>`
           : `<div class="admin-card"><div class="admin-card-head"><div><h3>출금 신청 목록</h3><p>완료를 누르면 같은 날 바로 이체 처리되고, 회원 잔액·내역이 서버에서 바뀌어요.</p></div></div>
-        <div class="table-wrap"><table><thead><tr><th>구분</th><th>금액</th><th>사원번호</th><th>상태</th><th>신청 시각</th><th></th></tr></thead><tbody>${body}</tbody></table></div>${mobileCards(withdrawCards)}
+        <div class="table-wrap"><table><thead><tr><th>구분</th><th>금액</th><th>사원번호</th><th>상태</th><th>신청 시각</th><th></th></tr></thead><tbody>${body}</tbody></table></div>${mobileCards(withdrawCards)}${revealPanel}
       </div>`;
     return `<div class="section-heading" style="margin-top:0"><div><h1 class="page-title">입출금 처리</h1><p class="page-copy">출금은 완료 한 번으로 바로 처리해요. 회원 잔액은 서버가 바꿉니다.</p></div>${seedButtons('finance', state.adminFinanceLoading)}</div>${contractNote}${error}
       <div class="admin-stat-grid">
@@ -1503,6 +1594,32 @@
       }
       if (action === 'withdraw-complete') {
         completeWithdrawal(target.dataset.withdrawalId);
+        return true;
+      }
+      if (action === 'reveal-withdrawal-destination') {
+        revealWithdrawalDestination(target.dataset.withdrawalId);
+        return true;
+      }
+      if (action === 'close-withdrawal-reveal') {
+        clearAdminSensitiveState(core());
+        core()?.render();
+        return true;
+      }
+      if (action === 'kyc-preview') {
+        previewKycDocument(target.dataset.kycUser, target.dataset.kycKind);
+        return true;
+      }
+      if (action === 'kyc-approve') {
+        reviewKycMember(target.dataset.kycUser, 'approved');
+        return true;
+      }
+      if (action === 'kyc-reject') {
+        reviewKycMember(target.dataset.kycUser, 'rejected');
+        return true;
+      }
+      if (action === 'close-kyc-preview') {
+        clearAdminSensitiveState(core());
+        core()?.render();
         return true;
       }
       if (action === 'edit-payout-destination') {

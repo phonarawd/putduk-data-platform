@@ -1,9 +1,9 @@
-const CACHE_NAME = 'putduk-shell-v21';
+const CACHE_NAME = 'putduk-shell-v22';
 const SHELL = [
   '/',
   '/admin/',
   '/assets/app.css?v=20260918-ui3',
-  '/assets/app.js?v=20260919-p4d2',
+  '/assets/app.js?v=20260919-p5r1',
   '/assets/overlay-surface.css?v=20260918-flash2',
   '/assets/overlay-surface.js?v=20260918-ui3',
   '/assets/origin-split.js?v=20260918-ui3',
