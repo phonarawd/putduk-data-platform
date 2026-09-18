@@ -1,16 +1,13 @@
 name: 퍼뜩 품질 확인
 
+# GitHub Actions 유료 한도에 의존하지 않습니다.
+# 기본 검증은 로컬에서 `pnpm quality:local`로 실행합니다.
+# 이 workflow는 향후 Actions를 다시 사용할 수 있을 때 수동 실행용으로만 남깁니다.
 on:
-  pull_request:
-  push:
-    branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: read
-
-concurrency:
-  group: putduk-ci-${{ github.ref }}
-  cancel-in-progress: true
 
 jobs:
   verify:
@@ -34,26 +31,5 @@ jobs:
       - name: 의존성 설치
         run: pnpm install --frozen-lockfile
 
-      - name: 출시 파일 확인
-        run: pnpm verify
-
-      - name: 문법 확인
-        run: pnpm typecheck
-
-      - name: 단위 테스트
-        run: pnpm test
-
-      - name: 정적 E2E
-        run: pnpm test:e2e
-
-      - name: 접근성 정적 검사
-        run: pnpm test:a11y
-
-      - name: 보안 검사
-        run: pnpm security:scan
-
-      - name: 성능 설정 검사
-        run: pnpm test:performance
-
-      - name: 로컬 헬스체크
-        run: pnpm healthcheck
+      - name: 로컬 표준 품질검증과 동일한 검사
+        run: pnpm quality:local

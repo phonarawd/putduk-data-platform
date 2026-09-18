@@ -21,6 +21,7 @@
     "test:performance": "node tooling/scripts/run-performance.mjs",
     "security:scan": "node tooling/scripts/security-scan.mjs",
     "healthcheck": "node scripts/automation/health-check.mjs",
+    "quality:local": "pnpm verify && pnpm typecheck && pnpm test && pnpm test:e2e && pnpm test:a11y && pnpm security:scan && pnpm test:performance && pnpm healthcheck",
     "handoff:audit": "node scripts/automation/handoff-audit.mjs",
     "release:deploy": "node scripts/automation/release.mjs",
     "release:notes": "node scripts/automation/create-release.mjs",
