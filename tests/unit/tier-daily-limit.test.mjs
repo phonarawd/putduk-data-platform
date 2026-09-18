@@ -174,8 +174,9 @@ test('라인 찾기 목록·업무 카드·출근 확인 화면이 대시보드�
   assert.match(nodesPageBody, /dailyQuotaSummaryText\(\)/);
 
   const nodeCardBody = appJs.slice(appJs.indexOf('function renderNodeCard'), appJs.indexOf('function renderNodeCard') + 1800);
-  assert.match(nodeCardBody, /dailyQuotaParts\(\)/);
-  assert.match(nodeCardBody, /오늘 소진/);
+  assert.match(nodeCardBody, /남은 자리/);
+  assert.equal(nodeCardBody.includes('오늘 소진'), false);
+  assert.equal(nodeCardBody.includes('dailyQuotaParts()'), false);
 
   const startConfirmBody = appJs.slice(appJs.indexOf('function renderStartConfirm'), appJs.indexOf('function renderStartConfirm') + 1800);
   assert.match(startConfirmBody, /dailyQuotaSummaryText\(\)/);

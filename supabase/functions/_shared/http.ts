@@ -48,6 +48,77 @@ export function jsonResponse(request: Request, body: JsonRecord, status = 200): 
   });
 }
 
+const CLIENT_IP_HEADERS = [
+  "cf-connecting-ip",
+  "true-client-ip",
+  "x-real-ip",
+  "x-client-ip",
+  "fly-client-ip",
+  "x-forwarded-for"
+] as const;
+
+function sanitizeClientIp(raw: unknown): string | null {
+  let value = String(raw ?? "").trim();
+  if (!value) return null;
+  const lower = value.toLowerCase();
+  if (lower === "unknown" || lower === "undefined" || lower === "null" || lower === "-") return null;
+  if (value.includes(",")) value = value.split(",")[0].trim();
+  value = value.replace(/^"+|"+$/g, "").trim();
+  const bracket = value.match(/^\[([^\]]+)\](?::\d+)?$/);
+  if (bracket) value = bracket[1];
+  const zone = value.indexOf("%");
+  if (zone > 0) value = value.slice(0, zone);
+  if (/^\d{1,3}(?:\.\d{1,3}){3}:\d+$/.test(value)) value = value.replace(/:\d+$/, "");
+  const mapped = value.match(/^::ffff:(\d{1,3}(?:\.\d{1,3}){3})$/i);
+  if (mapped) value = mapped[1];
+  if (/^(\d{1,3}\.){3}\d{1,3}$/.test(value)) {
+    const parts = value.split(".").map((part) => Number(part));
+    if (parts.every((part) => Number.isInteger(part) && part >= 0 && part <= 255)) return value;
+    return null;
+  }
+  if (value.includes(":") && /^[0-9a-f:]+$/i.test(value)) return value.toLowerCase();
+  return null;
+}
+
+function isPrivateClientIp(ip: string): boolean {
+  const value = ip.toLowerCase();
+  if (value === "127.0.0.1" || value === "0.0.0.0" || value === "::1" || value === "::") return true;
+  if (value.startsWith("10.")) return true;
+  if (value.startsWith("192.168.")) return true;
+  if (value.startsWith("169.254.")) return true;
+  const lan = value.match(/^172\.(\d+)\./);
+  if (lan) {
+    const octet = Number(lan[1]);
+    if (octet >= 16 && octet <= 31) return true;
+  }
+  if (value.startsWith("fc") || value.startsWith("fd") || value.startsWith("fe80:")) return true;
+  return false;
+}
+
+export type ClientConnInfo = {
+  remoteAddr?: {
+    hostname?: string;
+  };
+};
+
+export function clientIp(request: Request, info?: ClientConnInfo): string | null {
+  const candidates: string[] = [];
+  const seen = new Set<string>();
+  const push = (raw: unknown) => {
+    const ip = sanitizeClientIp(raw);
+    if (!ip || seen.has(ip)) return;
+    seen.add(ip);
+    candidates.push(ip);
+  };
+  for (const key of CLIENT_IP_HEADERS) {
+    const header = request.headers.get(key);
+    if (!header) continue;
+    header.split(",").forEach(push);
+  }
+  push(info?.remoteAddr?.hostname);
+  return candidates.find((ip) => !isPrivateClientIp(ip)) || candidates[0] || null;
+}
+
 export function userFromVerifiedJwt(request: Request, loginCopy = "로그인이 필요합니다."): AuthUser {
   const header = request.headers.get("authorization") || "";
   const token = header.replace(/^Bearer\s+/i, "").trim();

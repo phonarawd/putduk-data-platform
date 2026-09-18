@@ -1,7 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.0";
 import { handleOpsAction, loadAdminRoles, upsertWorkNode } from "../_shared/admin-ops.ts";
-import { userFromVerifiedJwt } from "../_shared/http.ts";
+import { clientIp, userFromVerifiedJwt } from "../_shared/http.ts";
 
 type JsonRecord = Record<string, unknown>;
 
@@ -726,7 +726,7 @@ async function listAdminRoles(userId: string) {
   return loadAdminRoles(admin, userId);
 }
 
-Deno.serve(async (request: Request) => {
+Deno.serve(async (request: Request, info) => {
   if (request.method === "OPTIONS") {
     return new Response(null, { status: 204, headers: corsHeaders(request) });
   }
@@ -748,8 +748,7 @@ Deno.serve(async (request: Request) => {
     }
 
     if (action === "record_session") {
-      const forwarded = request.headers.get("x-forwarded-for") || request.headers.get("cf-connecting-ip") || "";
-      const ip = forwarded.split(",")[0]?.trim() || null;
+      const ip = clientIp(request, info);
       const { error } = await admin.rpc("putduk_member_record_session", {
         p_user_id: user.id,
         p_ip: ip

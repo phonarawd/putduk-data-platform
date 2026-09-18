@@ -40,6 +40,11 @@
     const ip = String(value || '').trim();
     if (!ip || ip === '-') return '-';
     if (ip.includes('*')) return ip;
+    if (ip.includes(':')) {
+      const parts = ip.split(':').filter(Boolean);
+      if (parts.length < 2) return '****';
+      return `${parts[0]}:****:****`;
+    }
     const parts = ip.split('.');
     if (parts.length !== 4) return '****';
     return `${parts[0]}.***.***.${parts[3]}`;

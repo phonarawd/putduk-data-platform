@@ -10,6 +10,14 @@ import {
   WAIT_FOR_SUBMIT_CUT
 } from '../../src/ui/overlay-surface.mjs';
 
+test('근무 전표가 검수 대기보다 위에 뜬다', () => {
+  const state = {
+    resultScene: { nodeId: 'dhl', cut: 'submit' },
+    reviewWait: { overlayOpen: true, dbId: 'run-2' }
+  };
+  assert.equal(overlaySurfaceKey(state), 'result:dhl:submit');
+});
+
 test('같은 근무 표면은 키를 유지하고 본문만 바뀐다', () => {
   const state = {
     player: { nodeId: 'dhl', bundle: { current: 2, total: 5 } },

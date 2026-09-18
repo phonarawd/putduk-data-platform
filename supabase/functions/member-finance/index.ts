@@ -2,7 +2,7 @@
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.0";
-import { corsHeaders, HttpError, jsonResponse, rpcMessage, userFromVerifiedJwt, type JsonRecord } from "../_shared/http.ts";
+import { clientIp, corsHeaders, HttpError, jsonResponse, rpcMessage, userFromVerifiedJwt, type JsonRecord } from "../_shared/http.ts";
 import {
   ALLOWED_UPLOAD_TYPES,
   isAllowedUploadType,
@@ -49,12 +49,6 @@ async function parseRequest(request: Request): Promise<JsonRecord> {
   } catch {
     throw new HttpError(400, "요청 형식을 확인해 주세요.");
   }
-}
-
-function clientIp(request: Request): string | null {
-  const forwarded = request.headers.get("x-forwarded-for") || request.headers.get("cf-connecting-ip") || "";
-  const candidate = forwarded.split(",")[0]?.trim();
-  return candidate || null;
 }
 
 function textValue(value: unknown, label: string, max = 240, required = true): string | null {
@@ -304,7 +298,7 @@ async function submitKyc(userId: string, payload: JsonRecord) {
   return { kyc_status: data };
 }
 
-Deno.serve(async (request: Request) => {
+Deno.serve(async (request: Request, info) => {
   if (request.method === "OPTIONS") {
     return new Response(null, { status: 204, headers: corsHeaders(request) });
   }
@@ -313,7 +307,7 @@ Deno.serve(async (request: Request) => {
     const user = await authenticate(request);
     const payload = await parseRequest(request);
     const action = String(payload.action || "");
-    const ip = clientIp(request);
+    const ip = clientIp(request, info);
     const revealLike = action === "deposit_info_reveal"
       || action === "reveal"
       || payload.reveal === true
@@ -335,10 +329,14 @@ Deno.serve(async (request: Request) => {
     }
 
     if (action === "record_session") {
-      await admin.rpc("putduk_member_record_session", {
+      const { error } = await admin.rpc("putduk_member_record_session", {
         p_user_id: user.id,
         p_ip: ip
       });
+      if (error) {
+        console.error("record session failed", error);
+        throw new HttpError(503, "접속 기록을 남기지 못했습니다.");
+      }
       return jsonResponse(request, { ok: true });
     }
 

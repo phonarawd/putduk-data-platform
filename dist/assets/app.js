@@ -465,7 +465,7 @@
       stake,
       pay,
       trial,
-      html: `<div class="node-money"><div class="money-line">${icon('lock', 15)}<span>${trial ? '지원금 잠금' : '근무 보증'} ${money(stake)}</span></div><div class="money-line">${icon('coins', 15)}<span>끝나면 수당 ${money(pay)}</span></div>${settleNote('p', trial)}</div>`
+      html: `<div class="node-money"><div class="money-line">${icon('lock', 15)}<span>${trial ? '지원금 잠금' : '근무 보증'} ${money(stake)}</span></div><div class="money-line">${icon('coins', 15)}<span>수당 ${money(pay)}</span></div></div>`
     };
   }
 
@@ -2801,14 +2801,9 @@
     const mark = markSrc
       ? `<div class="company-mark has-image"><img src="${esc(markSrc)}" alt="${esc(company.name)} 로고" /></div>`
       : `<div class="company-mark">${esc(company.mark)}</div>`;
-    const badge = node.assigned ? '운영자 배정' : !enabled ? '잠시 쉼' : state.reviewWait ? '검수 대기' : ready ? '자리 있음' : (node.isTrial ? '지원금으로 출근' : '입금 후 출근');
     const cta = !enabled ? '대기 중' : state.reviewWait ? '검수 대기 중' : ready ? '출근하기' : '입금 안내';
     const slotsLeft = fomoSlotsLeft(node);
-    const quotaParts = dailyQuotaParts();
-    const quotaMeta = (quotaParts.loaded && !quotaParts.unlimited)
-      ? `<span${quotaParts.remaining <= 0 ? ' style="color:var(--danger)"' : ''}>${icon('clock-3', 12)} ${quotaParts.remaining <= 0 ? '오늘 소진' : `오늘 ${quotaParts.remaining}회`}</span>`
-      : '';
-    return `<article class="node-card" data-level="${esc(node.level || '')}" style="--node-color:${node.color};opacity:${enabled ? 1 : .55}"><div class="node-accent"></div><div class="node-top">${mark}<span class="status-badge ${node.assigned || node.level === '전문 검수' ? 'gold' : ''}">${badge}</span></div><div class="node-company">${esc(company.name)} · ${esc(company.category)}</div><div class="node-title">${esc(node.title)}</div>${cardMoneyLines(node).html}<div class="node-bottom"><div class="node-meta"><span>${icon('clock-3', 12)} ${esc(node.minutes)}</span><span data-fomo-slot="${esc(node.id)}">${slotsLeft.toLocaleString('ko-KR')}자리 남음</span>${quotaMeta}</div><button class="small-button ${ready ? 'primary' : ''}" data-start-node="${node.id}" ${enabled && !state.reviewWait ? '' : 'disabled'}>${cta}</button></div></article>`;
+    return `<article class="node-card compact-node" data-level="${esc(node.level || '')}" style="--node-color:${node.color};opacity:${enabled ? 1 : .55}"><div class="node-accent"></div><div class="node-top">${mark}</div><div class="node-company">${esc(company.name)}</div><div class="node-title">${esc(node.title)}</div>${cardMoneyLines(node).html}<div class="node-bottom"><div class="node-meta"><span>시간 ${esc(node.minutes)}</span><span data-fomo-slot="${esc(node.id)}">남은 자리 ${slotsLeft.toLocaleString('ko-KR')}</span></div><button class="small-button ${ready ? 'primary' : ''}" data-start-node="${node.id}" ${enabled && !state.reviewWait ? '' : 'disabled'}>${cta}</button></div></article>`;
   }
 
   function renderTimeline() {
@@ -3351,23 +3346,22 @@
       ? '운영자가 다시 확인해 달라고 했어요.'
       : wait.status === 'rejected'
         ? '운영자가 반려했어요. 원금만 돌아와요.'
-        : '운영자 확인 전이에요. 아직 수당이 출금가능으로 옮겨지지 않았어요.';
-    const reworkCopy = wait.status === 'rework' ? '제출한 번호를 다시 보고, 안내가 오면 이어서 확인해요.' : '재확인 요청은 아직 없어요.';
+        : '운영자가 확인하면 수당이 출금가능에 보여요.';
     return `<div class="modal-backdrop player-backdrop" data-modal="review-wait"><div class="player-sheet review-wait-sheet">
       <div class="player-card">
         <div class="player-toolbar">
           <div class="player-kicker">${icon('clipboard-check', 15)} 검수를 기다리고 있어요</div>
           <button type="button" class="icon-button" data-action="close-review-wait" aria-label="닫기">${icon('x', 18)}</button>
         </div>
-        <div class="detail-list">
-          <div><span>업무 이름</span><strong>${esc(company.name)} · ${esc(node.title)}</strong></div>
-          <div><span>제출 시간</span><strong>${esc(submitted)}</strong></div>
-          <div><span>검수 상태</span><strong>${esc(runStatusLabel(wait.status))}</strong></div>
-          <div><span>예상 보상</span><strong>${formatLedgerAmount(wait.rewardAmount)}</strong></div>
-          <div><span>운영자 확인 결과</span><strong>${esc(operatorResult)}</strong></div>
-          <div><span>재확인 요청 내용</span><strong>${esc(reworkCopy)}</strong></div>
+        <div class="work-receipt-card">
+          <div class="work-receipt-row"><span class="work-receipt-label">업무</span><span class="work-receipt-val">${esc(company.name)} · ${esc(node.title)}</span></div>
+          <div class="work-receipt-row"><span class="work-receipt-label">상태</span><span class="work-receipt-val">${esc(runStatusLabel(wait.status))}</span></div>
+          <div class="work-receipt-row"><span class="work-receipt-label">제출</span><span class="work-receipt-val">${esc(submitted)}</span></div>
+          <div class="work-receipt-row highlight"><span class="work-receipt-label">예정 수당</span><span class="work-receipt-val">${formatLedgerAmount(wait.rewardAmount)}</span></div>
         </div>
-        <div class="notice" style="margin-top:16px"><span style="color:var(--gold)">${icon('hourglass',17)}</span><div>새 출근은 검수가 끝난 뒤에 할 수 있어요. 화면을 닫아도 서버에 남아 있어요.</div></div>
+        <p class="page-copy review-wait-copy">${esc(operatorResult)}</p>
+        ${wait.status === 'rework' ? '<p class="page-copy review-wait-copy">제출한 번호를 다시 보고, 안내가 오면 이어서 확인해요.</p>' : ''}
+        <div class="notice" style="margin-top:14px"><span style="color:var(--gold)">${icon('hourglass',17)}</span><div>화면을 닫아도 서버에 남아 있어요. 검수가 끝난 뒤에 새 출근을 할 수 있어요.</div></div>
         <div class="modal-actions"><button class="secondary-button" type="button" data-action="close-review-wait">작업실로</button><button class="primary-button" type="button" disabled aria-disabled="true">새 업무 시작</button></div>
       </div>
     </div></div>`;
@@ -3383,70 +3377,55 @@
       : `<ul class="outcome-list"><li>✅ 승인되면 원금과 수당이 잔액에 같이 반영돼요.</li><li>↩️ 반려되면 원금만 돌아와요.</li></ul>`;
     const quotaNote = dailyQuotaSummaryText();
     const quotaLine = quotaNote
-      ? `<p class="page-copy" style="margin-top:8px;font-size:12px;color:var(--muted)">${icon('clock-3', 13)} ${esc(quotaNote)}</p>`
+      ? `<p class="page-copy assign-meta">${icon('clock-3', 13)} ${esc(quotaNote)}</p>`
       : '';
-    return `<div class="modal-backdrop" data-modal="start-confirm"><div class="modal cinematic-modal"><div class="cinematic-stage"><canvas id="startMotionCanvas" aria-hidden="true"></canvas></div><div class="modal-head"><div><h2>출근 확인할까요?</h2><p>${esc(company.name)} · ${esc(node.title)}</p></div><button class="icon-button" data-action="close-start" aria-label="닫기">${icon('x',18)}</button></div><div class="modal-body">${lines.html}${outcome}<p class="page-copy" style="margin-top:12px">${isCatalogWork(node) ? '한 화면에서 상품명·가격·옵션·배송을 적어 제출해요.' : '한 화면에서 실물 라벨 번호 5건을 입력해 대조해요.'}</p>${quotaLine}<div class="modal-actions"><button class="secondary-button" type="button" data-action="close-start">다음에</button><button class="primary-button" type="button" data-action="confirm-start">출근하기</button></div></div></div></div>`;
+    return `<div class="modal-backdrop" data-modal="start-confirm"><div class="modal assign-modal"><div class="modal-head"><div><p class="assign-kicker">업무 배정</p><h2>${esc(node.title)}</h2><p>${esc(company.name)}</p></div><button class="icon-button" data-action="close-start" aria-label="닫기">${icon('x',18)}</button></div><div class="modal-body"><div class="work-receipt-card assign-receipt"><div class="work-receipt-row"><span class="work-receipt-label">${lines.trial ? '지원금 잠금' : '근무 보증'}</span><span class="work-receipt-val">${money(lines.stake)}</span></div><div class="work-receipt-row highlight"><span class="work-receipt-label">수당</span><span class="work-receipt-val">+${money(lines.pay)}</span></div><div class="work-receipt-row"><span class="work-receipt-label">시간</span><span class="work-receipt-val">${esc(node.minutes)}</span></div></div>${outcome}<p class="page-copy assign-copy">${isCatalogWork(node) ? '한 화면에서 상품명·가격·옵션·배송을 적어 제출해요.' : '한 화면에서 실물 라벨 번호 5건을 입력해 대조해요.'}</p>${quotaLine}<div class="modal-actions"><button class="secondary-button" type="button" data-action="close-start">다음에</button><button class="primary-button" type="button" data-action="confirm-start">출근하기</button></div></div></div></div>`;
   }
 
   function renderResultOverlay() {
     if (!state.resultScene) return '';
     const scene = state.resultScene;
-    const next = scene.nextStake;
-    const ultra = next && next >= 30000000;
-    const copy = ultra
-      ? `${icon('shield-check', 16)} 이 금액 구간은 운영자 확인 후 열립니다`
-      : next
-        ? `다음 근무는 ${money(next)} 라인이에요. 넣으면 수당 ${money(payForStake(next))}이에요.`
-        : '오늘 라인 근무를 잘 마쳤어요.';
-    const currentBalance = Number(state.wallet.work ?? state.wallet.task ?? 0);
-    const diff = next ? Math.max(0, next - currentBalance) : 0;
-    const nextPct = next ? Math.min(100, Math.round((currentBalance / next) * 100)) : 100;
-
-    return `<div class="modal-backdrop" data-modal="result-scene"><div class="modal result-modal"><div class="result-stage"><canvas id="resultMotionCanvas" aria-hidden="true"></canvas></div><div class="modal-body">
-      <h2>다음 한 칸만 안내할게요</h2>
+    const approved = scene.cut === 'approve';
+    const nextStake = scene.nextStake;
+    const nextCopy = nextStake
+      ? (nextStake >= 30000000
+        ? '이 금액 구간은 운영자 확인 후 열립니다.'
+        : `다음 근무는 ${money(nextStake)} 라인이에요.`)
+      : '';
+    const title = approved ? '운영자 검수가 완료됐어요' : '근무 완료 전표';
+    const kicker = approved ? '업무 완료' : '오늘 근무 완료';
+    const pill = approved ? '검수 완료' : '검수 대기';
+    const stipendLabel = approved ? '확정 수당' : '예정 수당';
+    const note = approved
+      ? '✅ 확정 수당이 출금가능 칸에 반영됐어요'
+      : '✅ 일이 끝나면 원금과 수당이 잔액에 같이 반영돼요';
+    const trial = Boolean(nodeById(scene.nodeId)?.isTrial);
+    return `<div class="modal-backdrop" data-modal="result-scene"><div class="modal result-modal receipt-modal"><div class="modal-body">
+      <p class="assign-kicker">${icon('clipboard-check', 16)} ${kicker}</p>
+      <h2>${title}</h2>
       <div class="work-receipt-card">
         <div class="work-receipt-head">
-          <span class="work-receipt-title">${icon('clipboard-check', 16)} 오늘 근무 완료 전표</span>
-          <span class="pill ok">검수 대기</span>
+          <span class="work-receipt-title">${approved ? '검수 완료 영수증' : '근무 전표'}</span>
+          <span class="pill ${approved ? 'ok' : 'wait'}">${pill}</span>
         </div>
         <div class="work-receipt-body">
           <div class="work-receipt-row">
-            <span class="work-receipt-label">검수 완료 물량</span>
-            <span class="work-receipt-val">오늘 배정 물량 5건 정상 검수</span>
+            <span class="work-receipt-label">검수 물량</span>
+            <span class="work-receipt-val">오늘 배정 물량 5건</span>
           </div>
           <div class="work-receipt-row">
-            <span class="work-receipt-label">근무 보증금 (원금)</span>
-            <span class="work-receipt-val">${money(scene.principal)} <small style="color:var(--muted)">(안전 보관)</small></span>
+            <span class="work-receipt-label">${trial ? '지원금 잠금' : '근무 보증'}</span>
+            <span class="work-receipt-val">${money(scene.principal)}</span>
           </div>
           <div class="work-receipt-row highlight">
-            <span class="work-receipt-label">검수 후 예정 수당</span>
+            <span class="work-receipt-label">${stipendLabel}</span>
             <span class="work-receipt-val" style="color:var(--emerald-strong)">+${money(scene.stipend)}</span>
           </div>
         </div>
-        <div class="work-receipt-note">
-          ✅ 일이 끝나면 원금과 수당이 잔액에 같이 반영돼요
-        </div>
+        <div class="work-receipt-note">${note}</div>
       </div>
-
-      ${next ? `
-      <div class="next-ladder-card">
-        <div class="next-ladder-head">
-          <span class="next-ladder-label">${icon('trending-up', 14)} 다음 ${money(next)} 라인 해금 게이지</span>
-          <strong class="next-ladder-pct">${nextPct}% 달성</strong>
-        </div>
-        <div class="next-ladder-bar">
-          <div class="next-ladder-fill" style="width:${nextPct}%"></div>
-        </div>
-        <p class="page-copy" style="margin-top:10px">${copy}</p>
-        ${diff > 0 && !ultra ? `
-        <button class="gold-button" style="width:100%;margin-top:12px" data-action="deposit-shortcut" data-amount="${diff}">
-          ${icon('credit-card', 16)} 부족한 ${money(diff)} 채우고 ${money(next)} 라인 바로 열기
-        </button>
-        ` : ''}
-      </div>
-      ` : `<p class="page-copy">${copy}</p>`}
-
-      <div class="modal-actions"><button class="primary-button" data-action="close-result">작업실로</button></div>
+      ${nextCopy ? `<p class="page-copy result-next">${nextCopy}</p>` : ''}
+      <div class="modal-actions"><button class="primary-button" data-action="close-result">${approved ? '확인했어요' : '작업실로'}</button></div>
     </div></div></div>`;
   }
 
@@ -3456,7 +3435,7 @@
       return `<div class="modal-backdrop" data-modal="onboard-pwa"><div class="modal"><div class="result-stage compact"><canvas id="onboardMotionCanvas" aria-hidden="true"></canvas></div><div class="modal-body"><h2 class="modal-title-row">${icon('smartphone', 20)} 홈 화면에 사원증 두기</h2><p class="page-copy">아이콘으로 바로 출근하고, 자리 남음 알림도 받기 쉬워요. PC·브라우저에서도 근무할 수 있어요. 설치는 선택이고 건너뛰어도 작업실에 들어가요.</p><div class="modal-actions"><button class="secondary-button" type="button" data-action="skip-pwa">건너뛰기</button><button class="primary-button" type="button" data-action="onboard-install">사원증 두기</button></div></div></div></div>`;
     }
     const grant = Number(state.wallet.support || state.supportGrant || 10000);
-    return `<div class="modal-backdrop" data-modal="onboard-grant"><div class="modal"><div class="modal-head"><div><h2 class="modal-title-row">${icon('gift', 20)} 지원금은 딱 한 번이에요</h2><p>같은 지원금은 다시 나오지 않아요.</p></div></div><div class="modal-body"><p class="page-copy">업무 지원금 ${money(grant)}은 근무에 쓰고, 체험 수당 3천 원은 운영 경로로만 출금돼요.</p><div class="modal-actions"><button class="primary-button" type="button" data-action="ack-grant">확인했어요</button></div></div></div></div>`;
+    return `<div class="modal-backdrop" data-modal="onboard-grant"><div class="modal grant-modal"><div class="modal-head"><div><h2 class="modal-title-row">${icon('gift', 20)} 지원금은 딱 한 번이에요</h2><p>같은 지원금은 다시 나오지 않아요.</p></div></div><div class="modal-body"><ul class="grant-copy"><li>✅ 업무 지원금 ${money(grant)}은 근무에 쓰여요</li><li>✅ 체험 수당 3천원은 USDT로만 출금가능해요</li></ul><div class="modal-actions"><button class="primary-button" type="button" data-action="ack-grant">확인했어요</button></div></div></div></div>`;
   }
 
   function renderMemberTabbar() {
@@ -3580,15 +3559,18 @@
       || preset;
     const direction = preset.direction === 'debit' ? 'debit' : 'credit';
     const title = direction === 'debit' ? '잔액 차감' : '잔액 입금';
+    const bucket = ['support_grant', 'work_balance', 'available'].includes(preset.bucket) ? preset.bucket : 'available';
+    const bucketLabel = bucket === 'support_grant' ? '지원금' : bucket === 'work_balance' ? '근무 잔액' : '출금 가능';
     const copy = direction === 'debit'
-      ? '출금 가능 잔액에서 서버 원장을 통해 차감합니다. 화면에서 숫자를 빼지 않습니다.'
-      : '출금 가능 잔액에 서버 원장을 통해 입금합니다. 화면에서 숫자를 더하지 않습니다.';
+      ? '선택한 칸에서 서버 원장을 통해 차감합니다. 화면에서 숫자를 빼지 않습니다.'
+      : '선택한 칸에 서버 원장을 통해 입금합니다. 화면에서 숫자를 더하지 않습니다.';
     const wallet = member.wallet || {};
+    const bucketOptions = `<option value="available" ${bucket === 'available' ? 'selected' : ''}>출금 가능</option><option value="work_balance" ${bucket === 'work_balance' ? 'selected' : ''}>근무 잔액</option><option value="support_grant" ${bucket === 'support_grant' ? 'selected' : ''}>지원금</option>`;
     if (preset.confirmAmount != null) {
       const amount = Number(preset.confirmAmount) || 0;
-      return `<div class="modal-backdrop" data-modal="balance-adjust"><div class="modal"><div class="modal-head"><div><h2>${title} 최종 확인</h2><p>${esc(member.public_id || member.display_name || '회원')}</p></div><button class="icon-button" data-action="close-modal" aria-label="닫기">${icon('x',18)}</button></div><div class="modal-body"><form id="balanceAdjustForm" data-phase="confirm"><input type="hidden" name="user_id" value="${esc(preset.user_id || '')}" /><input type="hidden" name="direction" value="${esc(direction)}" /><input type="hidden" name="amount" value="${esc(String(amount))}" /><input type="hidden" name="currency" value="${esc(preset.currency || 'KRW')}" /><input type="hidden" name="reason" value="${esc(preset.reason || '')}" /><div class="notice"><span style="color:var(--gold)">${icon('triangle-alert',17)}</span><div><strong>한 번 더 확인해 주세요.</strong><br>금액을 서버 원장에 바로 반영해요. 되돌리려면 반대 방향으로 다시 조정해야 해요.</div></div><div class="penalty-figures" style="margin-top:14px"><div><span>${title} 금액</span><strong>${money(amount)}</strong></div><div><span>사유</span><strong style="font-size:14px">${esc(preset.reason || '-')}</strong></div></div><div class="modal-actions"><button class="secondary-button" type="button" data-action="back-balance-adjust">다시 입력</button><button class="primary-button" type="submit">네, ${title} 진행할게요</button></div></form></div></div></div>`;
+      return `<div class="modal-backdrop" data-modal="balance-adjust"><div class="modal"><div class="modal-head"><div><h2>${title} 최종 확인</h2><p>${esc(member.public_id || member.display_name || '회원')}</p></div><button class="icon-button" data-action="close-modal" aria-label="닫기">${icon('x',18)}</button></div><div class="modal-body"><form id="balanceAdjustForm" data-phase="confirm"><input type="hidden" name="user_id" value="${esc(preset.user_id || '')}" /><input type="hidden" name="direction" value="${esc(direction)}" /><input type="hidden" name="amount" value="${esc(String(amount))}" /><input type="hidden" name="currency" value="${esc(preset.currency || 'KRW')}" /><input type="hidden" name="reason" value="${esc(preset.reason || '')}" /><input type="hidden" name="bucket" value="${esc(bucket)}" /><div class="notice"><span style="color:var(--gold)">${icon('triangle-alert',17)}</span><div><strong>한 번 더 확인해 주세요.</strong><br>${esc(bucketLabel)} 칸에 금액을 서버 원장에 바로 반영해요. 되돌리려면 반대 방향으로 다시 조정해야 해요.</div></div><div class="penalty-figures" style="margin-top:14px"><div><span>${title} 금액</span><strong>${money(amount)}</strong></div><div><span>칸</span><strong style="font-size:14px">${esc(bucketLabel)}</strong></div><div><span>사유</span><strong style="font-size:14px">${esc(preset.reason || '-')}</strong></div></div><div class="modal-actions"><button class="secondary-button" type="button" data-action="back-balance-adjust">다시 입력</button><button class="primary-button" type="submit">네, ${title} 진행할게요</button></div></form></div></div></div>`;
     }
-    return `<div class="modal-backdrop" data-modal="balance-adjust"><div class="modal"><div class="modal-head"><div><h2>${title}</h2><p>${esc(member.public_id || member.display_name || '회원')}</p></div><button class="icon-button" data-action="close-modal" aria-label="닫기">${icon('x',18)}</button></div><div class="modal-body"><form id="balanceAdjustForm" data-phase="entry"><input type="hidden" name="user_id" value="${esc(member.id || member.user_id || '')}" /><input type="hidden" name="direction" value="${esc(direction)}" /><div class="notice"><span style="color:var(--emerald)">${icon('wallet',17)}</span><div>${copy}<br>현재 출금 가능 잔액 <strong>${money(wallet.available)}</strong></div></div><div class="form-grid" style="margin-top:16px"><div class="field"><label for="adjustAmount">금액</label><input id="adjustAmount" name="amount" type="number" min="1" step="1" required placeholder="1 이상" value="${esc(preset.amount != null ? String(preset.amount) : '')}" /></div><div class="field"><label for="adjustCurrency">통화</label><select id="adjustCurrency" name="currency"><option value="KRW">원화</option></select></div><div class="field full"><label for="adjustReason">사유</label><textarea id="adjustReason" name="reason" rows="2" required maxlength="500" placeholder="운영 기록에 남길 사유">${esc(preset.reason || '')}</textarea></div></div><div class="modal-actions"><button class="secondary-button" type="button" data-action="close-modal">취소</button><button class="primary-button" type="submit">다음: 금액 확인</button></div></form></div></div></div>`;
+    return `<div class="modal-backdrop" data-modal="balance-adjust"><div class="modal"><div class="modal-head"><div><h2>${title}</h2><p>${esc(member.public_id || member.display_name || '회원')}</p></div><button class="icon-button" data-action="close-modal" aria-label="닫기">${icon('x',18)}</button></div><div class="modal-body"><form id="balanceAdjustForm" data-phase="entry"><input type="hidden" name="user_id" value="${esc(member.id || member.user_id || '')}" /><input type="hidden" name="direction" value="${esc(direction)}" /><div class="notice"><span style="color:var(--emerald)">${icon('wallet',17)}</span><div>${copy}<br>현재 출금 가능 <strong>${money(wallet.available)}</strong> · 근무 잔액 <strong>${money(wallet.work ?? wallet.task)}</strong> · 지원금 <strong>${money(wallet.support)}</strong></div></div><div class="form-grid" style="margin-top:16px"><div class="field"><label for="adjustAmount">금액</label><input id="adjustAmount" name="amount" type="number" min="1" step="1" required placeholder="1 이상" value="${esc(preset.amount != null ? String(preset.amount) : '')}" /></div><div class="field"><label for="adjustBucket">칸</label><select id="adjustBucket" name="bucket" required>${bucketOptions}</select></div><div class="field"><label for="adjustCurrency">통화</label><select id="adjustCurrency" name="currency"><option value="KRW">원화</option></select></div><div class="field full"><label for="adjustReason">사유</label><textarea id="adjustReason" name="reason" rows="2" required maxlength="500" placeholder="운영 기록에 남길 사유">${esc(preset.reason || '')}</textarea></div></div><div class="modal-actions"><button class="secondary-button" type="button" data-action="close-modal">취소</button><button class="primary-button" type="submit">다음: 금액 확인</button></div></form></div></div></div>`;
   }
 
   function renderMemberDetailModal() {
@@ -3709,9 +3691,9 @@
     const api = overlayApi();
     if (api && typeof api.overlaySurfaceKey === 'function') return api.overlaySurfaceKey(state);
     if (state.player && state.run?.overlayOpen) return `run:${state.run.dbId || state.run.id || state.player.nodeId || 'active'}`;
+    if (state.resultScene) return `result:${state.resultScene.nodeId || ''}:${state.resultScene.cut || 'next'}`;
     if (state.reviewWait?.overlayOpen) return `review:${state.reviewWait.dbId || state.reviewWait.id || 'wait'}`;
     if (state.startNodeId) return `start:${state.startNodeId}`;
-    if (state.resultScene) return `result:${state.resultScene.nodeId || ''}:${state.resultScene.cut || 'next'}`;
     if (state.onboardingStep) return `onboard:${state.onboardingStep}`;
     if (state.modal) return `modal:${state.modal}`;
     return '';
@@ -3741,8 +3723,14 @@
   }
 
   function overlayMarkup() {
-    const html = `${renderOnboarding()}${renderStartConfirm()}${renderReviewWaitOverlay()}${renderRunOverlay()}${renderResultOverlay()}${renderModal()}`;
     const key = overlaySurfaceKey();
+    let html = '';
+    if (key.startsWith('run:')) html = renderRunOverlay();
+    else if (key.startsWith('result:')) html = renderResultOverlay();
+    else if (key.startsWith('review:')) html = renderReviewWaitOverlay();
+    else if (key.startsWith('start:')) html = renderStartConfirm();
+    else if (key.startsWith('onboard:')) html = renderOnboarding();
+    else html = renderModal();
     if (!html || !key) return html;
     const body = overlayBodyToken();
     const api = overlayApi();
@@ -4117,14 +4105,14 @@
     if (state.run?.serverBacked && workEnabled() && authState.session) {
       await finishRun(node);
       if (!state.reviewWait) return;
-      openResultScene(node, { cut: 'approve', principal: nodeStake(node), stipend: nodePay(node) });
+      openResultScene(node, { cut: 'submit', principal: nodeStake(node), stipend: nodePay(node) });
       render();
       return;
     }
     state.player = null;
     state.run = null;
     releaseMotionCanvas();
-    openResultScene(node, { cut: 'approve', principal: nodeStake(node), stipend: nodePay(node) });
+    openResultScene(node, { cut: 'submit', principal: nodeStake(node), stipend: nodePay(node) });
     saveState();
     render();
     lockToast('work');
@@ -4261,13 +4249,12 @@
         rewardAmount: parseLedgerAmount(data.reward_amount || run.rewardAmount),
         rewardStatus: data.reward_status || 'pending',
         submittedAt: data.completed_at || new Date().toISOString(),
-        overlayOpen: true
+        overlayOpen: false
       };
       state.run = null;
       state.player = null;
       saveState();
       releaseMotionCanvas();
-      render();
       showToast('✅ 근무 제출이 완료됐어요. 운영 검수 후 수당이 확정돼요.', 'success');
       return;
     }
@@ -4282,17 +4269,6 @@
   function bindAuxMotion() {
     if (isAdmin) return;
     flushMotionCue();
-    const result = document.getElementById('resultMotionCanvas');
-    if (result && state.resultScene && state.resultScene.cut !== 'approve' && window.PutdukMotion && typeof window.PutdukMotion.tick === 'function') {
-      const node = nodeById(state.resultScene.nodeId);
-      window.PutdukMotion.tick(result, {
-        progress: 0.72,
-        motion: node.motion || 'next_lane',
-        motion_profile: node.motion || 'next_lane',
-        title: node.title,
-        company: companyById(node.companyId).name
-      });
-    }
   }
 
   function playCueOnCanvas(canvas, token, run) {
@@ -4311,14 +4287,6 @@
     if (!motion || typeof motion.playWorkPhase !== 'function') return;
 
     if (state.startNodeId && !state.player) {
-      const canvas = document.getElementById('startMotionCanvas');
-      const token = `lock:${state.startNodeId}`;
-      const node = nodeById(state.startNodeId);
-      const partner = motionPartner(node);
-      const extras = { principal: nodeStake(node) };
-      playCueOnCanvas(canvas, token, () => {
-        motion.playWorkPhase(canvas, partner, 'lock', extras);
-      });
       return;
     }
 
@@ -4351,17 +4319,8 @@
       return;
     }
 
-    if (state.resultScene?.cut === 'approve') {
-      const canvas = document.getElementById('resultMotionCanvas');
-      const token = `approve:${state.resultScene.nodeId || ''}`;
-      const node = nodeById(state.resultScene.nodeId);
-      playCueOnCanvas(canvas, token, () => {
-        const extras = {
-          principal: state.resultScene.principal,
-          stipend: state.resultScene.stipend
-        };
-        motion.playWorkPhase(canvas, motionPartner(node), 'approve', extras);
-      });
+    if (state.resultScene) {
+      return;
     }
   }
 
@@ -4949,7 +4908,7 @@
       openDepositModal();
       return;
     }
-    if (action === 'close-result') { releaseNamedCanvas('resultMotionCanvas'); state.resultScene = null; render(); return; }
+    if (action === 'close-result') { releaseNamedCanvas('resultMotionCanvas'); state.resultScene = null; if (state.reviewWait) state.reviewWait.overlayOpen = false; render(); return; }
     if (action === 'skip-pwa') { releaseNamedCanvas('onboardMotionCanvas'); state.onboardingPwaDone = true; queueOnboarding(); saveState(); render(); return; }
     if (action === 'onboard-install') { installApp(); return; }
     if (action === 'ack-grant') { state.onboardingGrantSeen = true; state.onboardingStep = null; saveState(); render(); showToast('🎁 지원금은 딱 한 번이에요. 근무에 써 주세요.', 'success'); return; }
@@ -5079,6 +5038,11 @@
       return;
     }
     const phase = event.target.dataset.phase === 'confirm' ? 'confirm' : 'entry';
+    const bucket = ['support_grant', 'work_balance', 'available'].includes(values.bucket) ? values.bucket : 'available';
+    if (!values.user_id) {
+      showToast('회원 정보를 다시 열어 주세요.', 'warning');
+      return;
+    }
     if (phase === 'entry') {
       openModal('balance-adjust', {
         id: values.user_id,
@@ -5087,6 +5051,7 @@
         amount,
         currency: values.currency || 'KRW',
         reason: values.reason,
+        bucket,
         confirmAmount: amount
       });
       return;
@@ -5097,7 +5062,8 @@
         direction,
         amount,
         currency: values.currency || 'KRW',
-        reason: values.reason
+        reason: values.reason,
+        bucket
       });
       await loadAdminMembers({ silent: true });
       if (values.user_id) {

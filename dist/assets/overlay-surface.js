@@ -20,11 +20,11 @@ function overlaySurfaceKey(state = {}) {
   if (state.player && state.run?.overlayOpen) {
     return `run:${state.run.dbId || state.run.id || state.player.nodeId || 'active'}`;
   }
+  if (state.resultScene) return `result:${state.resultScene.nodeId || ''}:${state.resultScene.cut || 'next'}`;
   if (state.reviewWait?.overlayOpen) {
     return `review:${state.reviewWait.dbId || state.reviewWait.id || 'wait'}`;
   }
   if (state.startNodeId) return `start:${state.startNodeId}`;
-  if (state.resultScene) return `result:${state.resultScene.nodeId || ''}:${state.resultScene.cut || 'next'}`;
   if (state.onboardingStep) return `onboard:${state.onboardingStep}`;
   if (state.modal) return `modal:${state.modal}`;
   return '';

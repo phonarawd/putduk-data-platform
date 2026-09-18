@@ -129,6 +129,14 @@ function normalizeAdjustDirection(value: unknown): "credit" | "debit" {
   throw new HttpError(400, "잔액 입금 또는 차감을 선택해 주세요.");
 }
 
+function normalizeAdjustBucket(value: unknown): "support_grant" | "work_balance" | "available" {
+  const raw = String(value ?? "").trim().toLowerCase();
+  if (!raw || raw === "available" || raw === "출금 가능" || raw === "출금가능") return "available";
+  if (raw === "support_grant" || raw === "support" || raw === "지원금") return "support_grant";
+  if (raw === "work_balance" || raw === "work" || raw === "근무 잔액" || raw === "업무잔액") return "work_balance";
+  throw new HttpError(400, "지원금·근무 잔액·출금 가능 칸만 조정할 수 있어요.");
+}
+
 async function optionalList<T>(fn: () => Promise<T[]>): Promise<T[]> {
   try {
     return await fn();
@@ -1336,16 +1344,25 @@ export async function adjustMemberBalance(admin: AdminClient, userId: string, pa
   const amount = amountValue(payload.amount, "금액");
   const currency = currencyValue(payload.currency);
   const reason = textValue(payload.reason, "사유", 500);
-  const bucketRaw = textValue(payload.bucket, "지갑 칸", 40, false);
-  const data = await callRpc<JsonRecord>(admin, "putduk_admin_adjust_balance", {
+  const bucket = normalizeAdjustBucket(payload.bucket);
+  const args = {
     p_admin_id: userId,
     p_user_id: memberId,
     p_direction: direction,
     p_amount: amount,
     p_currency: currency,
-    p_reason: reason,
-    p_bucket: bucketRaw
-  }, "잔액 조정을 저장하지 못했습니다.");
+    p_reason: reason
+  };
+  let { data, error } = await admin.rpc("putduk_admin_adjust_balance", { ...args, p_bucket: bucket });
+  if (error && isMissingRpc(error)) {
+    const retry = await admin.rpc("putduk_admin_adjust_balance", args);
+    data = retry.data;
+    error = retry.error;
+  }
+  if (error || data == null) {
+    console.error("putduk_admin_adjust_balance failed", error);
+    throw new HttpError(400, rpcMessage(error, "잔액 조정을 저장하지 못했습니다."));
+  }
   await appendAudit(
     admin,
     userId,
