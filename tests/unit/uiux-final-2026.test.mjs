@@ -71,6 +71,33 @@ test('work matching page explains conditions clearly and keeps business values i
   assert.match(css, /\.uiux-work-card \.node-bottom \.small-button[\s\S]*min-height:\s*44px/);
 });
 
+test('work journey feels continuous from order confirmation through settlement without fabricating records', async () => {
+  const runtime = await readRepo('dist', 'assets', 'uiux-final-2026.js');
+  const css = await readRepo('dist', 'assets', 'uiux-final-2026.css');
+
+  assert.match(runtime, /const JOURNEY_STEPS = \['오더 확인', '업무 수행', '운영자 검수', '정산 완료'\]/);
+  assert.match(runtime, /function buildJourneyStepper/);
+  assert.match(runtime, /function enhanceStartConfirm/);
+  assert.match(runtime, /function enhanceActiveWork/);
+  assert.match(runtime, /function enhanceReviewWait/);
+  assert.match(runtime, /function enhanceResultScene/);
+  assert.match(runtime, /업무 오더 확인/);
+  assert.match(runtime, /업무 제출 완료 · 운영자 검수 대기/);
+  assert.match(runtime, /업무 완료 확인서/);
+  assert.match(runtime, /업무 제출 확인서/);
+  assert.match(runtime, /퍼뜩 업무 기록/);
+  assert.match(runtime, /출금 가능 금액에 반영됐어요/);
+  assert.doesNotMatch(runtime, /fake|가짜 주문|가짜 영수증|randomUUID|Math\.random\(\).*receipt/i);
+  assert.doesNotMatch(runtime, /nodeStake\(|nodePay\(|PAY_BY_STAKE|STAKE_LADDER|submit_deposit|withdrawal_requests/);
+
+  assert.match(css, /\.uiux-journey-stepper/);
+  assert.match(css, /\.uiux-work-document/);
+  assert.match(css, /\.uiux-document-brand/);
+  assert.match(css, /\.uiux-active-work/);
+  assert.match(css, /\.uiux-review-wait/);
+  assert.match(css, /\.uiux-result-document/);
+});
+
 test('member-facing finance copy follows Korean spacing without changing finance contracts', async () => {
   const runtime = await readRepo('dist', 'assets', 'uiux-final-2026.js');
   assert.match(runtime, /\['업무잔액', '업무 잔액'\]/);
