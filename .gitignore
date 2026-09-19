@@ -3,11 +3,12 @@ node_modules/
 .turbo/
 .pnpm-store/
 
-# 테스트·성능 리포트
+# 테스트·성능 리포트 (로컬 전용 — Git·커밋 대상 아님)
 playwright-report/
 test-results/
 blob-report/
 .lighthouseci/
+**/.lighthouseci/
 coverage/
 
 # 환경 비밀. 예시는 추적한다.
