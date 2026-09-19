@@ -1,4 +1,5 @@
 const RECOVERY_ORIGIN = 'https://putduk-data-platform.pages.dev';
+const RECOVERY_COOKIE = 'putduk_recovery';
 
 export async function onRequest(context) {
   const url = new URL(context.request.url);
@@ -11,8 +12,31 @@ export async function onRequest(context) {
     || url.pathname === '/sw.js'
     || url.pathname === '/manifest.webmanifest'
     || url.pathname === '/favicon.svg';
-  // 공식 회원 도메인만 안정본을 유지한다. pages.dev 프로젝트 주소는 최신 네이티브 빌드 검증용으로 직접 연다.
-  const recoveryMemberHost = host === 'app.hiptk.app';
+
+  const isOfficialMemberHost = host === 'app.hiptk.app';
+  const cookieHeader = context.request.headers.get('Cookie') || '';
+  const recoveryCookie = new RegExp(`(?:^|;\\s*)${RECOVERY_COOKIE}=1(?:;|$)`).test(cookieHeader);
+  const recoveryRequested = isOfficialMemberHost && url.searchParams.get('__recovery') === '1';
+  const nativeRequested = isOfficialMemberHost && url.searchParams.get('__native') === '1';
+
+  // Hidden emergency switch. Native is the default production path.
+  // ?__recovery=1 pins this browser to the last known-good Pages origin.
+  // ?__native=1 clears that pin and returns to the patched native build.
+  if (!adminPath && (recoveryRequested || nativeRequested)) {
+    const cleanUrl = new URL(url);
+    cleanUrl.searchParams.delete('__recovery');
+    cleanUrl.searchParams.delete('__native');
+    const response = Response.redirect(cleanUrl.toString(), 302);
+    response.headers.append(
+      'Set-Cookie',
+      recoveryRequested
+        ? `${RECOVERY_COOKIE}=1; Path=/; Max-Age=3600; Secure; HttpOnly; SameSite=Lax`
+        : `${RECOVERY_COOKIE}=; Path=/; Max-Age=0; Secure; HttpOnly; SameSite=Lax`
+    );
+    return response;
+  }
+
+  const recoveryMemberHost = isOfficialMemberHost && recoveryCookie;
 
   if (isOps && !adminPath && !staticPath) {
     url.pathname = '/admin/';
@@ -32,8 +56,6 @@ export async function onRequest(context) {
     }
   }
 
-  // Emergency recovery: keep the official member hostname while serving the last known-good Pages build.
-  // Preview pages.dev bypasses this branch so the patched native build can be verified before cutover.
   if (recoveryMemberHost && !adminPath && (method === 'GET' || method === 'HEAD')) {
     const upstreamUrl = new URL(url.pathname + url.search, RECOVERY_ORIGIN);
     const upstreamRequest = new Request(upstreamUrl.toString(), {
@@ -54,6 +76,6 @@ export async function onRequest(context) {
 
   const next = new Response(response.body, response);
   next.headers.delete('Clear-Site-Data');
-  next.headers.set('X-Putduk-Boot', 'native-v40');
+  next.headers.set('X-Putduk-Boot', 'native-v41');
   return next;
 }
