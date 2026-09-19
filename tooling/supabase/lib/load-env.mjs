@@ -5,7 +5,7 @@ import { join } from "node:path";
 
 export const EXPECTED_PROJECT_REF = "gaugwamwceqdnqdqrxqg";
 export const EXPECTED_REPO = "phonarawd/putduk-data-platform";
-export const EDGE_FUNCTIONS = ["admin-control", "member-finance"];
+export const EDGE_FUNCTIONS = ["admin-control", "admin-phase5", "member-finance"];
 
 const ENV_FILES = [".env", ".env.local", ".env.production.local", ".env.cursor.local"];
 
