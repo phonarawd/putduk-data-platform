@@ -66,3 +66,17 @@ test('관리자 UIUX는 MutationObserver 자기증폭 없이 렌더 버스트를
   assert.match(adminUiux, /if \(node\.textContent !== next\) node\.textContent = next/);
   assert.match(adminUiux, /if \(queued \|\| enhancing\) return/);
 });
+
+test('관리자 잔액조정은 전용 안전 핸들러가 최종 원장 호출과 중복 제출 차단을 보장한다', async () => {
+  const adminIndex = await readRepo('dist', 'admin', 'index.html');
+  const safety = await readRepo('dist', 'admin', 'balance-adjust-safety.js');
+
+  assert.match(adminIndex, /balance-adjust-safety\.js\?v=20260920-b1/);
+  assert.match(safety, /balanceAdjustForm/);
+  assert.match(safety, /stopImmediatePropagation\(\)/);
+  assert.match(safety, /balanceAdjustBusy/);
+  assert.match(safety, /adminRequest\('adjust_balance'/);
+  assert.match(safety, /\['support_grant', 'work_balance', 'available'\]/);
+  assert.match(safety, /confirmAmount: payload\.amount/);
+  assert.match(safety, /loadAdminMembers/);
+});
