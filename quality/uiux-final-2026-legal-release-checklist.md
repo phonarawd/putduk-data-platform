@@ -162,7 +162,7 @@ UI에 위 상태가 섞이면 merge 금지.
 - 업무/정산/입출금 문구와 서버 상태 일치
 - 법률문구 한국어 Copy QA
 - 모바일/데스크톱 법률페이지 visual QA
-- `pnpm quality:local` exact branch HEAD PASS
+- `pnpm quality:local` exact latest HEAD 검증 대기 (현재 HEAD에 GitHub Actions 실행 없음; Ready/Merge 전 실행 필요)
 - 최종 전문 법률 검토
 
 이 체크리스트를 통과하지 않은 법률문구를 `완벽한 법적 준수`라고 표현하지 않는다.
