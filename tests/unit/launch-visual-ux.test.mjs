@@ -80,3 +80,15 @@ test('관리자 잔액조정은 전용 안전 핸들러가 최종 원장 호출�
   assert.match(safety, /confirmAmount: payload\.amount/);
   assert.match(safety, /loadAdminMembers/);
 });
+
+test('관리자 잔액조정 버튼은 기존 안전 번들에서도 click 단계에서 직접 처리한다', async () => {
+  const adminIndex = await readRepo('dist', 'admin', 'index.html');
+  const safety = await readRepo('dist', 'admin', 'withdrawal-safety.js');
+
+  assert.match(adminIndex, /withdrawal-safety\.js\?v=20260920-w2/);
+  assert.match(safety, /#balanceAdjustForm button\[type="submit"\]/);
+  assert.match(safety, /handleBalanceAdjustClick/);
+  assert.match(safety, /adminRequest\('adjust_balance'/);
+  assert.match(safety, /confirmAmount: payload\.amount/);
+  assert.match(safety, /button\.disabled = true/);
+});
