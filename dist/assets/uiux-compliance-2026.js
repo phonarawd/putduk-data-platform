@@ -21,6 +21,27 @@
     else modal.querySelector('.modal-body')?.prepend(note);
   }
 
+  function legalAccess(className) {
+    const wrap = document.createElement('div');
+    wrap.className = className;
+    wrap.setAttribute('aria-label', '법적 고지');
+    wrap.innerHTML = '<button type="button" class="text-link" data-uiux-legal="terms">이용약관</button><button type="button" class="text-link" data-uiux-legal="privacy">개인정보 처리 안내</button>';
+    return wrap;
+  }
+
+  function enhanceLegalAccess() {
+    const sideFooter = document.querySelector('.side-footer');
+    if (sideFooter && !sideFooter.querySelector('.uiux-legal-access')) {
+      sideFooter.appendChild(legalAccess('uiux-legal-access'));
+    }
+
+    const authModal = document.querySelector('[data-modal="auth"] .auth-modal');
+    const authBody = authModal?.querySelector('.modal-body');
+    if (authBody && !authBody.querySelector('.uiux-auth-legal-access')) {
+      authBody.appendChild(legalAccess('uiux-auth-legal-access'));
+    }
+  }
+
   let queued = false;
   const observer = new MutationObserver((records) => {
     if (!records.some((record) => record.addedNodes.length)) return;
@@ -29,11 +50,13 @@
     queueMicrotask(() => {
       queued = false;
       enhanceKycPrivacy();
+      enhanceLegalAccess();
     });
   });
 
   function start() {
     enhanceKycPrivacy();
+    enhanceLegalAccess();
     observer.observe(document.body || document.documentElement, { childList: true, subtree: true });
   }
 
