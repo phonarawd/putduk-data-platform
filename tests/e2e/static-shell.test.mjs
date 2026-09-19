@@ -29,6 +29,14 @@ test('정적 셸 경로가 회원·운영자·PWA 파일을 제공한다', async
   assert.match(admin.text, /퍼뜩/);
   assert.match(admin.text, /adminFunctionUrl:\s*'https:\/\/gaugwamwceqdnqdqrxqg\.supabase\.co\/functions\/v1\/admin-phase5'/);
   assert.match(admin.text, /phase3-admin-wiring\.js/);
+  assert.match(admin.text, /withdrawal-safety\.js/);
+
+  const withdrawalSafety = await fetchText(`${started.url}/admin/withdrawal-safety.js`);
+  assert.equal(withdrawalSafety.status, 200);
+  assert.match(withdrawalSafety.text, /REVEAL_WINDOW_MS = 60_000/);
+  assert.match(withdrawalSafety.text, /reveal-withdrawal-destination/);
+  assert.match(withdrawalSafety.text, /withdraw-complete/);
+  assert.match(withdrawalSafety.text, /지급정보를 먼저 확인한 뒤 60초 안에 완료해 주세요/);
 
   const phase31 = await fetchText(`${started.url}/admin/phase3-admin-wiring.js`);
   assert.equal(phase31.status, 200);
@@ -68,6 +76,7 @@ test('운영자 포트 루트는 회원 화면이 아니라 운영자 셸이다'
   assert.doesNotMatch(root.text, /data-mode="member"/);
   assert.match(root.text, /운영자 관리센터/);
   assert.match(root.text, /phase3-admin-wiring\.js/);
+  assert.match(root.text, /withdrawal-safety\.js/);
 
   const indexHtml = await fetchText(`${started.url}/index.html`);
   assert.match(indexHtml.text, /data-mode="admin"/);
