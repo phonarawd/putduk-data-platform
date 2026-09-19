@@ -3,15 +3,16 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { repoPath } from '../helpers/repo.mjs';
 
-test('회원 입금·출금은 인증된 member-finance Edge 경로로 이어진다', async () => {
-  const [html, wiring, appJs, perfDeferred] = await Promise.all([
+test('자동 정산은 닫아도 회원 입금·출금 신청은 인증된 member-finance Edge 경로로 이어진다', async () => {
+  const [html, wiring, appJs, perfDeferred, guard] = await Promise.all([
     readFile(repoPath('dist/index.html'), 'utf8'),
     readFile(repoPath('dist/assets/phase4-finance-wiring.js'), 'utf8'),
     readFile(repoPath('dist/assets/app.js'), 'utf8'),
-    readFile(repoPath('dist/assets/perf-deferred.js'), 'utf8')
+    readFile(repoPath('dist/assets/perf-deferred.js'), 'utf8'),
+    readFile(repoPath('supabase/functions/_shared/finance-api-guard.ts'), 'utf8')
   ]);
 
-  assert.match(html, /enableFinanceApi:\s*true/);
+  assert.match(html, /enableFinanceApi:\s*false/);
   assert.match(html, /phase4-finance-wiring\.js/);
   assert.match(perfDeferred, /phase4-finance-wiring\.js\?v=20260919-p4r2/);
   assert.match(html, /app\.js\?v=20260920-recovery1/);
@@ -38,4 +39,10 @@ test('회원 입금·출금은 인증된 member-finance Edge 경로로 이어진
   assert.match(appJs, /memberFinanceRequest\('withdraw_request'/);
   assert.match(appJs, /include_principal:\s*kind === 'principal'/);
   assert.match(appJs, /if \(event\.target\.id === 'withdrawForm'\) \{ submitWithdrawForm\(event\); return; \}/);
+
+  // 자동 PG 플래그와 신청 경로는 분리한다.
+  assert.match(guard, /const application = new Set/);
+  assert.match(guard, /"submit_deposit"/);
+  assert.match(guard, /"withdraw_request"/);
+  assert.match(guard, /if \(application\.has\(name\)\) return \{ ok: true as const \};/);
 });
