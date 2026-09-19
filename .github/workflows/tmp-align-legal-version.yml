@@ -1,0 +1,52 @@
+name: Temporary align signup legal versions
+
+on:
+  push:
+    branches:
+      - feat/uiux-final-2026
+
+permissions:
+  contents: write
+
+jobs:
+  align:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout exact UI/UX branch
+        uses: actions/checkout@v4
+        with:
+          ref: feat/uiux-final-2026
+          fetch-depth: 0
+
+      - name: Align consent evidence versions and verify
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('dist/assets/app.js')
+          text = path.read_text(encoding='utf-8')
+          replacements = {
+              "terms_version: '2026-09-16'": "terms_version: '2026-09-19'",
+              "privacy_version: '2026-09-16'": "privacy_version: '2026-09-19'",
+          }
+          for old, new in replacements.items():
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'Expected exactly one occurrence of {old!r}, found {count}')
+              text = text.replace(old, new, 1)
+          path.write_text(text, encoding='utf-8')
+          PY
+          node --check dist/assets/app.js
+          node --test tests/unit/uiux-auth-2026.test.mjs
+
+      - name: Commit only the legal-version fix and remove this temporary workflow
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add dist/assets/app.js
+          git rm .github/workflows/tmp-align-legal-version.yml
+          git diff --cached --check
+          git commit -m "fix: align signup legal consent versions"
+          git push origin HEAD:feat/uiux-final-2026
