@@ -40,6 +40,15 @@ test('auth UX exposes required labels, password visibility, password validation 
   assert.match(runtime, /개인정보 수집·이용 동의/);
 });
 
+test('signup consent evidence uses the FINAL 2026-09-19 legal version', async () => {
+  const app = await readRepo('dist', 'assets', 'app.js');
+
+  assert.match(app, /terms_version:\s*['"]2026-09-19['"]/);
+  assert.match(app, /privacy_version:\s*['"]2026-09-19['"]/);
+  assert.doesNotMatch(app, /terms_version:\s*['"]2026-09-16['"]/);
+  assert.doesNotMatch(app, /privacy_version:\s*['"]2026-09-16['"]/);
+});
+
 test('legal UX presents structured member-facing legal documents and marketing choice', async () => {
   const [legal, authCss, legalCss] = await Promise.all([
     readRepo('dist', 'assets', 'uiux-legal-2026.js'),
