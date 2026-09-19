@@ -1,1 +1,64 @@
-noop
+<!doctype html>
+<html lang="ko" data-mode="admin">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#0b0b0c" />
+    <meta name="description" content="퍼뜩" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="퍼뜩" />
+    <link rel="manifest" href="../manifest.webmanifest" />
+    <link rel="icon" href="../icons/putduk-premium.png" type="image/png" />
+    <link rel="apple-touch-icon" href="../icons/putduk-premium.png" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="color-scheme" content="light dark" />
+    <title>퍼뜩</title>
+    <script src="../assets/origin-split.js?v=20260918-ui3"></script>
+    <link rel="stylesheet" href="../assets/app.css?v=20260918-ui3" />
+    <link rel="stylesheet" href="../assets/overlay-surface.css?v=20260918-flash2" />
+    <link rel="stylesheet" href="./admin.css?v=20260918-ux1" />
+    <link rel="stylesheet" href="../assets/uiux-final-2026.css?v=20260919-uiux1" />
+    <link rel="stylesheet" href="../assets/uiux-premium-2026.css?v=20260919-uiux2" />
+    <link rel="stylesheet" href="./uiux-admin-premium-2026.css?v=20260919-uiux2" />
+  </head>
+  <body>
+    <div id="app">
+      <div class="app-shell" data-boot-shell="1">
+        <aside class="sidebar">
+          <div class="brand-mark">
+            <div class="brand-symbol"><img src="../icons/putduk-premium.png" alt="" width="38" height="38" style="display:block;border-radius:12px" /></div>
+            <div><div class="brand-name">퍼뜩</div><div class="brand-kicker">운영자 관리센터</div></div>
+          </div>
+        </aside>
+        <main class="main">
+          <section class="empty-state" style="max-width:560px;margin:72px auto;text-align:center">
+            <h1 class="page-title">운영 화면을 열고 있어요</h1>
+            <p class="page-copy">🙂 권한을 확인하고 바로 이어서 보여 드릴게요.</p>
+          </section>
+        </main>
+      </div>
+    </div>
+    <script>
+      window.PUTDUK_CONFIG = {
+        supabaseUrl: 'https://gaugwamwceqdnqdqrxqg.supabase.co',
+        supabasePublishableKey: 'sb_publishable_gQehI4oD_qQm2MEtZ1-OpQ_wLY1SFBb',
+        adminFunctionUrl: 'https://gaugwamwceqdnqdqrxqg.supabase.co/functions/v1/admin-phase5',
+        enableWorkApi: false,
+        enableFinanceApi: false,
+        memberOrigin: 'https://app.hiptk.app',
+        opsOrigin: 'https://ops.hiptk.app'
+      };
+    </script>
+    <script defer src="../assets/vendor/supabase.min.js?v=20260918-ui3"></script>
+    <script defer src="../assets/ui-icons.js?v=20260918-ui3"></script>
+    <script defer src="../assets/motion-runtime.js?v=20260918-ux1"></script>
+    <script defer src="../assets/overlay-surface.js?v=20260918-ui3"></script>
+    <script defer src="../assets/app.js?v=20260919-sq1"></script>
+    <script defer src="./admin.js?v=20260919-p5r1"></script>
+    <script defer src="./phase3-admin-wiring.js?v=20260919-p31"></script>
+    <script defer src="../assets/brand-runtime.js?v=20260919-logo1"></script>
+    <script defer src="../assets/uiux-final-2026.js?v=20260919-uiux1"></script>
+    <script defer src="./uiux-admin-premium-2026.js?v=20260919-uiux2"></script>
+  </body>
+</html>
