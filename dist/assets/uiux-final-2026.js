@@ -42,6 +42,8 @@
     ['근무 상태', '현재 상태']
   ]);
 
+  const JOURNEY_STEPS = ['오더 확인', '업무 수행', '운영자 검수', '정산 완료'];
+
   function replaceExactText(text) {
     const trimmed = text.trim();
     const replacement = EXACT_TEXT_REPLACEMENTS.get(trimmed);
@@ -74,6 +76,62 @@
       .filter((node) => node.nodeType === Node.TEXT_NODE)
       .forEach((node) => node.remove());
     button.appendChild(document.createTextNode(` ${label}`));
+  }
+
+  function buildJourneyStepper(activeIndex, completeThrough = activeIndex - 1) {
+    const wrapper = document.createElement('div');
+    wrapper.className = 'uiux-journey-stepper';
+    wrapper.setAttribute('aria-label', '업무 진행 단계');
+    JOURNEY_STEPS.forEach((label, index) => {
+      const step = document.createElement('div');
+      step.className = 'uiux-journey-step';
+      if (index <= completeThrough) step.classList.add('is-complete');
+      if (index === activeIndex) step.classList.add('is-active');
+      const number = document.createElement('span');
+      number.className = 'uiux-journey-number';
+      number.textContent = index <= completeThrough ? '✓' : String(index + 1);
+      const text = document.createElement('span');
+      text.className = 'uiux-journey-label';
+      text.textContent = label;
+      step.append(number, text);
+      wrapper.appendChild(step);
+    });
+    return wrapper;
+  }
+
+  function ensureJourneyStepper(host, activeIndex, completeThrough = activeIndex - 1) {
+    if (!(host instanceof Element)) return;
+    const existing = host.querySelector(':scope > .uiux-journey-stepper');
+    if (existing) return;
+    host.prepend(buildJourneyStepper(activeIndex, completeThrough));
+  }
+
+  function relabelReceipt(receipt, options = {}) {
+    if (!(receipt instanceof Element)) return;
+    receipt.classList.add('uiux-work-document');
+    if (!receipt.querySelector('.uiux-document-brand')) {
+      const brand = document.createElement('div');
+      brand.className = 'uiux-document-brand';
+      brand.innerHTML = '<span>PUTDUK WORK RECORD</span><strong>퍼뜩 업무 기록</strong>';
+      receipt.prepend(brand);
+    }
+
+    receipt.querySelectorAll('.work-receipt-row').forEach((row) => {
+      const label = row.querySelector('.work-receipt-label');
+      const value = row.querySelector('.work-receipt-val');
+      if (!label) return;
+      const current = String(label.textContent || '').trim();
+      if (current === '지원금 잠금' || current === '근무 보증') label.textContent = '업무 시작 금액';
+      else if (current === '수당' || current === '예정 수당') label.textContent = options.approved ? '확정 수당' : '예상 수당';
+      else if (current === '시간') label.textContent = '예상 소요';
+      else if (current === '제출') label.textContent = '제출 시각';
+      else if (current === '검수 물량') label.textContent = '처리 업무';
+
+      if (value && current === '검수 물량') {
+        const text = String(value.textContent || '').trim();
+        if (text.startsWith('오늘 배정 물량 ')) value.textContent = text.replace(/^오늘 배정 물량\s+/, '배정 항목 ');
+      }
+    });
   }
 
   function enhanceDashboardHero() {
@@ -174,6 +232,145 @@
     });
   }
 
+  function enhanceStartConfirm() {
+    const backdrop = document.querySelector('[data-modal="start-confirm"]');
+    if (!backdrop) return;
+    const modal = backdrop.querySelector('.assign-modal');
+    if (!modal) return;
+    modal.classList.add('uiux-order-modal');
+    const body = modal.querySelector('.modal-body');
+    if (body) ensureJourneyStepper(body, 0, -1);
+
+    const kicker = modal.querySelector('.assign-kicker');
+    if (kicker) kicker.textContent = '업무 오더 확인';
+    const receipt = modal.querySelector('.assign-receipt');
+    relabelReceipt(receipt, { approved: false });
+
+    const copy = modal.querySelector('.assign-copy');
+    if (copy) {
+      const current = String(copy.textContent || '');
+      if (current.includes('상품명·가격·옵션·배송')) {
+        copy.textContent = '배정된 상품 정보를 확인하고 상품명·가격·옵션·배송 항목을 오더와 동일하게 입력해 주세요.';
+      } else if (current.includes('실물 라벨 번호')) {
+        copy.textContent = '배정 전표와 실물 라벨을 한 건씩 대조해 주세요. 입력한 내용은 제출 후 운영자가 확인합니다.';
+      }
+    }
+
+    const startButton = modal.querySelector('[data-action="confirm-start"]');
+    if (startButton) {
+      setButtonText(startButton, '업무 시작');
+      startButton.setAttribute('aria-label', '업무 시작');
+    }
+    const laterButton = modal.querySelector('[data-action="close-start"]');
+    if (laterButton && String(laterButton.textContent || '').trim() === '다음에') setButtonText(laterButton, '나중에');
+  }
+
+  function enhanceActiveWork() {
+    const backdrops = Array.from(document.querySelectorAll('.player-backdrop'))
+      .filter((node) => node.getAttribute('data-modal') !== 'review-wait');
+    backdrops.forEach((backdrop) => {
+      const card = backdrop.querySelector('.player-card');
+      if (!card) return;
+      card.classList.add('uiux-active-work');
+      ensureJourneyStepper(card, 1, 0);
+
+      const kicker = card.querySelector('.player-kicker');
+      if (kicker && !kicker.dataset.uiuxWorkKicker) {
+        const current = String(kicker.textContent || '').trim();
+        if (current.includes('상품 정리')) kicker.innerHTML = kicker.innerHTML.replace('상품 정리', '상품 정보 확인');
+        kicker.dataset.uiuxWorkKicker = 'true';
+      }
+
+      card.querySelectorAll('.wms-card-tag').forEach((tag) => {
+        if (String(tag.textContent || '').includes('오늘 배정 상품 카드')) {
+          Array.from(tag.childNodes).filter((node) => node.nodeType === Node.TEXT_NODE).forEach((node) => node.remove());
+          tag.appendChild(document.createTextNode(' 업무 오더'));
+        }
+      });
+
+      card.querySelectorAll('.wms-mission-copy').forEach((copy) => {
+        const current = String(copy.textContent || '').trim();
+        if (current.includes('카드에 적힌 상품명')) {
+          Array.from(copy.childNodes).filter((node) => node.nodeType === Node.TEXT_NODE).forEach((node) => node.remove());
+          copy.appendChild(document.createTextNode(' 오더에 표시된 항목과 실제 정보를 순서대로 확인해 주세요.'));
+        }
+        if (current.includes('전표 번호를 보고')) {
+          Array.from(copy.childNodes).filter((node) => node.nodeType === Node.TEXT_NODE).forEach((node) => node.remove());
+          copy.appendChild(document.createTextNode(' 전표 번호와 실물 라벨 번호를 한 건씩 직접 대조해 주세요.'));
+        }
+      });
+    });
+  }
+
+  function enhanceReviewWait() {
+    const backdrop = document.querySelector('[data-modal="review-wait"]');
+    if (!backdrop) return;
+    const card = backdrop.querySelector('.player-card');
+    if (!card) return;
+    card.classList.add('uiux-review-wait');
+    ensureJourneyStepper(card, 2, 1);
+
+    const kicker = card.querySelector('.player-kicker');
+    if (kicker) {
+      Array.from(kicker.childNodes).filter((node) => node.nodeType === Node.TEXT_NODE).forEach((node) => node.remove());
+      kicker.appendChild(document.createTextNode(' 업무 제출 완료 · 운영자 검수 대기'));
+    }
+
+    relabelReceipt(card.querySelector('.work-receipt-card'), { approved: false });
+
+    const notice = card.querySelector('.notice div');
+    if (notice && String(notice.textContent || '').includes('화면을 닫아도')) {
+      notice.textContent = '화면을 닫아도 제출 기록은 서버에 저장돼요. 검수가 완료되면 결과와 정산 상태를 확인할 수 있어요.';
+    }
+
+    const closeButton = card.querySelector('[data-action="close-review-wait"]');
+    if (closeButton && closeButton.classList.contains('secondary-button')) setButtonText(closeButton, '화면 닫기');
+  }
+
+  function enhanceResultScene() {
+    const backdrop = document.querySelector('[data-modal="result-scene"]');
+    if (!backdrop) return;
+    const modal = backdrop.querySelector('.receipt-modal');
+    if (!modal) return;
+    modal.classList.add('uiux-result-document');
+    const body = modal.querySelector('.modal-body');
+    if (!body) return;
+
+    const receipt = body.querySelector('.work-receipt-card');
+    const approved = String(receipt?.querySelector('.pill')?.textContent || '').includes('검수 완료');
+    ensureJourneyStepper(body, approved ? 3 : 2, approved ? 3 : 1);
+
+    const kicker = body.querySelector('.assign-kicker');
+    if (kicker) {
+      Array.from(kicker.childNodes).filter((node) => node.nodeType === Node.TEXT_NODE).forEach((node) => node.remove());
+      kicker.appendChild(document.createTextNode(approved ? ' 정산 완료' : ' 업무 제출 완료'));
+    }
+
+    const title = body.querySelector('h2');
+    if (title) title.textContent = approved ? '업무가 승인되고 정산이 반영됐어요' : '업무 제출이 완료됐어요';
+
+    const receiptTitle = receipt?.querySelector('.work-receipt-title');
+    if (receiptTitle) receiptTitle.textContent = approved ? '업무 완료 확인서' : '업무 제출 확인서';
+    relabelReceipt(receipt, { approved });
+
+    const note = receipt?.querySelector('.work-receipt-note');
+    if (note) {
+      note.textContent = approved
+        ? '운영자 검수가 완료됐고 확정 수당이 출금 가능 금액에 반영됐어요.'
+        : '업무 제출이 기록됐어요. 운영자 검수가 완료되면 확정 수당과 정산 상태가 반영됩니다.';
+    }
+
+    const closeButton = modal.querySelector('[data-action="close-result"]');
+    if (closeButton) setButtonText(closeButton, approved ? '확인 완료' : '검수 상태 확인');
+  }
+
+  function enhanceWorkJourney() {
+    enhanceStartConfirm();
+    enhanceActiveWork();
+    enhanceReviewWait();
+    enhanceResultScene();
+  }
+
   function ensureMatchingTab() {
     const tabbar = document.querySelector('.member-tabbar');
     if (!tabbar) return;
@@ -247,6 +444,7 @@
     roots.forEach(normalizeTree);
     enhanceDashboardHero();
     enhanceMatchingPage();
+    enhanceWorkJourney();
     ensureMatchingTab();
   }
 
@@ -266,6 +464,7 @@
     normalizeTree(document);
     enhanceDashboardHero();
     enhanceMatchingPage();
+    enhanceWorkJourney();
     ensureMatchingTab();
     observer.observe(document.body || document.documentElement, {
       childList: true,
