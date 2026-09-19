@@ -24,7 +24,7 @@ test('UIUX FINAL 2026 assets are wired into member/admin shells and service work
   assert.match(perfDeferred, /uiux-final-2026\.js\?v=20260919-uiux1/);
   assert.match(perfDeferred, /uiux-premium-2026\.css\?v=20260919-uiux2/);
   assert.match(perfDeferred, /uiux-premium-2026\.js\?v=20260919-uiux2/);
-  assert.match(sw, /putduk-member-v34/);
+  assert.match(sw, /putduk-member-v35/);
   assert.match(sw, /ADMIN_SHELL/);
   assert.match(sw, /uiux-final-2026\.css\?v=20260919-uiux1/);
   assert.match(sw, /uiux-final-2026\.js\?v=20260919-uiux1/);
@@ -210,5 +210,5 @@ test('static release verification requires the UIUX FINAL and Premium assets and
   assert.match(verify, /dist\/admin\/admin\.js/);
   assert.match(verify, /--check[\s\S]*dist\/admin\/admin\.js/);
   assert.match(verify, /--check[\s\S]*uiux-admin-premium-2026\.js/);
-  assert.match(verify, /putduk-member-v34/);
+  assert.match(verify, /putduk-member-v35/);
 });

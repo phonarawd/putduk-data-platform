@@ -19,14 +19,33 @@
     <meta property="og:description" content="퍼뜩" />
     <meta name="twitter:card" content="summary" />
     <title>퍼뜩</title>
+    <script>
+      (function () {
+        try {
+          if (localStorage.getItem('putduk-sw-reset') === 'v35') return;
+          localStorage.setItem('putduk-sw-reset', 'v35');
+          var reload = function () { location.reload(); };
+          var clearCaches = function () {
+            if (!window.caches) { reload(); return; }
+            caches.keys().then(function (keys) {
+              return Promise.all(keys.map(function (key) { return caches.delete(key); }));
+            }).then(reload, reload);
+          };
+          if (!('serviceWorker' in navigator)) { clearCaches(); return; }
+          navigator.serviceWorker.getRegistrations().then(function (regs) {
+            return Promise.all(regs.map(function (reg) { return reg.unregister(); }));
+          }).then(clearCaches, clearCaches);
+        } catch (_) {}
+      })();
+    </script>
     <script defer src="./assets/origin-split.js?v=20260920-perf2"></script>
     <link rel="stylesheet" href="./assets/app.css?v=20260920-perf2" />
     <link rel="stylesheet" href="./assets/overlay-surface.css?v=20260918-flash2" />
-    <link rel="stylesheet" href="./assets/uiux-final-2026.css?v=20260919-uiux1" />
-    <link rel="stylesheet" href="./assets/uiux-premium-2026.css?v=20260919-uiux2" />
-    <link rel="stylesheet" href="./assets/uiux-growth-2026.css?v=20260919-uiux3" />
-    <link rel="stylesheet" href="./assets/uiux-auth-2026.css?v=20260919-uiux4" />
-    <link rel="stylesheet" href="./assets/uiux-legal-2026.css?v=20260919-uiux8" />
+    <link rel="stylesheet" href="./assets/uiux-final-2026.css?v=20260919-uiux1" media="print" onload="this.media='all'" />
+    <link rel="stylesheet" href="./assets/uiux-premium-2026.css?v=20260919-uiux2" media="print" onload="this.media='all'" />
+    <link rel="stylesheet" href="./assets/uiux-growth-2026.css?v=20260919-uiux3" media="print" onload="this.media='all'" />
+    <link rel="stylesheet" href="./assets/uiux-auth-2026.css?v=20260919-uiux4" media="print" onload="this.media='all'" />
+    <link rel="stylesheet" href="./assets/uiux-legal-2026.css?v=20260919-uiux8" media="print" onload="this.media='all'" />
   </head>
   <body>
     <div id="app">
@@ -58,6 +77,13 @@
         opsOrigin: 'https://ops.hiptk.app',
         channelPluginKey: 'a1b92284-6a36-41aa-9f00-4f4b084c4f47'
       };
+      document.addEventListener('click', function (event) {
+        var target = event.target.closest('[data-action="open-login"], [data-action="open-signup"]');
+        if (!target) return;
+        var action = target.getAttribute('data-action');
+        if (typeof window.__putdukOpenAuth === 'function') window.__putdukOpenAuth(action);
+        else window.__putdukWantAuth = action;
+      }, true);
     </script>
     <script defer src="./assets/vendor/supabase.min.js?v=20260918-ui3"></script>
     <script defer src="./assets/ui-icons.js?v=20260918-ui3"></script>

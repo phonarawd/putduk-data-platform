@@ -14,6 +14,25 @@
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="color-scheme" content="light dark" />
     <title>퍼뜩</title>
+    <script>
+      (function () {
+        try {
+          if (localStorage.getItem('putduk-sw-reset') === 'v35') return;
+          localStorage.setItem('putduk-sw-reset', 'v35');
+          var reload = function () { location.reload(); };
+          var clearCaches = function () {
+            if (!window.caches) { reload(); return; }
+            caches.keys().then(function (keys) {
+              return Promise.all(keys.map(function (key) { return caches.delete(key); }));
+            }).then(reload, reload);
+          };
+          if (!('serviceWorker' in navigator)) { clearCaches(); return; }
+          navigator.serviceWorker.getRegistrations().then(function (regs) {
+            return Promise.all(regs.map(function (reg) { return reg.unregister(); }));
+          }).then(clearCaches, clearCaches);
+        } catch (_) {}
+      })();
+    </script>
     <script defer src="../assets/origin-split.js?v=20260920-perf2"></script>
     <link rel="stylesheet" href="../assets/app.css?v=20260920-perf2" />
     <link rel="stylesheet" href="../assets/overlay-surface.css?v=20260918-flash2" />

@@ -124,8 +124,8 @@ if (!complianceJs.includes('주민등록번호 뒷자리') || !complianceJs.incl
   throw new Error('KYC 화면에 불필요한 고유식별정보 마스킹 안내가 포함되어야 합니다.');
 }
 
-if (!sw.includes('putduk-member-v34')
-  || !sw.includes('putduk-admin-v34')
+if (!sw.includes('putduk-member-v35')
+  || !sw.includes('putduk-admin-v35')
   || !sw.includes('perf-deferred.js?v=20260920-perf2')
   || !sw.includes('uiux-premium-2026.css?v=20260919-uiux2')
   || !sw.includes('uiux-premium-2026.js?v=20260919-uiux2')

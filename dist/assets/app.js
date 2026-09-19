@@ -4721,9 +4721,13 @@
   let deferredInstallPrompt = null;
 
   function initializePwa() {
-    if ('serviceWorker' in navigator) {
-      const serviceWorkerPath = isAdmin ? '../sw.js' : './sw.js';
-      navigator.serviceWorker.register(serviceWorkerPath).catch(() => {});
+    if (!('serviceWorker' in navigator)) return;
+    const serviceWorkerPath = isAdmin ? '../sw.js' : './sw.js';
+    const register = () => navigator.serviceWorker.register(serviceWorkerPath).catch(() => {});
+    if (document.readyState === 'complete') {
+      window.setTimeout(register, 2500);
+    } else {
+      window.addEventListener('load', () => window.setTimeout(register, 2500), { once: true });
     }
     window.addEventListener('beforeinstallprompt', (event) => {
       event.preventDefault();
@@ -6020,6 +6024,15 @@
     };
   }
 
+  window.__putdukOpenAuth = (action) => {
+    state.authMode = action === 'open-signup' ? 'signup' : 'login';
+    openModal('auth');
+  };
+  if (window.__putdukWantAuth) {
+    const pending = window.__putdukWantAuth;
+    window.__putdukWantAuth = null;
+    window.__putdukOpenAuth(pending);
+  }
   initializePwa();
   initializeAuth().then(() => render());
   const overlay = overlayApi();
