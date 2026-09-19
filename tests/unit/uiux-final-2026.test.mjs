@@ -135,6 +135,7 @@ test('premium visual system replaces demo-like blur and card styling with restra
 
 test('premium admin layer clarifies operator terminology and responsive tables without backend contracts', async () => {
   const runtime = await readRepo('dist', 'admin', 'uiux-admin-premium-2026.js');
+  const adminCore = await readRepo('dist', 'admin', 'admin.js');
   const css = await readRepo('dist', 'admin', 'uiux-admin-premium-2026.css');
   assert.match(runtime, /\['전체 현황', '운영 현황'\]/);
   assert.match(runtime, /\['업무 카드 관리', '업무 관리'\]/);
@@ -143,6 +144,10 @@ test('premium admin layer clarifies operator terminology and responsive tables w
   assert.match(runtime, /function enhanceFinance/);
   assert.match(runtime, /출금 가능 금액/);
   assert.match(runtime, /회원 업무 배정/);
+  assert.match(adminCore, /const allNodeRows = api\.adminNodeViews\(\)/);
+  assert.match(adminCore, /node\.supply_source === 'operator'/);
+  assert.match(adminCore, /brand\.verification_status|brand\.verified/);
+  assert.match(adminCore, /현재 배정 가능한 공개 업무 카드가 없습니다/);
   assert.doesNotMatch(runtime, /service_role|admin-phase5|putduk_admin_|withdrawal_requests|member-finance/);
   assert.match(css, /\.uiux-admin-table/);
   assert.match(css, /position:\s*sticky/);
