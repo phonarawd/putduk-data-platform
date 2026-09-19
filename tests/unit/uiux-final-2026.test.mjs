@@ -150,6 +150,8 @@ test('premium admin layer clarifies operator terminology and responsive tables w
   assert.match(adminCore, /brand\.verification_status|brand\.verified/);
   assert.match(adminCore, /현재 배정 가능한 공개 업무 카드가 없습니다/);
   assert.match(adminCore, /async function submitAdminAssignment/);
+  assert.match(adminCore, /function invalidateMemberCache/);
+  assert.match(adminCore, /window\.PUTDUK_ADMIN\?\.invalidateMember\?\.\(memberId\)/);
   assert.match(adminCore, /window\.PUTDUK_PHASE31\?\.invalidateMember/);
   assert.match(phase3, /function invalidateMemberCanonicalDetail/);
   assert.match(phase3, /window\.PUTDUK_PHASE31 = \{ invalidateMember/);
