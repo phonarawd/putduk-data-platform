@@ -66,6 +66,7 @@ jobs:
       - name: Edge Function 배포
         run: |
           supabase functions deploy admin-control --project-ref "$SUPABASE_PROJECT_REF"
+          supabase functions deploy admin-phase5 --project-ref "$SUPABASE_PROJECT_REF"
           supabase functions deploy member-finance --project-ref "$SUPABASE_PROJECT_REF"
 
       - name: Edge 인증 스모크
