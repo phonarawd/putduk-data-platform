@@ -54,3 +54,15 @@ test('관리자 입출금은 다섯 탭이고 모바일 카드가 있으며 지�
   assert.match(safety, /지급정보를 먼저 확인한 뒤 60초 안에 완료해 주세요/);
   assert.match(safety, /stopImmediatePropagation\(\)/);
 });
+
+test('관리자 UIUX는 MutationObserver 자기증폭 없이 렌더 버스트를 프레임 단위로 합친다', async () => {
+  const adminIndex = await readRepo('dist', 'admin', 'index.html');
+  const adminUiux = await readRepo('dist', 'admin', 'uiux-admin-premium-2026.js');
+
+  assert.equal(adminIndex.includes('assets/uiux-final-2026.js'), false);
+  assert.match(adminIndex, /uiux-admin-premium-2026\.js\?v=20260920-perf2/);
+  assert.match(adminUiux, /observer\?\.disconnect\(\)/);
+  assert.match(adminUiux, /requestAnimationFrame\(\(\) =>/);
+  assert.match(adminUiux, /if \(node\.textContent !== next\) node\.textContent = next/);
+  assert.match(adminUiux, /if \(queued \|\| enhancing\) return/);
+});
