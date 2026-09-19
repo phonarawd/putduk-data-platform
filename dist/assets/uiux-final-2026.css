@@ -66,6 +66,34 @@ h1, h2, h3, h4,
 }
 .metric-value { letter-spacing: -.026em; }
 
+.hero-card .hero-copy { max-width: 620px; }
+.hero-card .hero-actions { margin-top: 20px; }
+.hero-card .hero-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 24px;
+}
+.hero-card .hero-metrics > div {
+  min-width: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--surface-strong) 82%, transparent);
+}
+.hero-card .metric-label {
+  font-size: 12px;
+  line-height: 1.35;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.hero-card .metric-value {
+  margin-top: 6px;
+  font-size: 22px;
+  line-height: 1.15;
+}
+
 .primary-button, .secondary-button, .gold-button,
 .small-button, .kyc-file-btn {
   min-height: var(--uiux-touch);
@@ -192,6 +220,7 @@ html[data-mode="admin"] th { line-height: 1.5; }
   .hero-card { padding: 18px; }
   .hero-title { font-size: clamp(24px, 7vw, 30px); line-height: 1.16; }
   .hero-copy { font-size: 15px; }
+  .hero-card .hero-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .section-heading { margin-bottom: 14px; }
   .modal-backdrop { padding-inline: 10px; }
   .modal {
@@ -221,6 +250,9 @@ html[data-mode="admin"] th { line-height: 1.5; }
   }
   .hero-actions > button, .hero-actions > a,
   .wallet-toolbar > button, .withdraw-actions > button { width: 100%; }
+  .hero-card .hero-metrics > div { padding: 11px 12px; }
+  .hero-card .metric-label { font-size: 11px; }
+  .hero-card .metric-value { font-size: 20px; }
   .wallet-slot { min-height: 88px; padding: 14px; }
   .modal-backdrop { padding-left: 8px; padding-right: 8px; }
   .modal { border-radius: 18px; }
