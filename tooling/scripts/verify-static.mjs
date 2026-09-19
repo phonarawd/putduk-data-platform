@@ -18,6 +18,8 @@ const requiredFiles = [
   'dist/assets/overlay-surface.js',
   'dist/assets/overlay-surface.css',
   'dist/assets/channel-talk.js',
+  'dist/assets/uiux-final-2026.css',
+  'dist/assets/uiux-final-2026.js',
   'dist/manifest.webmanifest',
   'dist/sw.js',
   'dist/_headers',
@@ -41,6 +43,7 @@ await execFileAsync(process.execPath, ['--check', join(root, 'dist/admin/phase3-
 await execFileAsync(process.execPath, ['--check', join(root, 'dist/assets/phase4-finance-wiring.js')]);
 await execFileAsync(process.execPath, ['--check', join(root, 'dist/assets/overlay-surface.js')]);
 await execFileAsync(process.execPath, ['--check', join(root, 'dist/assets/channel-talk.js')]);
+await execFileAsync(process.execPath, ['--check', join(root, 'dist/assets/uiux-final-2026.js')]);
 
 if (!memberHtml.includes('lang="ko"') || !adminHtml.includes('lang="ko"')) {
   throw new Error('회원·관리자 문서 언어가 한국어로 설정되어야 합니다.');
@@ -52,6 +55,14 @@ if (!adminHtml.includes('phase3-admin-wiring.js')) {
 
 if (!memberHtml.includes('phase4-finance-wiring.js')) {
   throw new Error('회원 PHASE 4 입금 증빙 연결 스크립트가 회원 셸에 포함되어야 합니다.');
+}
+
+if (!memberHtml.includes('uiux-final-2026.css') || !memberHtml.includes('uiux-final-2026.js')) {
+  throw new Error('회원 셸에 UI/UX FINAL 2026 자산이 포함되어야 합니다.');
+}
+
+if (!adminHtml.includes('uiux-final-2026.css') || !adminHtml.includes('uiux-final-2026.js')) {
+  throw new Error('운영자 셸에 UI/UX FINAL 2026 자산이 포함되어야 합니다.');
 }
 
 for (const forbidden of ['운영자 데모', '미리보기 화면', 'putduk-demo-state']) {
