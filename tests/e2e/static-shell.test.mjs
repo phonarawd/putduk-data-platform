@@ -18,7 +18,7 @@ test('정적 셸 경로가 회원·운영자·PWA 파일을 제공한다', async
   assert.match(member.text, /lang="ko"/);
   assert.match(member.text, /data-mode="member"/);
   assert.match(member.text, /enableWorkApi:\s*true/);
-  assert.match(member.text, /enableFinanceApi:\s*false/);
+  assert.match(member.text, /enableFinanceApi:\s*true/);
   assert.match(member.text, /channel-talk\.js/);
   assert.match(member.text, /channelPluginKey/);
 
@@ -26,6 +26,7 @@ test('정적 셸 경로가 회원·운영자·PWA 파일을 제공한다', async
   assert.equal(admin.status, 200);
   assert.match(admin.text, /data-mode="admin"/);
   assert.match(admin.text, /퍼뜩/);
+  assert.match(admin.text, /adminFunctionUrl:\s*'https:\/\/gaugwamwceqdnqdqrxqg\.supabase\.co\/functions\/v1\/admin-phase5'/);
   assert.match(admin.text, /phase3-admin-wiring\.js/);
 
   const phase31 = await fetchText(`${started.url}/admin/phase3-admin-wiring.js`);
