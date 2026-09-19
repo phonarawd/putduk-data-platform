@@ -85,6 +85,7 @@ test('legal UX presents structured member-facing legal documents and marketing c
   assert.match(legal, /업무 매칭과 오더/);
   assert.match(legal, /검수와 수당 확정/);
   assert.match(legal, /주민등록번호/);
+  assert.doesNotMatch(legal, /주민확인번호/);
   assert.match(legal, /오후 9시/);
   assert.match(legal, /개인정보 보호책임자/);
   assert.match(legal, /혜택·이벤트 등 광고성 정보 수신/);
