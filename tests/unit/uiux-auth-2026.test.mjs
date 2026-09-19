@@ -43,8 +43,12 @@ test('auth UX exposes required labels, password visibility, password validation 
 test('signup consent evidence uses the FINAL 2026-09-19 legal version', async () => {
   const app = await readRepo('dist', 'assets', 'app.js');
 
+  assert.match(app, /terms_accepted:\s*termsAccepted/);
+  assert.match(app, /privacy_accepted:\s*privacyAccepted/);
   assert.match(app, /terms_version:\s*['"]2026-09-19['"]/);
   assert.match(app, /privacy_version:\s*['"]2026-09-19['"]/);
+  assert.match(app, /!termsAccepted\s*\|\|\s*!privacyAccepted/);
+  assert.match(app, /marketing_opt_in:/);
   assert.doesNotMatch(app, /terms_version:\s*['"]2026-09-16['"]/);
   assert.doesNotMatch(app, /privacy_version:\s*['"]2026-09-16['"]/);
 });

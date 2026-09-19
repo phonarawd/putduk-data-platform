@@ -4778,6 +4778,12 @@
     const email = document.getElementById('signupEmail')?.value.trim().toLowerCase() || '';
     if (password !== confirm) { showToast('비밀번호가 서로 달라요. 다시 확인해 주세요.', 'info'); return; }
     if (!normalizeBirth(birth)) { showToast('생년월일 6자리를 숫자로 입력해 주세요.', 'info'); return; }
+    const termsAccepted = Boolean(document.getElementById('signupTerms')?.checked);
+    const privacyAccepted = Boolean(document.getElementById('signupPrivacy')?.checked);
+    if (!termsAccepted || !privacyAccepted) {
+      showToast('이용약관과 개인정보 수집·이용에 동의해 주세요.', 'info');
+      return;
+    }
     if (!supabaseClient) {
       closeModal();
       showToast('✅ 가입 정보가 접수됐어요. 이메일 인증을 완료하면 회원 카드가 활성화돼요.', 'success');
@@ -4789,7 +4795,9 @@
       birth_date: normalizeBirth(birth),
       phone_e164: normalizePhone(document.getElementById('signupPhone')?.value),
       referral_code: document.getElementById('signupReferral')?.value.trim().toUpperCase() || null,
+      terms_accepted: termsAccepted,
       terms_version: '2026-09-19',
+      privacy_accepted: privacyAccepted,
       privacy_version: '2026-09-19',
       marketing_opt_in: Boolean(document.getElementById('signupMarketing')?.checked)
     };
