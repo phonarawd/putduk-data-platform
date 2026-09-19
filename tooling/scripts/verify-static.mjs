@@ -22,6 +22,8 @@ const requiredFiles = [
   'dist/assets/uiux-final-2026.js',
   'dist/assets/uiux-premium-2026.css',
   'dist/assets/uiux-premium-2026.js',
+  'dist/admin/uiux-admin-premium-2026.css',
+  'dist/admin/uiux-admin-premium-2026.js',
   'dist/manifest.webmanifest',
   'dist/sw.js',
   'dist/_headers',
@@ -48,6 +50,7 @@ await execFileAsync(process.execPath, ['--check', join(root, 'dist/assets/overla
 await execFileAsync(process.execPath, ['--check', join(root, 'dist/assets/channel-talk.js')]);
 await execFileAsync(process.execPath, ['--check', join(root, 'dist/assets/uiux-final-2026.js')]);
 await execFileAsync(process.execPath, ['--check', join(root, 'dist/assets/uiux-premium-2026.js')]);
+await execFileAsync(process.execPath, ['--check', join(root, 'dist/admin/uiux-admin-premium-2026.js')]);
 
 if (!memberHtml.includes('lang="ko"') || !adminHtml.includes('lang="ko"')) {
   throw new Error('회원·관리자 문서 언어가 한국어로 설정되어야 합니다.');
@@ -73,12 +76,16 @@ if (!memberHtml.includes('uiux-premium-2026.css') || !memberHtml.includes('uiux-
   throw new Error('회원 셸에 Premium UI/UX 2026 자산이 포함되어야 합니다.');
 }
 
-if (!adminHtml.includes('uiux-premium-2026.css')) {
-  throw new Error('운영자 셸에 Premium UI/UX 2026 스타일이 포함되어야 합니다.');
+if (!adminHtml.includes('uiux-premium-2026.css') || !adminHtml.includes('uiux-admin-premium-2026.css') || !adminHtml.includes('uiux-admin-premium-2026.js')) {
+  throw new Error('운영자 셸에 Premium Admin UI/UX 2026 자산이 포함되어야 합니다.');
 }
 
-if (!sw.includes("putduk-shell-v25") || !sw.includes('uiux-premium-2026.css?v=20260919-uiux2') || !sw.includes('uiux-premium-2026.js?v=20260919-uiux2')) {
-  throw new Error('서비스워커가 Premium UI/UX 2026 자산과 v25 캐시를 사용해야 합니다.');
+if (!sw.includes("putduk-shell-v26")
+  || !sw.includes('uiux-premium-2026.css?v=20260919-uiux2')
+  || !sw.includes('uiux-premium-2026.js?v=20260919-uiux2')
+  || !sw.includes('uiux-admin-premium-2026.css?v=20260919-uiux2')
+  || !sw.includes('uiux-admin-premium-2026.js?v=20260919-uiux2')) {
+  throw new Error('서비스워커가 Premium UI/UX 2026 회원·운영자 자산과 v26 캐시를 사용해야 합니다.');
 }
 
 for (const forbidden of ['운영자 데모', '미리보기 화면', 'putduk-demo-state']) {
