@@ -1395,6 +1395,17 @@
   }
 
   const packingIds = new Set();
+
+  function invalidateMemberCache(memberId) {
+    const key = String(memberId || '').trim();
+    if (!key) return;
+    memberPacks.delete(key);
+    packingIds.delete(key);
+    const api = core();
+    const state = api?.getState?.() || {};
+    const currentId = state.adminMemberDetail?.id || state.adminMemberDetail?.user_id || state.modalPayload?.id || state.modalPayload?.user_id || '';
+    if (String(currentId) === key) api?.patchState?.({ adminMemberPack: null });
+  }
   async function ensureMemberPack() {
     const api = wrapCore();
     if (!api || api.getState().modal !== 'member-detail') return;
@@ -1537,6 +1548,7 @@
         estimated_seconds: Number(values.estimated_seconds || 60),
         notify: Boolean(event.target.notify?.checked)
       });
+      window.PUTDUK_ADMIN?.invalidateMember?.(memberId);
       window.PUTDUK_PHASE31?.invalidateMember?.(memberId);
       const state = api.getState();
       const currentMember = state.adminMemberDetail || {};
@@ -1551,6 +1563,7 @@
     }
   }
   window.PUTDUK_ADMIN = {
+    invalidateMember: invalidateMemberCache,
     renderPage(page) {
       wrapCore();
       if (page === 'overview') return renderOverview();
