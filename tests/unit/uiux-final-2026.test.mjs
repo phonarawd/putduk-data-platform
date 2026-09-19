@@ -136,6 +136,7 @@ test('premium visual system replaces demo-like blur and card styling with restra
 test('premium admin layer clarifies operator terminology and responsive tables without backend contracts', async () => {
   const runtime = await readRepo('dist', 'admin', 'uiux-admin-premium-2026.js');
   const adminCore = await readRepo('dist', 'admin', 'admin.js');
+  const phase3 = await readRepo('dist', 'admin', 'phase3-admin-wiring.js');
   const css = await readRepo('dist', 'admin', 'uiux-admin-premium-2026.css');
   assert.match(runtime, /\['전체 현황', '운영 현황'\]/);
   assert.match(runtime, /\['업무 카드 관리', '업무 관리'\]/);
@@ -148,6 +149,10 @@ test('premium admin layer clarifies operator terminology and responsive tables w
   assert.match(adminCore, /node\.supply_source === 'operator'/);
   assert.match(adminCore, /brand\.verification_status|brand\.verified/);
   assert.match(adminCore, /현재 배정 가능한 공개 업무 카드가 없습니다/);
+  assert.match(adminCore, /async function submitAdminAssignment/);
+  assert.match(adminCore, /window\.PUTDUK_PHASE31\?\.invalidateMember/);
+  assert.match(phase3, /function invalidateMemberCanonicalDetail/);
+  assert.match(phase3, /window\.PUTDUK_PHASE31 = \{ invalidateMember/);
   assert.doesNotMatch(runtime, /service_role|admin-phase5|putduk_admin_|withdrawal_requests|member-finance/);
   assert.match(css, /\.uiux-admin-table/);
   assert.match(css, /position:\s*sticky/);
