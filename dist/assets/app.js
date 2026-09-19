@@ -4789,8 +4789,8 @@
       birth_date: normalizeBirth(birth),
       phone_e164: normalizePhone(document.getElementById('signupPhone')?.value),
       referral_code: document.getElementById('signupReferral')?.value.trim().toUpperCase() || null,
-      terms_version: '2026-09-16',
-      privacy_version: '2026-09-16',
+      terms_version: '2026-09-19',
+      privacy_version: '2026-09-19',
       marketing_opt_in: Boolean(document.getElementById('signupMarketing')?.checked)
     };
     const { data, error } = await supabaseClient.auth.signUp({ email, password, options: { data: metadata } });
