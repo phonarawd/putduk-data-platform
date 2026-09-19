@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import {
   isAmountInRange,
   isOwnStoragePath,
@@ -37,5 +38,19 @@ assert.equal(maskUsdt("TABCDEFGHIJKLMNOPQRSTUV"), "TABCDE…STUV");
 assert.equal(REFERRAL_REWARD_KRW, 5000);
 assert.equal(SIGNED_URL_SECONDS, 60);
 assert.equal(PRIVATE_BUCKET, "putduk-private");
+
+// 운영 어드민은 admin-phase5를 호출한다. 이 함수가 JWT 검증/배포/스모크 대상에서
+// 빠지면 프런트와 운영 Edge 배포 계약이 어긋나므로 정적 회귀 검사로 막는다.
+const supabaseConfig = readFileSync(new URL("../../supabase/config.toml", import.meta.url), "utf8");
+const deployWorkflow = readFileSync(new URL("../../.github/workflows/supabase-deploy.yml", import.meta.url), "utf8");
+const edgeEnv = readFileSync(new URL("../supabase/lib/load-env.mjs", import.meta.url), "utf8");
+const adminHtml = readFileSync(new URL("../../dist/admin/index.html", import.meta.url), "utf8");
+
+for (const functionName of ["admin-control", "admin-phase5", "member-finance"]) {
+  assert.match(supabaseConfig, new RegExp(`\\[functions\\.${functionName}\\]\\s+verify_jwt\\s*=\\s*true`), `${functionName} must require gateway JWT verification`);
+  assert.match(deployWorkflow, new RegExp(`supabase functions deploy ${functionName}\\b`), `${functionName} must be deployed by the production workflow`);
+  assert.match(edgeEnv, new RegExp(`["]${functionName}["]`), `${functionName} must be included in Edge smoke verification`);
+}
+assert.match(adminHtml, /functions\/v1\/admin-phase5/, "admin UI must use the verified admin-phase5 compatibility endpoint");
 
 console.log("backend-guards: 통과");
