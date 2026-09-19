@@ -22,6 +22,10 @@ const requiredFiles = [
   'dist/assets/uiux-final-2026.js',
   'dist/assets/uiux-premium-2026.css',
   'dist/assets/uiux-premium-2026.js',
+  'dist/assets/uiux-growth-2026.css',
+  'dist/assets/uiux-growth-2026.js',
+  'dist/assets/uiux-auth-2026.css',
+  'dist/assets/uiux-auth-2026.js',
   'dist/admin/uiux-admin-premium-2026.css',
   'dist/admin/uiux-admin-premium-2026.js',
   'dist/manifest.webmanifest',
@@ -50,6 +54,8 @@ await execFileAsync(process.execPath, ['--check', join(root, 'dist/assets/overla
 await execFileAsync(process.execPath, ['--check', join(root, 'dist/assets/channel-talk.js')]);
 await execFileAsync(process.execPath, ['--check', join(root, 'dist/assets/uiux-final-2026.js')]);
 await execFileAsync(process.execPath, ['--check', join(root, 'dist/assets/uiux-premium-2026.js')]);
+await execFileAsync(process.execPath, ['--check', join(root, 'dist/assets/uiux-growth-2026.js')]);
+await execFileAsync(process.execPath, ['--check', join(root, 'dist/assets/uiux-auth-2026.js')]);
 await execFileAsync(process.execPath, ['--check', join(root, 'dist/admin/uiux-admin-premium-2026.js')]);
 
 if (!memberHtml.includes('lang="ko"') || !adminHtml.includes('lang="ko"')) {
@@ -76,16 +82,28 @@ if (!memberHtml.includes('uiux-premium-2026.css') || !memberHtml.includes('uiux-
   throw new Error('회원 셸에 Premium UI/UX 2026 자산이 포함되어야 합니다.');
 }
 
+if (!memberHtml.includes('uiux-growth-2026.css') || !memberHtml.includes('uiux-growth-2026.js')) {
+  throw new Error('회원 셸에 Growth UI/UX 2026 추천·등급 자산이 포함되어야 합니다.');
+}
+
+if (!memberHtml.includes('uiux-auth-2026.css') || !memberHtml.includes('uiux-auth-2026.js')) {
+  throw new Error('회원 셸에 Auth UI/UX 2026 로그인·회원가입·약관 자산이 포함되어야 합니다.');
+}
+
 if (!adminHtml.includes('uiux-premium-2026.css') || !adminHtml.includes('uiux-admin-premium-2026.css') || !adminHtml.includes('uiux-admin-premium-2026.js')) {
   throw new Error('운영자 셸에 Premium Admin UI/UX 2026 자산이 포함되어야 합니다.');
 }
 
-if (!sw.includes("putduk-shell-v26")
+if (!sw.includes("putduk-shell-v28")
   || !sw.includes('uiux-premium-2026.css?v=20260919-uiux2')
   || !sw.includes('uiux-premium-2026.js?v=20260919-uiux2')
+  || !sw.includes('uiux-growth-2026.css?v=20260919-uiux3')
+  || !sw.includes('uiux-growth-2026.js?v=20260919-uiux3')
+  || !sw.includes('uiux-auth-2026.css?v=20260919-uiux4')
+  || !sw.includes('uiux-auth-2026.js?v=20260919-uiux4')
   || !sw.includes('uiux-admin-premium-2026.css?v=20260919-uiux2')
   || !sw.includes('uiux-admin-premium-2026.js?v=20260919-uiux2')) {
-  throw new Error('서비스워커가 Premium UI/UX 2026 회원·운영자 자산과 v26 캐시를 사용해야 합니다.');
+  throw new Error('서비스워커가 FINAL/Premium/Growth/Auth UI 자산과 v28 캐시를 사용해야 합니다.');
 }
 
 for (const forbidden of ['운영자 데모', '미리보기 화면', 'putduk-demo-state']) {
