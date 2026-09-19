@@ -20,6 +20,8 @@ const requiredFiles = [
   'dist/assets/channel-talk.js',
   'dist/assets/uiux-final-2026.css',
   'dist/assets/uiux-final-2026.js',
+  'dist/assets/uiux-premium-2026.css',
+  'dist/assets/uiux-premium-2026.js',
   'dist/manifest.webmanifest',
   'dist/sw.js',
   'dist/_headers',
@@ -37,6 +39,7 @@ for (const relativePath of requiredFiles) {
 const memberHtml = await readFile(join(root, 'dist/index.html'), 'utf8');
 const adminHtml = await readFile(join(root, 'dist/admin/index.html'), 'utf8');
 const appJs = await readFile(join(root, 'dist/assets/app.js'), 'utf8');
+const sw = await readFile(join(root, 'dist/sw.js'), 'utf8');
 
 await execFileAsync(process.execPath, ['--check', join(root, 'dist/assets/app.js')]);
 await execFileAsync(process.execPath, ['--check', join(root, 'dist/admin/phase3-admin-wiring.js')]);
@@ -44,6 +47,7 @@ await execFileAsync(process.execPath, ['--check', join(root, 'dist/assets/phase4
 await execFileAsync(process.execPath, ['--check', join(root, 'dist/assets/overlay-surface.js')]);
 await execFileAsync(process.execPath, ['--check', join(root, 'dist/assets/channel-talk.js')]);
 await execFileAsync(process.execPath, ['--check', join(root, 'dist/assets/uiux-final-2026.js')]);
+await execFileAsync(process.execPath, ['--check', join(root, 'dist/assets/uiux-premium-2026.js')]);
 
 if (!memberHtml.includes('lang="ko"') || !adminHtml.includes('lang="ko"')) {
   throw new Error('회원·관리자 문서 언어가 한국어로 설정되어야 합니다.');
@@ -63,6 +67,18 @@ if (!memberHtml.includes('uiux-final-2026.css') || !memberHtml.includes('uiux-fi
 
 if (!adminHtml.includes('uiux-final-2026.css') || !adminHtml.includes('uiux-final-2026.js')) {
   throw new Error('운영자 셸에 UI/UX FINAL 2026 자산이 포함되어야 합니다.');
+}
+
+if (!memberHtml.includes('uiux-premium-2026.css') || !memberHtml.includes('uiux-premium-2026.js')) {
+  throw new Error('회원 셸에 Premium UI/UX 2026 자산이 포함되어야 합니다.');
+}
+
+if (!adminHtml.includes('uiux-premium-2026.css')) {
+  throw new Error('운영자 셸에 Premium UI/UX 2026 스타일이 포함되어야 합니다.');
+}
+
+if (!sw.includes("putduk-shell-v25") || !sw.includes('uiux-premium-2026.css?v=20260919-uiux2') || !sw.includes('uiux-premium-2026.js?v=20260919-uiux2')) {
+  throw new Error('서비스워커가 Premium UI/UX 2026 자산과 v25 캐시를 사용해야 합니다.');
 }
 
 for (const forbidden of ['운영자 데모', '미리보기 화면', 'putduk-demo-state']) {
