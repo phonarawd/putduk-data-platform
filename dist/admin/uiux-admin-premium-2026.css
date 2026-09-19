@@ -1,0 +1,171 @@
+html[data-mode="admin"] .main > div {
+  width: min(100%, 1540px);
+}
+
+html[data-mode="admin"] .uiux-admin-page-heading {
+  align-items: flex-start;
+  margin-bottom: 20px;
+}
+
+html[data-mode="admin"] .uiux-admin-card-premium,
+html[data-mode="admin"] .uiux-admin-members-card {
+  border-color: var(--premium-line) !important;
+  border-radius: 18px !important;
+  background: var(--premium-surface) !important;
+  box-shadow: var(--premium-shadow-xs) !important;
+}
+
+html[data-mode="admin"] .admin-stat-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+html[data-mode="admin"] .uiux-admin-stat,
+html[data-mode="admin"] .uiux-admin-finance-stat {
+  min-height: 116px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+html[data-mode="admin"] .uiux-admin-stat p,
+html[data-mode="admin"] .uiux-admin-finance-stat p {
+  font-size: 12px;
+  font-weight: 750;
+}
+
+html[data-mode="admin"] .uiux-admin-stat strong,
+html[data-mode="admin"] .uiux-admin-finance-stat strong {
+  margin-top: 10px;
+  font-size: 26px;
+  font-variant-numeric: tabular-nums;
+}
+
+html[data-mode="admin"] .search-bar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+html[data-mode="admin"] .search-bar input {
+  min-height: 44px;
+  padding: 0 13px;
+  border: 1px solid var(--premium-line-strong);
+  border-radius: 12px;
+  background: var(--premium-surface);
+  color: var(--text);
+  outline: none;
+}
+
+html[data-mode="admin"] .search-bar input:focus {
+  border-color: var(--emerald);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--emerald) 12%, transparent);
+}
+
+html[data-mode="admin"] .uiux-admin-table-wrap {
+  margin-top: 14px;
+  overflow: auto;
+  scrollbar-width: thin;
+}
+
+html[data-mode="admin"] .uiux-admin-table {
+  width: 100%;
+  min-width: 860px;
+}
+
+html[data-mode="admin"] .uiux-admin-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 11px 12px;
+  background: var(--premium-surface-soft);
+  white-space: nowrap;
+}
+
+html[data-mode="admin"] .uiux-admin-table tbody td {
+  padding: 13px 12px;
+  vertical-align: middle;
+}
+
+html[data-mode="admin"] .uiux-admin-table tbody tr:hover td {
+  background: color-mix(in srgb, var(--emerald) 2.5%, var(--premium-surface));
+}
+
+html[data-mode="admin"] .action-row {
+  gap: 7px;
+  flex-wrap: wrap;
+}
+
+html[data-mode="admin"] .uiux-admin-modal .modal-head {
+  background: var(--premium-surface);
+}
+
+html[data-mode="admin"] .uiux-admin-assignment-modal .form-grid {
+  gap: 14px;
+}
+
+html[data-mode="admin"] .uiux-admin-assignment-modal .field.full textarea {
+  min-height: 86px;
+  resize: vertical;
+}
+
+@media (max-width: 1180px) {
+  html[data-mode="admin"] .admin-stat-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  html[data-mode="admin"] .admin-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 840px) {
+  html[data-mode="admin"] .main {
+    padding-inline: 15px;
+  }
+  html[data-mode="admin"] .uiux-admin-page-heading {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+  html[data-mode="admin"] .uiux-admin-page-heading > button,
+  html[data-mode="admin"] .uiux-admin-page-heading > .action-row {
+    width: 100%;
+  }
+  html[data-mode="admin"] .admin-card {
+    padding: 17px;
+  }
+  html[data-mode="admin"] .uiux-admin-table-wrap {
+    margin-inline: -17px;
+    border-left: 0;
+    border-right: 0;
+    border-radius: 0;
+  }
+  html[data-mode="admin"] .uiux-admin-table {
+    min-width: 760px;
+  }
+}
+
+@media (max-width: 520px) {
+  html[data-mode="admin"] .admin-stat-grid {
+    grid-template-columns: 1fr;
+  }
+  html[data-mode="admin"] .uiux-admin-stat,
+  html[data-mode="admin"] .uiux-admin-finance-stat {
+    min-height: 96px;
+  }
+  html[data-mode="admin"] .search-bar {
+    grid-template-columns: 1fr;
+  }
+  html[data-mode="admin"] .search-bar button {
+    width: 100%;
+    min-height: 46px;
+  }
+  html[data-mode="admin"] .modal-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+  html[data-mode="admin"] .modal-actions > * {
+    width: 100%;
+  }
+}
