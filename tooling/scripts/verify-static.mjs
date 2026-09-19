@@ -19,6 +19,7 @@ const requiredFiles = [
   'dist/assets/overlay-surface.js',
   'dist/assets/overlay-surface.css',
   'dist/assets/channel-talk.js',
+  'dist/assets/perf-deferred.js',
   'dist/assets/uiux-final-2026.css',
   'dist/assets/uiux-final-2026.js',
   'dist/assets/uiux-premium-2026.css',
@@ -65,6 +66,7 @@ await execFileAsync(process.execPath, ['--check', join(root, 'dist/assets/uiux-g
 await execFileAsync(process.execPath, ['--check', join(root, 'dist/assets/uiux-auth-2026.js')]);
 await execFileAsync(process.execPath, ['--check', join(root, 'dist/assets/uiux-legal-2026.js')]);
 await execFileAsync(process.execPath, ['--check', join(root, 'dist/assets/uiux-compliance-2026.js')]);
+await execFileAsync(process.execPath, ['--check', join(root, 'dist/assets/perf-deferred.js')]);
 await execFileAsync(process.execPath, ['--check', join(root, 'dist/admin/uiux-admin-premium-2026.js')]);
 
 if (!memberHtml.includes('lang="ko"') || !adminHtml.includes('lang="ko"')) {
@@ -77,6 +79,10 @@ if (!adminHtml.includes('phase3-admin-wiring.js')) {
 
 if (!memberHtml.includes('phase4-finance-wiring.js')) {
   throw new Error('회원 PHASE 4 입금 증빙 연결 스크립트가 회원 셸에 포함되어야 합니다.');
+}
+
+if (!memberHtml.includes('perf-deferred.js')) {
+  throw new Error('회원 셸에 perf-deferred.js 지연 로딩 부트스트랩이 포함되어야 합니다.');
 }
 
 if (!memberHtml.includes('uiux-final-2026.css') || !memberHtml.includes('uiux-final-2026.js')) {
@@ -118,7 +124,9 @@ if (!complianceJs.includes('주민등록번호 뒷자리') || !complianceJs.incl
   throw new Error('KYC 화면에 불필요한 고유식별정보 마스킹 안내가 포함되어야 합니다.');
 }
 
-if (!sw.includes("putduk-shell-v32")
+if (!sw.includes('putduk-member-v33')
+  || !sw.includes('putduk-admin-v33')
+  || !sw.includes('perf-deferred.js?v=20260920-perf1')
   || !sw.includes('uiux-premium-2026.css?v=20260919-uiux2')
   || !sw.includes('uiux-premium-2026.js?v=20260919-uiux2')
   || !sw.includes('uiux-growth-2026.css?v=20260919-uiux3')

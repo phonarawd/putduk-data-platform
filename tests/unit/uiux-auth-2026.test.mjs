@@ -2,18 +2,19 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readRepo } from '../helpers/repo.mjs';
 
-test('member shell wires premium auth/legal assets and service worker v32 caches them', async () => {
-  const [memberHtml, sw] = await Promise.all([
+test('member shell wires premium auth/legal assets and service worker caches them', async () => {
+  const [memberHtml, sw, perfDeferred] = await Promise.all([
     readRepo('dist', 'index.html'),
-    readRepo('dist', 'sw.js')
+    readRepo('dist', 'sw.js'),
+    readRepo('dist', 'assets', 'perf-deferred.js')
   ]);
 
-  assert.match(memberHtml, /uiux-auth-2026\.css\?v=20260919-uiux4/);
-  assert.match(memberHtml, /uiux-auth-2026\.js\?v=20260919-uiux4/);
-  assert.match(memberHtml, /uiux-legal-2026\.css\?v=20260919-uiux8/);
-  assert.match(memberHtml, /uiux-legal-2026\.js\?v=20260919-uiux8/);
-  assert.match(memberHtml, /uiux-compliance-2026\.js\?v=20260919-uiux8/);
-  assert.match(sw, /putduk-shell-v32/);
+  assert.match(memberHtml, /uiux-auth-2026\.css/);
+  assert.match(memberHtml, /uiux-auth-2026\.js/);
+  assert.match(memberHtml, /uiux-legal-2026\.css/);
+  assert.match(memberHtml, /uiux-legal-2026\.js/);
+  assert.match(memberHtml, /uiux-compliance-2026\.js/);
+  assert.match(sw, /putduk-member-v33/);
   assert.match(sw, /uiux-auth-2026\.css\?v=20260919-uiux4/);
   assert.match(sw, /uiux-auth-2026\.js\?v=20260919-uiux4/);
   assert.match(sw, /uiux-legal-2026\.css\?v=20260919-uiux8/);
@@ -22,8 +23,8 @@ test('member shell wires premium auth/legal assets and service worker v32 caches
   assert.match(sw, /uiux-growth-2026\.css\?v=20260919-uiux3/);
   assert.match(sw, /uiux-growth-2026\.js\?v=20260919-uiux3/);
 
-  const authScriptIdx = memberHtml.indexOf('uiux-auth-2026.js');
-  const legalScriptIdx = memberHtml.indexOf('uiux-legal-2026.js');
+  const authScriptIdx = perfDeferred.indexOf('uiux-auth-2026.js');
+  const legalScriptIdx = perfDeferred.indexOf('uiux-legal-2026.js');
   assert.ok(authScriptIdx >= 0 && legalScriptIdx > authScriptIdx, 'auth runtime must load before final legal runtime');
 });
 

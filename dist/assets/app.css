@@ -1701,3 +1701,18 @@ html[data-theme="dark"] .toast {
   *, *::before, *::after { animation-duration:.01ms !important; animation-iteration-count:1 !important; scroll-behavior:auto !important; transition-duration:.01ms !important; }
   .id-flip-inner { transition:none; }
 }
+
+html[data-low-perf="1"] .modal-backdrop,
+html[data-low-perf="1"] .mobile-topbar,
+html[data-low-perf="1"] .sidebar,
+html[data-low-perf="1"] .toast,
+html[data-low-perf="1"] .member-tabbar {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+html[data-low-perf="1"] canvas[data-motion],
+html[data-low-perf="1"] #motionCanvas,
+html[data-low-perf="1"] #startMotionCanvas,
+html[data-low-perf="1"] #resultMotionCanvas {
+  display: none !important;
+}
