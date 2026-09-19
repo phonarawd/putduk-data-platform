@@ -3,7 +3,7 @@
 
   const root = document.documentElement;
   if (root.dataset.mode !== 'admin') return;
-  root.dataset.uiuxAdminPremium = '2026-09';
+  root.dataset.uiuxAdminPremium = '2026-09-perf2';
 
   const REPLACEMENTS = [
     ['전체 현황', '운영 현황'],
@@ -23,6 +23,22 @@
       if (text.includes(from)) text = text.split(from).join(to);
     }
     return text;
+  }
+
+  function setText(node, value) {
+    if (!node) return;
+    const next = String(value ?? '');
+    if (node.textContent !== next) node.textContent = next;
+  }
+
+  function setAttr(node, name, value) {
+    if (!node) return;
+    const next = String(value ?? '');
+    if (node.getAttribute(name) !== next) node.setAttribute(name, next);
+  }
+
+  function addClass(node, className) {
+    if (node && !node.classList.contains(className)) node.classList.add(className);
   }
 
   function rewrite(scope = document) {
@@ -53,7 +69,7 @@
     const title = document.querySelector('.section-heading .page-title');
     if (!title) return;
     const heading = title.closest('.section-heading');
-    heading?.classList.add('uiux-admin-page-heading');
+    addClass(heading, 'uiux-admin-page-heading');
     const copy = heading?.querySelector('.page-copy');
     const name = String(title.textContent || '').trim();
 
@@ -67,7 +83,7 @@
       '공지·알림': '회원에게 표시할 운영 안내와 실제 업무 상태 알림을 관리합니다.',
       '운영 설정': '서비스 운영에 필요한 설정을 확인하고 변경합니다.'
     };
-    if (copy && copyByPage[name]) copy.textContent = copyByPage[name];
+    if (copy && copyByPage[name]) setText(copy, copyByPage[name]);
   }
 
   function enhanceMembers() {
@@ -77,84 +93,113 @@
     const card = title.closest('.section-heading')?.nextElementSibling?.classList.contains('admin-card')
       ? title.closest('.section-heading').nextElementSibling
       : document.querySelector('.admin-card');
-    card?.classList.add('uiux-admin-members-card');
+    addClass(card, 'uiux-admin-members-card');
 
     document.querySelectorAll('table th').forEach((th) => {
       const text = String(th.textContent || '').trim();
-      if (text === '출금 가능') th.textContent = '출금 가능 금액';
-      if (text === '잠금') th.textContent = '업무 잠금';
+      if (text === '출금 가능') setText(th, '출금 가능 금액');
+      if (text === '잠금') setText(th, '업무 잠금');
     });
 
     document.querySelectorAll('[data-action="member-detail"]').forEach((button) => {
-      button.textContent = '회원 상세';
-      button.setAttribute('aria-label', '회원 상세 보기');
+      setText(button, '회원 상세');
+      setAttr(button, 'aria-label', '회원 상세 보기');
     });
   }
 
   function enhanceOverview() {
-    document.querySelectorAll('.admin-stat').forEach((stat) => stat.classList.add('uiux-admin-stat'));
-    document.querySelectorAll('.admin-card').forEach((card) => card.classList.add('uiux-admin-card-premium'));
+    document.querySelectorAll('.admin-stat').forEach((stat) => addClass(stat, 'uiux-admin-stat'));
+    document.querySelectorAll('.admin-card').forEach((card) => addClass(card, 'uiux-admin-card-premium'));
   }
 
   function enhanceAssignmentModal() {
     const modal = document.querySelector('[data-modal="assign-task"] .modal');
     if (!modal) return;
-    modal.classList.add('uiux-admin-assignment-modal');
+    addClass(modal, 'uiux-admin-assignment-modal');
     const title = modal.querySelector('.modal-head h2');
     const copy = modal.querySelector('.modal-head p');
-    if (title) title.textContent = '회원 업무 배정';
-    if (copy) copy.textContent = '회원, 협력사, 업무와 노출 기간을 확인한 뒤 실제 업무를 배정합니다.';
+    setText(title, '회원 업무 배정');
+    setText(copy, '회원, 협력사, 업무와 노출 기간을 확인한 뒤 실제 업무를 배정합니다.');
     const submit = modal.querySelector('button[type="submit"]');
-    if (submit) submit.textContent = '업무 배정';
+    setText(submit, '업무 배정');
   }
 
   function enhanceFinance() {
     const title = Array.from(document.querySelectorAll('.page-title'))
       .find((node) => String(node.textContent || '').trim() === '입출금 처리');
     if (!title) return;
-    document.querySelectorAll('.admin-stat').forEach((stat) => stat.classList.add('uiux-admin-finance-stat'));
+    document.querySelectorAll('.admin-stat').forEach((stat) => addClass(stat, 'uiux-admin-finance-stat'));
     const waiting = Array.from(document.querySelectorAll('.admin-card h3'))
       .find((node) => String(node.textContent || '').trim() === '처리 대기 목록');
     const copy = waiting?.parentElement?.querySelector('p');
-    if (copy) copy.textContent = '회원에게 표시되는 상태와 실제 처리 기록을 함께 확인합니다.';
+    setText(copy, '회원에게 표시되는 상태와 실제 처리 기록을 함께 확인합니다.');
   }
 
   function enhanceTables() {
-    document.querySelectorAll('.table-wrap').forEach((wrap) => wrap.classList.add('uiux-admin-table-wrap'));
-    document.querySelectorAll('.admin-card table').forEach((table) => table.classList.add('uiux-admin-table'));
+    document.querySelectorAll('.table-wrap').forEach((wrap) => addClass(wrap, 'uiux-admin-table-wrap'));
+    document.querySelectorAll('.admin-card table').forEach((table) => addClass(table, 'uiux-admin-table'));
   }
 
   function enhanceModals() {
     document.querySelectorAll('.modal-backdrop .modal').forEach((modal) => {
-      modal.classList.add('uiux-admin-modal');
+      addClass(modal, 'uiux-admin-modal');
     });
+  }
+
+  let observer = null;
+  let queued = false;
+  let enhancing = false;
+  let frame = 0;
+
+  function observe() {
+    if (!observer) return;
+    const target = document.body || document.documentElement;
+    if (!target) return;
+    observer.observe(target, { childList: true, subtree: true });
   }
 
   function enhanceAll() {
-    rewrite(document);
-    enhancePageHeading();
-    enhanceMembers();
-    enhanceOverview();
-    enhanceAssignmentModal();
-    enhanceFinance();
-    enhanceTables();
-    enhanceModals();
+    if (enhancing) return;
+    enhancing = true;
+    // Ignore mutations authored by this enhancement pass. Without this disconnect,
+    // textContent replacements can create childList records and recursively schedule
+    // another whole-document enhancement forever on data-heavy admin pages.
+    observer?.disconnect();
+    try {
+      rewrite(document);
+      enhancePageHeading();
+      enhanceMembers();
+      enhanceOverview();
+      enhanceAssignmentModal();
+      enhanceFinance();
+      enhanceTables();
+      enhanceModals();
+    } finally {
+      enhancing = false;
+      observe();
+    }
   }
 
-  let queued = false;
-  const observer = new MutationObserver((records) => {
-    if (!records.some((record) => record.addedNodes.length)) return;
-    if (queued) return;
+  function scheduleEnhance() {
+    if (queued || enhancing) return;
     queued = true;
-    queueMicrotask(() => {
+    if (frame) cancelAnimationFrame(frame);
+    frame = requestAnimationFrame(() => {
+      frame = 0;
       queued = false;
       enhanceAll();
     });
+  }
+
+  observer = new MutationObserver((records) => {
+    if (enhancing) return;
+    if (!records.some((record) => record.addedNodes.length || record.removedNodes.length)) return;
+    scheduleEnhance();
   });
 
   function start() {
     enhanceAll();
-    observer.observe(document.body || document.documentElement, { childList: true, subtree: true });
+    observe();
   }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start, { once: true });
