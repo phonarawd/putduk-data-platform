@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readRepo } from '../helpers/repo.mjs';
 
-test('member shell wires premium auth assets and service worker v28 caches them', async () => {
+test('member shell wires premium auth/legal assets and service worker v29 caches them', async () => {
   const [memberHtml, sw] = await Promise.all([
     readRepo('dist', 'index.html'),
     readRepo('dist', 'sw.js')
@@ -10,9 +10,15 @@ test('member shell wires premium auth assets and service worker v28 caches them'
 
   assert.match(memberHtml, /uiux-auth-2026\.css\?v=20260919-uiux4/);
   assert.match(memberHtml, /uiux-auth-2026\.js\?v=20260919-uiux4/);
-  assert.match(sw, /putduk-shell-v28/);
+  assert.match(memberHtml, /uiux-legal-2026\.css\?v=20260919-uiux5/);
+  assert.match(memberHtml, /uiux-legal-2026\.js\?v=20260919-uiux5/);
+  assert.match(memberHtml, /uiux-compliance-2026\.js\?v=20260919-uiux5/);
+  assert.match(sw, /putduk-shell-v29/);
   assert.match(sw, /uiux-auth-2026\.css\?v=20260919-uiux4/);
   assert.match(sw, /uiux-auth-2026\.js\?v=20260919-uiux4/);
+  assert.match(sw, /uiux-legal-2026\.css\?v=20260919-uiux5/);
+  assert.match(sw, /uiux-legal-2026\.js\?v=20260919-uiux5/);
+  assert.match(sw, /uiux-compliance-2026\.js\?v=20260919-uiux5/);
   assert.match(sw, /uiux-growth-2026\.css\?v=20260919-uiux3/);
   assert.match(sw, /uiux-growth-2026\.js\?v=20260919-uiux3/);
 });
@@ -35,27 +41,39 @@ test('auth UX exposes required labels, password visibility, password validation 
   assert.match(runtime, /업무 상태 및 서비스 안내 알림 수신/);
 });
 
-test('legal UX keeps the currently published terms text and presents it in a structured sheet', async () => {
-  const runtime = await readRepo('dist', 'assets', 'uiux-auth-2026.js');
-  const css = await readRepo('dist', 'assets', 'uiux-auth-2026.css');
+test('legal UX presents structured member-facing legal documents', async () => {
+  const [legal, authCss] = await Promise.all([
+    readRepo('dist', 'assets', 'uiux-legal-2026.js'),
+    readRepo('dist', 'assets', 'uiux-auth-2026.css')
+  ]);
 
-  assert.match(runtime, /LEGAL_DOCUMENTS/);
-  assert.match(runtime, /퍼뜩 이용약관/);
-  assert.match(runtime, /개인정보 수집·이용 안내/);
-  assert.match(runtime, /서비스 이용/);
-  assert.match(runtime, /보상 기준/);
-  assert.match(runtime, /계정 보호/);
-  assert.match(runtime, /수집 항목/);
-  assert.match(runtime, /이용 목적/);
-  assert.match(runtime, /보관 및 열람/);
-  assert.match(runtime, /현재 서비스에 게시된 원문/);
-  assert.match(css, /\.uiux-legal-sheet/);
-  assert.match(css, /\.uiux-legal-nav/);
-  assert.match(css, /\.uiux-legal-section/);
-  assert.match(css, /@media \(max-width: 430px\)[\s\S]*min-height:\s*100dvh/);
+  assert.match(legal, /퍼뜩 이용약관/);
+  assert.match(legal, /개인정보 수집·이용 및 처리 안내/);
+  assert.match(legal, /광고성 정보 수신 동의/);
+  assert.match(legal, /업무 매칭과 오더/);
+  assert.match(legal, /검수와 수당 확정/);
+  assert.match(legal, /주민등록번호/);
+  assert.match(legal, /오후 9시/);
+  assert.match(legal, /개인정보 보호책임자/);
+  assert.match(legal, /uiux-legal-final/);
+  assert.match(authCss, /\.uiux-legal-sheet/);
+  assert.match(authCss, /@media \(max-width: 430px\)[\s\S]*min-height:\s*100dvh/);
 });
 
-test('auth overlay does not change Supabase, finance, payout or work contracts', async () => {
-  const runtime = await readRepo('dist', 'assets', 'uiux-auth-2026.js');
-  assert.doesNotMatch(runtime, /supabase|member-finance|admin-phase5|submit_deposit|withdrawal_requests|nodeStake\(|nodePay\(/);
+test('KYC compliance guidance tells members to mask unnecessary identity numbers', async () => {
+  const compliance = await readRepo('dist', 'assets', 'uiux-compliance-2026.js');
+  assert.match(compliance, /신분증 제출 전 확인해 주세요/);
+  assert.match(compliance, /주민등록번호 뒷자리/);
+  assert.match(compliance, /필요하지 않은 정보는 가린 뒤 제출/);
+});
+
+test('auth/legal overlays do not change Supabase, finance, payout or work contracts', async () => {
+  const [authRuntime, legalRuntime, complianceRuntime] = await Promise.all([
+    readRepo('dist', 'assets', 'uiux-auth-2026.js'),
+    readRepo('dist', 'assets', 'uiux-legal-2026.js'),
+    readRepo('dist', 'assets', 'uiux-compliance-2026.js')
+  ]);
+  for (const runtime of [authRuntime, legalRuntime, complianceRuntime]) {
+    assert.doesNotMatch(runtime, /member-finance|admin-phase5|submit_deposit|withdrawal_requests|nodeStake\(|nodePay\(/);
+  }
 });
