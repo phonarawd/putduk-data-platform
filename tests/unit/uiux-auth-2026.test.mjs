@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readRepo } from '../helpers/repo.mjs';
 
-test('member shell wires premium auth/legal assets and service worker v29 caches them', async () => {
+test('member shell wires premium auth/legal assets and service worker v32 caches them', async () => {
   const [memberHtml, sw] = await Promise.all([
     readRepo('dist', 'index.html'),
     readRepo('dist', 'sw.js')
@@ -10,15 +10,15 @@ test('member shell wires premium auth/legal assets and service worker v29 caches
 
   assert.match(memberHtml, /uiux-auth-2026\.css\?v=20260919-uiux4/);
   assert.match(memberHtml, /uiux-auth-2026\.js\?v=20260919-uiux4/);
-  assert.match(memberHtml, /uiux-legal-2026\.css\?v=20260919-uiux5/);
-  assert.match(memberHtml, /uiux-legal-2026\.js\?v=20260919-uiux5/);
-  assert.match(memberHtml, /uiux-compliance-2026\.js\?v=20260919-uiux5/);
-  assert.match(sw, /putduk-shell-v29/);
+  assert.match(memberHtml, /uiux-legal-2026\.css\?v=20260919-uiux8/);
+  assert.match(memberHtml, /uiux-legal-2026\.js\?v=20260919-uiux8/);
+  assert.match(memberHtml, /uiux-compliance-2026\.js\?v=20260919-uiux8/);
+  assert.match(sw, /putduk-shell-v32/);
   assert.match(sw, /uiux-auth-2026\.css\?v=20260919-uiux4/);
   assert.match(sw, /uiux-auth-2026\.js\?v=20260919-uiux4/);
-  assert.match(sw, /uiux-legal-2026\.css\?v=20260919-uiux5/);
-  assert.match(sw, /uiux-legal-2026\.js\?v=20260919-uiux5/);
-  assert.match(sw, /uiux-compliance-2026\.js\?v=20260919-uiux5/);
+  assert.match(sw, /uiux-legal-2026\.css\?v=20260919-uiux8/);
+  assert.match(sw, /uiux-legal-2026\.js\?v=20260919-uiux8/);
+  assert.match(sw, /uiux-compliance-2026\.js\?v=20260919-uiux8/);
   assert.match(sw, /uiux-growth-2026\.css\?v=20260919-uiux3/);
   assert.match(sw, /uiux-growth-2026\.js\?v=20260919-uiux3/);
 
@@ -94,6 +94,8 @@ test('legal UX presents structured member-facing legal documents and marketing c
   assert.match(authCss, /@media \(max-width: 430px\)[\s\S]*min-height:\s*100dvh/);
   assert.match(legalCss, /\.uiux-legal-section-final/);
   assert.match(legalCss, /\.uiux-agreement-service-note/);
+  assert.match(legalCss, /\.uiux-business-certificate/);
+  assert.match(legalCss, /\.uiux-biz-cert-table/);
 });
 
 test('KYC compliance guidance tells members to mask unnecessary identity numbers and keeps legal docs accessible', async () => {
@@ -103,8 +105,29 @@ test('KYC compliance guidance tells members to mask unnecessary identity numbers
   assert.match(compliance, /필요하지 않은 정보는 가린 뒤 제출/);
   assert.match(compliance, /uiux-legal-access/);
   assert.match(compliance, /uiux-auth-legal-access/);
+  assert.match(compliance, /data-uiux-legal="business"/);
+  assert.match(compliance, /사업자정보/);
+  assert.match(compliance, /uiux-business-info-card/);
+  assert.match(compliance, /data-uiux-business-certificate/);
+  assert.match(compliance, /사업자등록증 보기/);
   assert.match(compliance, /이용약관/);
   assert.match(compliance, /개인정보 처리 안내/);
+});
+
+test('legal runtime publishes GOGOX HOLDINGS LIMITED business operator info', async () => {
+  const legal = await readRepo('dist', 'assets', 'uiux-legal-2026.js');
+  assert.match(legal, /const BUSINESS_INFO = \{/);
+  assert.match(legal, /GOGOX HOLDINGS LIMITED/);
+  assert.match(legal, /representative: '퍼뜩'/);
+  assert.match(legal, /help@hiptk\.app/);
+  assert.match(legal, /certificateNumber: 'PDK-BIZ-20260919'/);
+  assert.match(legal, /function openBusinessCertificate/);
+  assert.match(legal, /uiux-business-certificate/);
+  assert.match(legal, /사업자등록증/);
+  assert.match(legal, /business:\s*\{/);
+  assert.match(legal, /title: '사업자정보'/);
+  assert.doesNotMatch(legal, /[\u4e00-\u9fff]/);
+  assert.doesNotMatch(legal, /홍콩/);
 });
 
 test('auth/legal overlays do not change finance, payout or work contracts', async () => {

@@ -116,16 +116,16 @@ if (!complianceJs.includes('주민등록번호 뒷자리') || !complianceJs.incl
   throw new Error('KYC 화면에 불필요한 고유식별정보 마스킹 안내가 포함되어야 합니다.');
 }
 
-if (!sw.includes("putduk-shell-v29")
+if (!sw.includes("putduk-shell-v32")
   || !sw.includes('uiux-premium-2026.css?v=20260919-uiux2')
   || !sw.includes('uiux-premium-2026.js?v=20260919-uiux2')
   || !sw.includes('uiux-growth-2026.css?v=20260919-uiux3')
   || !sw.includes('uiux-growth-2026.js?v=20260919-uiux3')
   || !sw.includes('uiux-auth-2026.css?v=20260919-uiux4')
   || !sw.includes('uiux-auth-2026.js?v=20260919-uiux4')
-  || !sw.includes('uiux-legal-2026.css?v=20260919-uiux5')
-  || !sw.includes('uiux-legal-2026.js?v=20260919-uiux5')
-  || !sw.includes('uiux-compliance-2026.js?v=20260919-uiux5')
+  || !sw.includes('uiux-legal-2026.css?v=20260919-uiux8')
+  || !sw.includes('uiux-legal-2026.js?v=20260919-uiux8')
+  || !sw.includes('uiux-compliance-2026.js?v=20260919-uiux8')
   || !sw.includes('uiux-admin-premium-2026.css?v=20260919-uiux2')
   || !sw.includes('uiux-admin-premium-2026.js?v=20260919-uiux2')) {
   throw new Error('서비스워커가 FINAL/Premium/Growth/Auth/Legal UI 자산과 v29 캐시를 사용해야 합니다.');

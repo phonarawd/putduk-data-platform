@@ -1,4 +1,4 @@
-const CACHE_NAME = 'putduk-shell-v29';
+const CACHE_NAME = 'putduk-shell-v32';
 const SHELL = [
   '/',
   '/admin/',
@@ -20,9 +20,9 @@ const SHELL = [
   '/assets/uiux-growth-2026.js?v=20260919-uiux3',
   '/assets/uiux-auth-2026.css?v=20260919-uiux4',
   '/assets/uiux-auth-2026.js?v=20260919-uiux4',
-  '/assets/uiux-legal-2026.css?v=20260919-uiux5',
-  '/assets/uiux-legal-2026.js?v=20260919-uiux5',
-  '/assets/uiux-compliance-2026.js?v=20260919-uiux5',
+  '/assets/uiux-legal-2026.css?v=20260919-uiux8',
+  '/assets/uiux-legal-2026.js?v=20260919-uiux8',
+  '/assets/uiux-compliance-2026.js?v=20260919-uiux8',
   '/admin/uiux-admin-premium-2026.css?v=20260919-uiux2',
   '/admin/uiux-admin-premium-2026.js?v=20260919-uiux2',
   '/assets/vendor/supabase.min.js?v=20260918-ui3',

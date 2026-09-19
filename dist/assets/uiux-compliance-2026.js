@@ -25,8 +25,18 @@
     const wrap = document.createElement('div');
     wrap.className = className;
     wrap.setAttribute('aria-label', '법적 고지');
-    wrap.innerHTML = '<button type="button" class="text-link" data-uiux-legal="terms">이용약관</button><button type="button" class="text-link" data-uiux-legal="privacy">개인정보 처리 안내</button>';
+    wrap.innerHTML = '<button type="button" class="text-link" data-uiux-legal="business">사업자정보</button><button type="button" class="text-link" data-uiux-legal="terms">이용약관</button><button type="button" class="text-link" data-uiux-legal="privacy">개인정보 처리 안내</button>';
     return wrap;
+  }
+
+  function enhanceSupportBusinessInfo() {
+    const helpChannel = document.querySelector('.help-channel');
+    if (!helpChannel || helpChannel.querySelector('.uiux-business-info-card')) return;
+
+    const card = document.createElement('div');
+    card.className = 'panel panel-pad uiux-business-info-card';
+    card.innerHTML = '<h3>사업자정보</h3><p class="help-line"><span>퍼뜩을 운영하는 법인·대표자·문의처와 사업자등록증을 확인할 수 있어요.</span></p><div class="uiux-business-info-actions"><button type="button" class="secondary-button" data-uiux-business-certificate>📄 사업자등록증 보기</button><button type="button" class="text-link" data-uiux-legal="business">상세 정보</button></div>';
+    helpChannel.insertAdjacentElement('afterend', card);
   }
 
   function enhanceLegalAccess() {
@@ -51,12 +61,14 @@
       queued = false;
       enhanceKycPrivacy();
       enhanceLegalAccess();
+      enhanceSupportBusinessInfo();
     });
   });
 
   function start() {
     enhanceKycPrivacy();
     enhanceLegalAccess();
+    enhanceSupportBusinessInfo();
     observer.observe(document.body || document.documentElement, { childList: true, subtree: true });
   }
 

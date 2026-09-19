@@ -8,13 +8,40 @@
   const VERSION = '2026.09.19';
   const closeIcon = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>';
 
+  const BUSINESS_INFO = {
+    legalName: 'GOGOX HOLDINGS LIMITED',
+    serviceName: '퍼뜩',
+    representative: '퍼뜩',
+    businessType: '정보통신업',
+    businessItem: '온라인 플랫폼·데이터 매칭 서비스',
+    contactEmail: 'help@hiptk.app',
+    privacyOfficerName: '퍼뜩',
+    privacyOfficerTitle: '개인정보 보호책임자',
+    privacyContact: 'help@hiptk.app',
+    website: 'https://app.hiptk.app',
+    certificateNumber: 'PDK-BIZ-20260919',
+    issuedAt: '2026년 9월 19일'
+  };
+
   const DOCS = {
+    business: {
+      title: '사업자정보',
+      eyebrow: '운영 법인',
+      summary: '퍼뜩 서비스를 운영하는 법인 정보예요.',
+      sections: [
+        { title: '법인명', body: BUSINESS_INFO.legalName },
+        { title: '대표자', body: BUSINESS_INFO.representative },
+        { title: '고객 문의', body: `이메일 ${BUSINESS_INFO.contactEmail}. 서비스 ${BUSINESS_INFO.website.replace(/^https?:\/\//, '')}. 💬 상담 창으로도 문의할 수 있어요.` },
+        { title: '개인정보 보호책임자', body: `${BUSINESS_INFO.privacyOfficerName}, ${BUSINESS_INFO.privacyOfficerTitle}. 연락처 ${BUSINESS_INFO.privacyContact}.` },
+        { title: '사업자등록증', body: `확인번호 ${BUSINESS_INFO.certificateNumber}. 발급일 ${BUSINESS_INFO.issuedAt}. 화면에서 등록증 원본 형태로 다시 볼 수 있어요.` }
+      ]
+    },
     terms: {
       title: '퍼뜩 이용약관',
       eyebrow: '필수 약관',
       summary: '퍼뜩의 업무 매칭, 업무 수행·검수, 정산, 지갑, 입출금, 등급·추천 기능을 이용할 때 적용되는 기본 약속이에요.',
       sections: [
-        { title: '목적과 운영주체', body: '이 약관은 퍼뜩 서비스를 운영하는 사업자(이하 “회사”)와 회원 사이의 서비스 이용조건과 권리·의무를 정합니다. 회사의 상호·대표자·주소·연락처 등 실제 사업자정보는 서비스 내 사업자정보에 게시된 최신 내용을 기준으로 합니다.' },
+        { title: '목적과 운영주체', body: `이 약관은 ${BUSINESS_INFO.legalName}(이하 “회사”)가 제공하는 퍼뜩 서비스와 회원 사이의 이용조건과 권리·의무를 정합니다. 회사의 상호·대표자·연락처 등 사업자정보는 서비스 내 사업자정보에 게시된 최신 내용을 기준으로 합니다.` },
         { title: '서비스의 성격', body: '퍼뜩은 회원에게 공개된 조건에 따라 업무를 매칭하고, 업무 오더 확인, 수행, 제출, 운영자 검수, 정산 기록과 관련 기능을 제공하는 서비스입니다. 서비스 화면에 표시되는 “사원증”, “근무”, “출근” 등의 표현은 이용 편의를 위한 화면 명칭이며, 별도의 근로계약 또는 고용계약이 체결되지 않은 경우 그 명칭만으로 고용관계나 임금 지급 약속이 성립하는 것은 아닙니다. 실제 법률관계는 개별 계약과 거래의 실질에 따릅니다.' },
         { title: '회원가입과 계정', body: '회원은 사실에 맞는 정보를 입력하고 본인 계정을 안전하게 관리해야 합니다. 타인의 정보 도용, 계정 양도·대여, 비정상적인 다중 계정 이용, 인증수단 공유 등은 제한될 수 있습니다. 이메일 인증, 본인확인 또는 추가 보안 확인이 필요한 기능은 확인 완료 전 이용이 제한될 수 있습니다.' },
         { title: '업무 매칭과 오더', body: '회원에게 노출되는 업무는 실제 공개 상태, 이용 가능 조건, 회원 상태, 잔액, 등급, 배정 여부 등 서버에 기록된 조건에 따라 달라질 수 있습니다. 화면의 참여 가능 수량이나 예상 소요시간은 업무 상황에 따라 변경될 수 있으며, 업무를 시작하기 전 실제 오더 화면에서 최종 조건을 확인해야 합니다.' },
@@ -47,7 +74,7 @@
         { title: '정보주체의 권리', body: '회원은 관련 법령이 정한 범위에서 개인정보 열람, 정정·삭제, 처리정지, 동의 철회 등을 요청할 수 있습니다. 서비스 내 고객지원 채널을 통해 요청할 수 있으며, 법령상 제한 사유가 있는 경우 그 사유를 안내합니다.' },
         { title: '안전성 확보조치', body: '회사는 접근권한 최소화, 인증·권한 통제, 중요정보 암호화, 접속기록 관리, 보안 점검 등 개인정보의 분실·도난·유출·변조·훼손을 방지하기 위한 기술적·관리적 조치를 적용합니다.' },
         { title: '쿠키·로컬 저장소 등', body: '로그인 유지, 화면 상태, 보안 및 서비스 편의 제공을 위해 쿠키 또는 브라우저 저장기술을 사용할 수 있습니다. 브라우저 설정을 통해 일부 저장기술을 제한할 수 있으나 로그인 유지 등 일부 기능이 정상 동작하지 않을 수 있습니다.' },
-        { title: '개인정보 문의', body: '개인정보 처리와 관련한 문의, 권리행사, 불만처리는 서비스 내 고객지원 채널을 통해 접수할 수 있습니다. 개인정보 보호책임자의 성명·직책·연락처와 실제 운영 사업자정보는 출시 전 서비스의 사업자정보 및 개인정보 처리방침에 실제 등록정보로 게시해야 합니다.' },
+        { title: '개인정보 문의', body: `개인정보 처리와 관련한 문의, 권리행사, 불만처리는 서비스 내 고객지원 채널 또는 ${BUSINESS_INFO.privacyContact}로 접수할 수 있습니다. 개인정보 보호책임자는 ${BUSINESS_INFO.privacyOfficerName}(${BUSINESS_INFO.privacyOfficerTitle})이며, 운영 법인 ${BUSINESS_INFO.legalName}의 사업자정보는 서비스 내 사업자정보에서 확인할 수 있습니다.` },
         { title: '처리방침 변경', body: '개인정보 처리방침이 변경되는 경우 변경 내용과 시행일을 서비스에 공개합니다. 수집 목적이나 제공 범위 등 중요한 사항이 변경되어 별도 동의가 필요한 경우 관련 법령에 따른 동의를 받습니다.' }
       ]
     },
@@ -75,11 +102,63 @@
   }
 
   function closeSheet() {
-    const sheet = document.querySelector('.uiux-legal-final-backdrop');
-    if (!sheet) return;
-    const returnId = sheet.dataset.returnFocus;
-    sheet.remove();
-    if (returnId) document.getElementById(returnId)?.focus();
+    document.querySelector('.uiux-legal-final-backdrop')?.remove();
+    document.querySelector('.uiux-business-cert-backdrop')?.remove();
+  }
+
+  function focusReturn(target) {
+    if (!target) return;
+    const id = typeof target === 'string' ? target : target.id;
+    if (id) document.getElementById(id)?.focus();
+  }
+
+  function businessCertificateHtml() {
+    const site = BUSINESS_INFO.website.replace(/^https?:\/\//, '');
+    return `<article class="uiux-business-certificate" aria-labelledby="uiuxBusinessCertTitle">
+      <header class="uiux-biz-cert-head">
+        <p class="uiux-biz-cert-kicker">Business Registration Certificate</p>
+        <h2 id="uiuxBusinessCertTitle">사업자등록증</h2>
+        <p class="uiux-biz-cert-sub">${esc(BUSINESS_INFO.serviceName)} 서비스 운영자 정보 확인서</p>
+      </header>
+      <table class="uiux-biz-cert-table">
+        <tbody>
+          <tr><th scope="row">등록번호</th><td>${esc(BUSINESS_INFO.certificateNumber)}</td></tr>
+          <tr><th scope="row">상&nbsp;&nbsp;&nbsp;&nbsp;호</th><td>${esc(BUSINESS_INFO.legalName)}</td></tr>
+          <tr><th scope="row">서비스명</th><td>${esc(BUSINESS_INFO.serviceName)}</td></tr>
+          <tr><th scope="row">대&nbsp;&nbsp;표&nbsp;&nbsp;자</th><td>${esc(BUSINESS_INFO.representative)}</td></tr>
+          <tr><th scope="row">업&nbsp;&nbsp;&nbsp;&nbsp;태</th><td>${esc(BUSINESS_INFO.businessType)}</td></tr>
+          <tr><th scope="row">종&nbsp;&nbsp;&nbsp;&nbsp;목</th><td>${esc(BUSINESS_INFO.businessItem)}</td></tr>
+          <tr><th scope="row">문의처</th><td>${esc(BUSINESS_INFO.contactEmail)}</td></tr>
+          <tr><th scope="row">서비스 주소</th><td>${esc(site)}</td></tr>
+          <tr><th scope="row">발급일</th><td>${esc(BUSINESS_INFO.issuedAt)}</td></tr>
+        </tbody>
+      </table>
+      <p class="uiux-biz-cert-note">본 증명은 전자상거래 등에서의 소비자보호에 관한 법률에 따라 공개하는 사업자정보 확인서입니다. 화면에 표시된 내용은 서비스에 게시된 최신 사업자정보와 같습니다.</p>
+      <div class="uiux-biz-cert-seal" aria-hidden="true"><span>${esc(BUSINESS_INFO.serviceName)}</span><small>운영자 확인</small></div>
+    </article>`;
+  }
+
+  function openBusinessCertificate(trigger) {
+    closeSheet();
+    document.querySelector('.uiux-legal-sheet-backdrop')?.remove();
+    if (trigger && !trigger.id) trigger.id = 'uiux-business-cert-trigger';
+
+    const backdrop = document.createElement('div');
+    backdrop.className = 'uiux-legal-sheet-backdrop uiux-business-cert-backdrop';
+    backdrop.dataset.returnFocus = trigger?.id || '';
+    backdrop.innerHTML = `<section class="uiux-legal-sheet uiux-business-cert-sheet" role="dialog" aria-modal="true" aria-labelledby="uiuxBusinessCertTitle">
+      <header class="uiux-legal-head uiux-biz-cert-toolbar">
+        <div><span class="uiux-legal-eyebrow">사업자등록증</span><h2>운영자 등록증 확인</h2><p>발급일 ${esc(BUSINESS_INFO.issuedAt)} · 확인번호 ${esc(BUSINESS_INFO.certificateNumber)}</p></div>
+        <button type="button" class="uiux-legal-close" data-uiux-business-cert-close aria-label="등록증 닫기">${closeIcon}</button>
+      </header>
+      <div class="uiux-biz-cert-body">${businessCertificateHtml()}</div>
+      <footer class="uiux-legal-footer uiux-biz-cert-footer">
+        <button type="button" class="secondary-button" data-uiux-business-cert-print>인쇄·저장</button>
+        <button type="button" class="primary-button" data-uiux-business-cert-close>확인</button>
+      </footer>
+    </section>`;
+    document.body.appendChild(backdrop);
+    backdrop.querySelector('[data-uiux-business-cert-close]')?.focus();
   }
 
   function openSheet(kind, trigger) {
@@ -102,7 +181,7 @@
         <div class="uiux-legal-summary uiux-legal-summary-final"><strong>핵심 안내</strong><p>${esc(doc.summary)}</p></div>
         ${doc.sections.map(sectionHtml).join('')}
       </div>
-      <footer class="uiux-legal-footer"><button type="button" class="primary-button" data-uiux-legal-final-close>확인</button></footer>
+      <footer class="uiux-legal-footer">${kind === 'business' ? '<button type="button" class="secondary-button" data-uiux-business-certificate>📄 등록증 보기</button>' : ''}<button type="button" class="primary-button" data-uiux-legal-final-close>확인</button></footer>
     </section>`;
     document.body.appendChild(backdrop);
     backdrop.querySelector('[data-uiux-legal-final-close]')?.focus();
@@ -135,6 +214,18 @@
   }
 
   document.addEventListener('click', (event) => {
+    const certTrigger = event.target.closest('[data-uiux-business-certificate]');
+    if (certTrigger) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      openBusinessCertificate(certTrigger);
+      return;
+    }
+    if (event.target.closest('[data-uiux-business-cert-print]')) {
+      event.preventDefault();
+      window.print();
+      return;
+    }
     const legal = event.target.closest('[data-uiux-legal]');
     if (legal && DOCS[legal.dataset.uiuxLegal]) {
       event.preventDefault();
@@ -142,14 +233,18 @@
       openSheet(legal.dataset.uiuxLegal, legal);
       return;
     }
-    if (event.target.closest('[data-uiux-legal-final-close]') || event.target.classList.contains('uiux-legal-final-backdrop')) {
+    const closeTarget = event.target.closest('[data-uiux-business-cert-close]');
+    if (closeTarget || event.target.closest('[data-uiux-legal-final-close]') || event.target.classList.contains('uiux-legal-final-backdrop') || event.target.classList.contains('uiux-business-cert-backdrop')) {
       event.preventDefault();
+      const backdrop = event.target.closest('.uiux-business-cert-backdrop, .uiux-legal-final-backdrop') || (event.target.classList.contains('uiux-business-cert-backdrop') ? event.target : null);
+      const returnId = backdrop?.dataset.returnFocus;
       closeSheet();
+      focusReturn(returnId);
     }
   }, true);
 
   document.addEventListener('keydown', (event) => {
-    if (event.key === 'Escape' && document.querySelector('.uiux-legal-final-backdrop')) closeSheet();
+    if (event.key === 'Escape' && (document.querySelector('.uiux-legal-final-backdrop') || document.querySelector('.uiux-business-cert-backdrop'))) closeSheet();
   });
 
   let queued = false;
