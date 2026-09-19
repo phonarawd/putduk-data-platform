@@ -27,12 +27,20 @@
     ['운영자가 배정한 라인이나 공개된 근무가 여기에 보여요.', '운영자가 배정했거나 지금 참여할 수 있는 업무가 여기에 표시돼요.'],
     ['오늘 공개된 라인이 아직 없어요.', '오늘 참여할 수 있는 업무가 아직 없어요.'],
     ['배정된 라인을 업무 매칭에서 확인해요.', '배정된 업무를 업무 매칭에서 확인해요.'],
-    ['로그인하면 오늘 라인에 출근해요', '로그인하면 오늘 업무를 확인할 수 있어요'],
+    ['로그인하면 오늘 라인에 출근해요', '지금 참여할 수 있는 업무'],
     ['오늘 라인 근무와 등급·혜택을 쉽게 안내해요.', '오늘 업무와 등급·혜택을 쉽게 안내해요.'],
     ['협력사 라인 근무', '협력사 업무 운영'],
     ['퍼뜩 라인 근무', '퍼뜩 업무'],
     ['나만의 노드 카드를 발급해요.', '가입 후 나만의 회원 카드를 발급해요.']
   ];
+
+  const DASHBOARD_METRIC_LABELS = new Map([
+    ['오늘 라인', '매칭 가능 업무'],
+    ['오늘 업무', '매칭 가능 업무'],
+    ['검수 완료', '완료한 업무'],
+    ['오늘 작업 가능', '오늘 남은 횟수'],
+    ['근무 상태', '현재 상태']
+  ]);
 
   function replaceExactText(text) {
     const trimmed = text.trim();
@@ -58,6 +66,52 @@
       const after = normalizeText(before);
       if (after !== before) element.setAttribute(name, after);
     }
+  }
+
+  function setButtonText(button, label) {
+    if (!(button instanceof Element)) return;
+    Array.from(button.childNodes)
+      .filter((node) => node.nodeType === Node.TEXT_NODE)
+      .forEach((node) => node.remove());
+    button.appendChild(document.createTextNode(` ${label}`));
+  }
+
+  function enhanceDashboardHero() {
+    const hero = document.querySelector('.grid-hero .hero-card');
+    if (!hero) return;
+
+    const eyebrow = hero.querySelector('.eyebrow');
+    if (eyebrow) {
+      const textNodes = Array.from(eyebrow.childNodes).filter((node) => node.nodeType === Node.TEXT_NODE);
+      textNodes.forEach((node) => node.remove());
+      eyebrow.appendChild(document.createTextNode(' 지금 참여할 수 있는 업무'));
+    }
+
+    const title = hero.querySelector('.hero-title');
+    if (title) {
+      title.innerHTML = '내 조건에 맞는 업무를<br><span style="color:var(--emerald-strong)">확인해 보세요.</span>';
+    }
+
+    const copy = hero.querySelector('.hero-copy');
+    if (copy) {
+      copy.textContent = '현재 참여 가능한 업무와 필요한 조건을 한눈에 확인하고, 준비가 되면 바로 업무 매칭을 시작할 수 있어요.';
+    }
+
+    const matchingButton = hero.querySelector('.hero-actions [data-nav="nodes"]');
+    if (matchingButton) {
+      setButtonText(matchingButton, '업무 매칭 시작');
+      matchingButton.setAttribute('aria-label', '업무 매칭 시작');
+    }
+
+    hero.querySelectorAll('.hero-metrics .metric-label').forEach((label) => {
+      const current = String(label.textContent || '').trim();
+      const next = DASHBOARD_METRIC_LABELS.get(current);
+      if (next) label.textContent = next;
+    });
+
+    hero.querySelectorAll('.hero-metrics .metric-value').forEach((value) => {
+      if (String(value.textContent || '').trim() === '로그인 후 출근') value.textContent = '로그인 후 확인';
+    });
   }
 
   function ensureMatchingTab() {
@@ -131,6 +185,7 @@
     const roots = Array.from(pending);
     pending.clear();
     roots.forEach(normalizeTree);
+    enhanceDashboardHero();
     ensureMatchingTab();
   }
 
@@ -148,6 +203,7 @@
 
   function start() {
     normalizeTree(document);
+    enhanceDashboardHero();
     ensureMatchingTab();
     observer.observe(document.body || document.documentElement, {
       childList: true,
