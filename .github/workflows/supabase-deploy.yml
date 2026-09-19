@@ -1,9 +1,16 @@
-name: Supabase 수동 배포
+name: Supabase 운영 배포
 
-# 운영 기본 경로는 MCP/CLI Path A입니다.
-# GitHub Actions는 계정 billing/spending limit 해소 후 보조 수동 경로로만 사용합니다.
+# 운영 Supabase(gaugwamwceqdnqdqrxqg) 관련 코드가 main에 바뀔 때만 자동 배포한다.
+# 수동 재실행 경로도 유지한다. 프로젝트 ref가 다르면 preflight에서 즉시 중단한다.
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - "supabase/**"
+      - "tooling/supabase/**"
+      - ".github/workflows/supabase-deploy.yml"
 
 permissions:
   contents: read
@@ -21,13 +28,13 @@ env:
 
 jobs:
   deploy:
-    name: 마이그레이션·Edge Function 수동 배포
+    name: 마이그레이션·Edge Function 운영 배포
     runs-on: ubuntu-latest
     steps:
       - name: 저장소 가져오기
         uses: actions/checkout@v4
 
-      - name: Secret 사전 검사
+      - name: Secret·운영 프로젝트 사전 검사
         run: bash tooling/supabase/preflight-secrets.sh
 
       - name: Node.js 준비
