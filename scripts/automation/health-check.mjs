@@ -11,6 +11,7 @@ const required = [
   "dist/manifest.webmanifest",
   "dist/sw.js",
   "supabase/functions/admin-control/index.ts",
+  "supabase/functions/admin-phase5/index.ts",
   "supabase/functions/member-finance/index.ts",
   "supabase/migrations/20260916233653_putduk_ops_finance_schema.sql",
   "supabase/migrations/20260916233710_putduk_ops_finance_rpc_member.sql",
@@ -21,7 +22,10 @@ const required = [
   "supabase/migrations/20260917120956_trial_ops_withdraw.sql",
   "supabase/migrations/20260917144749_putduk_member_submit_work.sql",
   "supabase/migrations/20260918033000_putduk_inspect_bundle_submit.sql",
-  "supabase/migrations/20260918061600_putduk_catalog_checkpoint_submit.sql"
+  "supabase/migrations/20260918061600_putduk_catalog_checkpoint_submit.sql",
+  "supabase/migrations/20260918160000_putduk_task_start_events_after_insert.sql",
+  "supabase/migrations/20260919120000_putduk_phase5_kyc_payout_security.sql",
+  "supabase/migrations/20260920041000_putduk_work_lifecycle_rework_and_timing_guard.sql"
 ];
 
 const missing = required.filter((file) => !existsSync(path.join(root, file)));
@@ -39,6 +43,7 @@ if (!supabaseUrl) {
 const origin = supabaseUrl.replace(/\/$/, "");
 const targets = [
   `${origin}/functions/v1/admin-control`,
+  `${origin}/functions/v1/admin-phase5`,
   `${origin}/functions/v1/member-finance`
 ];
 
