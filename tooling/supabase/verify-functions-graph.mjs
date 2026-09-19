@@ -6,6 +6,7 @@ const root = process.cwd();
 const functionsRoot = join(root, "supabase/functions");
 const entrypoints = [
   "admin-control/index.ts",
+  "admin-phase5/index.ts",
   "member-finance/index.ts"
 ];
 const IMPORT_RE = /from\s+['"](\.\.?\/[^'"]+)['"]/g;
