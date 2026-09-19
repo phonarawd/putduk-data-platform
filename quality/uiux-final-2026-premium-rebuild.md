@@ -149,8 +149,8 @@
 
 ## 릴리스 조건
 
-- `pnpm quality:local` exact branch HEAD PASS
-- UIUX 런타임 `node --check` PASS
+- `pnpm quality:local` exact latest HEAD 검증 대기 (현재 HEAD에 GitHub Actions 실행 없음; Ready/Merge 전 실행 필요)
+- UIUX 런타임 `node --check`는 verify 스크립트에 포함되어 있으나 최신 HEAD 실행 증적 확인 필요
 - 320 / 360 / 390 / 430px 모바일 확인
 - tablet / desktop 확인
 - 로그인 / 회원가입 / 비밀번호 보기·숨기기 / 약관 동의 visual QA
