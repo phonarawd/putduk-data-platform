@@ -22,7 +22,7 @@
     ['업무잔액', '업무 잔액'],
     ['출금가능', '출금 가능'],
     ['USDT로만 출금 가능해요', 'USDT로만 출금할 수 있어요'],
-    ['오늘 배정된 라인이에요. 잠금 금액과 수당을 보고 출근하세요.', '오늘 참여할 수 있는 업무예요. 잠금 금액과 예상 수당을 확인한 뒤 시작해 주세요.'],
+    ['오늘 배정된 라인이에요. 잠금 금액과 수당을 보고 출근하세요.', '오늘 참여할 수 있는 업무예요. 시작 조건과 예상 수당을 확인한 뒤 진행해 주세요.'],
     ['운영자가 배정한 라인이나 공개된 근무가 여기에 나타나요.', '운영자가 배정했거나 지금 참여할 수 있는 업무가 여기에 표시돼요.'],
     ['운영자가 배정한 라인이나 공개된 근무가 여기에 보여요.', '운영자가 배정했거나 지금 참여할 수 있는 업무가 여기에 표시돼요.'],
     ['오늘 공개된 라인이 아직 없어요.', '오늘 참여할 수 있는 업무가 아직 없어요.'],
@@ -119,6 +119,61 @@
     });
   }
 
+  function enhanceMatchingPage() {
+    const heading = Array.from(document.querySelectorAll('.section-heading .page-title'))
+      .find((node) => String(node.textContent || '').trim() === '업무 매칭');
+    if (!heading) return;
+
+    const sectionHeading = heading.closest('.section-heading');
+    sectionHeading?.classList.add('uiux-matching-heading');
+    const pageCopy = sectionHeading?.querySelector('.page-copy');
+    if (pageCopy) {
+      pageCopy.textContent = '업무별 시작 금액, 예상 수당, 예상 소요를 비교해 보세요. 업무를 선택하면 실제 진행 조건을 한 번 더 확인할 수 있어요.';
+    }
+
+    const filterRow = document.querySelector('.filter-row');
+    if (filterRow) {
+      filterRow.classList.add('uiux-matching-filters');
+      filterRow.setAttribute('aria-label', '업무 유형');
+    }
+
+    const grid = document.getElementById('nodeGrid');
+    if (!grid) return;
+    grid.classList.add('uiux-matching-grid');
+
+    grid.querySelectorAll('.node-card').forEach((card) => {
+      card.classList.add('uiux-work-card');
+
+      card.querySelectorAll('.node-money .money-line span').forEach((span) => {
+        const current = String(span.textContent || '').trim();
+        if (current.startsWith('지원금 잠금 ')) span.textContent = current.replace(/^지원금 잠금\s+/, '업무 시작 금액 ');
+        else if (current.startsWith('근무 보증 ')) span.textContent = current.replace(/^근무 보증\s+/, '업무 시작 금액 ');
+        else if (current.startsWith('수당 ')) span.textContent = current.replace(/^수당\s+/, '예상 수당 ');
+      });
+
+      card.querySelectorAll('.node-meta span').forEach((span) => {
+        const current = String(span.textContent || '').trim();
+        if (current.startsWith('시간 ')) {
+          span.textContent = current.replace(/^시간\s+/, '예상 소요 ');
+          return;
+        }
+        if (current.startsWith('남은 자리 ')) {
+          const count = current.replace(/^남은 자리\s+/, '').replace(/건$/, '').trim();
+          span.textContent = `참여 가능 ${count}건`;
+        }
+      });
+
+      const button = card.querySelector('[data-start-node]');
+      if (button) {
+        const current = String(button.textContent || '').trim();
+        if (current === '출근하기') setButtonText(button, '업무 시작');
+        else if (current === '입금 안내') setButtonText(button, '시작 조건 확인');
+        const title = String(card.querySelector('.node-title')?.textContent || '업무').trim();
+        if (!button.disabled) button.setAttribute('aria-label', `${title} ${String(button.textContent || '').trim()}`);
+      }
+    });
+  }
+
   function ensureMatchingTab() {
     const tabbar = document.querySelector('.member-tabbar');
     if (!tabbar) return;
@@ -191,6 +246,7 @@
     pending.clear();
     roots.forEach(normalizeTree);
     enhanceDashboardHero();
+    enhanceMatchingPage();
     ensureMatchingTab();
   }
 
@@ -209,6 +265,7 @@
   function start() {
     normalizeTree(document);
     enhanceDashboardHero();
+    enhanceMatchingPage();
     ensureMatchingTab();
     observer.observe(document.body || document.documentElement, {
       childList: true,
