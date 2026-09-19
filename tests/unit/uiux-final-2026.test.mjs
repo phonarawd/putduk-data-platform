@@ -151,6 +151,9 @@ test('premium admin layer clarifies operator terminology and responsive tables w
   assert.match(adminCore, /현재 배정 가능한 공개 업무 카드가 없습니다/);
   assert.match(adminCore, /async function submitAdminAssignment/);
   assert.match(adminCore, /function invalidateMemberCache/);
+  assert.match(adminCore, /function normalizeAdminDateTime/);
+  assert.match(adminCore, /visible_from: visibleFrom/);
+  assert.match(adminCore, /노출 종료 시간은 시작 이후여야 해요/);
   assert.match(adminCore, /window\.PUTDUK_ADMIN\?\.invalidateMember\?\.\(memberId\)/);
   assert.match(adminCore, /window\.PUTDUK_PHASE31\?\.invalidateMember/);
   assert.match(phase3, /function invalidateMemberCanonicalDetail/);
