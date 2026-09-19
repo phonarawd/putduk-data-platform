@@ -11,7 +11,8 @@ export async function onRequest(context) {
     || url.pathname === '/sw.js'
     || url.pathname === '/manifest.webmanifest'
     || url.pathname === '/favicon.svg';
-  const recoveryMemberHost = host === 'app.hiptk.app' || host === 'putduk-git-preview.pages.dev';
+  // 공식 회원 도메인만 안정본을 유지한다. pages.dev 프로젝트 주소는 최신 네이티브 빌드 검증용으로 직접 연다.
+  const recoveryMemberHost = host === 'app.hiptk.app';
 
   if (isOps && !adminPath && !staticPath) {
     url.pathname = '/admin/';
@@ -31,8 +32,8 @@ export async function onRequest(context) {
     }
   }
 
-  // Emergency recovery: keep the official/member hostname while serving the last known-good Pages build.
-  // Proxy all GET/HEAD member documents and static assets to the stable project. API traffic remains direct to Supabase.
+  // Emergency recovery: keep the official member hostname while serving the last known-good Pages build.
+  // Preview pages.dev bypasses this branch so the patched native build can be verified before cutover.
   if (recoveryMemberHost && !adminPath && (method === 'GET' || method === 'HEAD')) {
     const upstreamUrl = new URL(url.pathname + url.search, RECOVERY_ORIGIN);
     const upstreamRequest = new Request(upstreamUrl.toString(), {
@@ -53,6 +54,6 @@ export async function onRequest(context) {
 
   const next = new Response(response.body, response);
   next.headers.delete('Clear-Site-Data');
-  next.headers.set('X-Putduk-Boot', 'v39');
+  next.headers.set('X-Putduk-Boot', 'native-v40');
   return next;
 }
