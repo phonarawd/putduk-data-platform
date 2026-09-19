@@ -25,7 +25,7 @@ test('UIUX FINAL 2026 assets are wired into member/admin shells and service work
   assert.match(sw, /putduk-sw-off-v37/);
   assert.doesNotMatch(sw, /ADMIN_SHELL/);
   assert.doesNotMatch(sw, /cache\.addAll/);
-  assert.match(memberHtml, /uiux-final-2026\.css\?v=20260919-uiux1/);
+  assert.match(memberHtml, /uiux-final-2026\.css\?v=20260920-mobile1/);
   assert.match(memberHtml, /uiux-final-2026\.js\?v=20260919-uiux1/);
   assert.match(memberHtml, /uiux-premium-2026\.css\?v=20260919-uiux2/);
   assert.match(memberHtml, /uiux-premium-2026\.js\?v=20260919-uiux2/);

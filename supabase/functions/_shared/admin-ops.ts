@@ -255,14 +255,14 @@ const allKnownAdminRoles = [
 ];
 
 export async function loadAdminRoles(admin: AdminClient, userId: string): Promise<string[]> {
-  const { data, error } = await admin.schema("private").from("admin_roles").select("role").eq("user_id", userId);
+  const { data, error } = await admin.rpc("putduk_admin_list_roles", { p_user_id: userId });
   if (error) {
     console.error("admin roles load failed", error);
     throw new HttpError(503, "운영자 권한을 확인하지 못했습니다.");
   }
   const known = new Set<string>(allKnownAdminRoles);
-  return ((data || []) as JsonRecord[])
-    .map((row) => String(row.role || ""))
+  return (Array.isArray(data) ? data : [])
+    .map((role) => String(role || ""))
     .filter((role) => known.has(role));
 }
 

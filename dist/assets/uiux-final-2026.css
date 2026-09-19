@@ -529,6 +529,30 @@ html[data-mode="admin"] th { line-height: 1.5; }
   .wallet-slot { min-height: 88px; padding: 14px; }
   .modal-backdrop { padding-left: 8px; padding-right: 8px; }
   .modal { border-radius: 18px; }
+  html[data-mode="member"] {
+    touch-action: manipulation;
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+  html[data-mode="member"] body {
+    overscroll-behavior-y: none;
+    min-height: 100dvh;
+  }
+  html[data-mode="member"] .app-shell {
+    min-height: 100dvh;
+  }
+  html[data-mode="member"] input,
+  html[data-mode="member"] select,
+  html[data-mode="member"] textarea,
+  html[data-mode="member"] .uiux-auth-modal .field input,
+  html[data-mode="member"] .uiux-auth-modal .field select,
+  html[data-mode="member"] .uiux-auth-modal .field textarea {
+    font-size: 16px;
+  }
+  html[data-mode="member"] .member-tabbar {
+    transform: translateZ(0);
+    -webkit-transform: translateZ(0);
+  }
 }
 
 @media (max-width: 359px) {

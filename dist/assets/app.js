@@ -12,7 +12,7 @@
       auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
     })
     : null;
-  const authState = { session: null, profile: null, loading: Boolean(supabaseClient), error: null, adminLoading: isAdmin && Boolean(supabaseClient), adminAuthorized: !isAdmin, adminRoles: [] };
+  const authState = { session: null, profile: null, loading: Boolean(supabaseClient), error: null, adminLoading: isAdmin && Boolean(supabaseClient), adminAuthorized: !isAdmin, adminRoles: [], adminAuthError: null };
 
   // 회원 화면은 서버에서 공개된 협력사·업무만 채운다. 정적 샘플을 두지 않는다.
   let companies = [];
@@ -1749,6 +1749,7 @@
   async function hydrateAdminAuthorization() {
     authState.adminAuthorized = !isAdmin;
     authState.adminRoles = [];
+    authState.adminAuthError = null;
     if (!isAdmin) return;
 
     authState.adminLoading = true;
@@ -1769,17 +1770,32 @@
       });
       const result = await response.json().catch(() => ({}));
       if (!response.ok || result.ok !== true) {
-        authState.error = new Error(result.error || '운영자 권한을 확인하지 못했어요.');
+        authState.adminAuthError = String(result.error || '운영자 권한을 확인하지 못했어요.');
         return;
       }
       authState.adminAuthorized = true;
       authState.adminRoles = Array.isArray(result.roles) ? result.roles : [];
+      authState.adminAuthError = null;
       void refreshMemberNotices({ toastNew: false }).then(() => paintNoticeBadge()).catch(() => {});
     } catch (error) {
-      authState.error = error;
+      authState.adminAuthError = error?.message || '운영자 권한을 확인하지 못했어요.';
     } finally {
       authState.adminLoading = false;
+      if (isAdmin && !state.modal) render();
     }
+  }
+
+  function settleMobileViewportAfterAuth() {
+    if (isAdmin || typeof window === 'undefined') return;
+    if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+    window.scrollTo(0, 0);
+  }
+
+  function queueAdminPageData(options = {}) {
+    if (!isAdmin || !authState.adminAuthorized) return;
+    void refreshAdminPageData(options).then(() => {
+      if (!state.modal) render();
+    });
   }
 
   let sessionRecorded = false;
@@ -2289,13 +2305,22 @@
       if (authState.session && !isAdmin) queueOnboarding();
       if (isAdmin) {
         await hydrateAdminAuthorization();
-        if (authState.adminAuthorized) {
-          await refreshAdminPageData({ silent: true });
-        }
+        if (authState.adminAuthorized) queueAdminPageData({ silent: true });
       }
       supabaseClient.auth.onAuthStateChange((event, session) => {
-        if (event === 'TOKEN_REFRESHED' || event === 'INITIAL_SESSION') {
+        if (event === 'TOKEN_REFRESHED') {
           authState.session = session || authState.session;
+          return;
+        }
+        if (event === 'INITIAL_SESSION') {
+          authState.session = session || authState.session;
+          if (isAdmin && authState.session && !authState.adminAuthorized && !authState.adminLoading) {
+            window.setTimeout(async () => {
+              await hydrateAdminAuthorization();
+              if (authState.adminAuthorized) queueAdminPageData({ silent: true });
+              if (!state.modal) render();
+            }, 0);
+          }
           return;
         }
         window.setTimeout(async () => {
@@ -2303,9 +2328,10 @@
           if (authState.session) recordOwnSession();
           if (isAdmin) {
             await hydrateAdminAuthorization();
-            if (authState.adminAuthorized) {
-              await refreshAdminPageData({ silent: true });
-            }
+            if (authState.adminAuthorized) queueAdminPageData({ silent: true });
+          } else {
+            queueOnboarding();
+            settleMobileViewportAfterAuth();
           }
           if (!state.modal) render();
         }, 0);
@@ -3298,13 +3324,20 @@
 
   function renderAdminGate() {
     const waiting = authState.loading || authState.adminLoading;
+    const sessionEmail = String(authState.session?.user?.email || '').trim();
     const title = waiting ? '운영자 권한을 확인하고 있어요' : authState.session ? '운영자 권한이 없어요' : '운영자 로그인이 필요해요';
     const copy = waiting
       ? '잠시만 기다려 주세요. 안전한 운영자 확인을 진행하고 있어요.'
       : authState.session
-        ? '이 계정에는 운영자 권한이 연결돼 있지 않습니다.'
+        ? '회원 앱과 같은 이메일이라도, 운영자 권한은 따로 연결된 계정만 들어갈 수 있어요.'
         : '운영자 계정으로 로그인하면 회원·업무·입출금 메뉴가 열립니다.';
-    return `<section class="empty-state" style="max-width:640px;margin:80px auto;text-align:center"><div class="empty-icon">${icon(waiting ? 'loader-circle' : 'shield-alert', 28)}</div><h1 class="page-title">${title}</h1><p class="page-copy" style="margin:12px auto 22px">${copy}</p>${!authState.session && !waiting ? '<button class="primary-button" data-action="open-login">운영자 로그인</button>' : ''}${authState.session && !waiting ? '<button class="secondary-button" data-action="logout" style="margin-left:8px">로그아웃</button>' : ''}</section>`;
+    const emailLine = authState.session && sessionEmail && !waiting
+      ? `<p class="page-copy" style="margin:0 auto 10px;font-weight:600">🔐 지금 로그인: ${esc(sessionEmail)}</p>`
+      : '';
+    const reasonLine = authState.session && authState.adminAuthError && !waiting
+      ? `<p class="page-copy" style="margin:0 auto 14px;color:var(--muted,#888)">ℹ️ ${esc(authState.adminAuthError)}</p>`
+      : '';
+    return `<section class="empty-state" style="max-width:640px;margin:80px auto;text-align:center"><div class="empty-icon">${icon(waiting ? 'loader-circle' : 'shield-alert', 28)}</div><h1 class="page-title">${title}</h1><p class="page-copy" style="margin:12px auto 22px">${copy}</p>${emailLine}${reasonLine}${!authState.session && !waiting ? '<button class="primary-button" data-action="open-login">운영자 로그인</button>' : ''}${authState.session && !waiting ? '<button class="secondary-button" data-action="logout" style="margin-left:8px">로그아웃</button>' : ''}</section>`;
   }
 
   function renderAdminPage() {
@@ -4994,9 +5027,17 @@
     const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
     if (error) { showToast('로그인 정보를 확인해 주세요. 이메일 인증이 필요할 수도 있어요.', 'info'); return; }
     await hydrateSession(data.session);
-    if (!isAdmin) queueOnboarding();
     state.modal = null;
+    if (isAdmin) {
+      await hydrateAdminAuthorization();
+      render();
+      if (authState.adminAuthorized) queueAdminPageData({ silent: true });
+      showToast(authState.adminAuthorized ? '👋 운영 화면을 열었어요.' : '운영자 권한을 확인해 주세요.', authState.adminAuthorized ? 'success' : 'info');
+      return;
+    }
+    queueOnboarding();
     render();
+    settleMobileViewportAfterAuth();
     showToast('👋 다시 만나서 반가워요. 작업실을 준비했어요.', 'success');
   }
 
