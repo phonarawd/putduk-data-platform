@@ -70,11 +70,29 @@ jobs:
           printf 'PUTDUK_PAYOUT_SECRET=%s\n' "$PUTDUK_PAYOUT_SECRET" > "$TMPDIR/payout.env"
           supabase secrets set --project-ref "$SUPABASE_PROJECT_REF" --env-file "$TMPDIR/payout.env"
 
+      - name: Web Push Secret 동기화
+        env:
+          VAPID_PUBLIC_KEY: ${{ secrets.VAPID_PUBLIC_KEY }}
+          VAPID_PRIVATE_KEY: ${{ secrets.VAPID_PRIVATE_KEY }}
+          VAPID_SUBJECT: ${{ secrets.VAPID_SUBJECT }}
+          PUTDUK_PUSH_DISPATCH_SECRET: ${{ secrets.PUTDUK_PUSH_DISPATCH_SECRET }}
+        run: |
+          TMPDIR=$(mktemp -d)
+          trap 'rm -rf "$TMPDIR"' EXIT
+          umask 077
+          printf 'VAPID_PUBLIC_KEY=%s\nVAPID_PRIVATE_KEY=%s\nVAPID_SUBJECT=%s\nPUTDUK_PUSH_DISPATCH_SECRET=%s\n' \
+            "$VAPID_PUBLIC_KEY" "$VAPID_PRIVATE_KEY" "${VAPID_SUBJECT:-mailto:putduk.operator@gmail.com}" "$PUTDUK_PUSH_DISPATCH_SECRET" \
+            > "$TMPDIR/push.env"
+          supabase secrets set --project-ref "$SUPABASE_PROJECT_REF" --env-file "$TMPDIR/push.env"
+          node tooling/supabase/sync-push-dispatch-config.mjs
+
       - name: Edge Function 배포
         run: |
           supabase functions deploy admin-control --project-ref "$SUPABASE_PROJECT_REF"
           supabase functions deploy admin-phase5 --project-ref "$SUPABASE_PROJECT_REF"
           supabase functions deploy member-finance --project-ref "$SUPABASE_PROJECT_REF"
+          supabase functions deploy member-push --project-ref "$SUPABASE_PROJECT_REF"
+          supabase functions deploy push-dispatch --project-ref "$SUPABASE_PROJECT_REF"
 
       - name: Edge 인증 스모크
         env:

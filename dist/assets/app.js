@@ -1705,6 +1705,7 @@
         state.dailyTaskQuota = quotaResult.quota || null;
       }).catch(() => {});
       void refreshMemberNotices({ toastNew: !light }).catch(() => {});
+      syncMemberPush(session, { prompt: false });
       if (!light) {
         void Promise.all([
           supabaseClient
@@ -1789,6 +1790,16 @@
     if (isAdmin || typeof window === 'undefined') return;
     if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
     window.scrollTo(0, 0);
+  }
+
+  function syncMemberPush(session, options = {}) {
+    const push = window.PUTDUK_PUSH;
+    if (isAdmin || !push || typeof push.subscribeWithSession !== 'function' || !session?.access_token) return;
+    const prompt = options.prompt === true;
+    const task = prompt && typeof push.maybePromptAfterLogin === 'function'
+      ? push.maybePromptAfterLogin(session)
+      : push.subscribeWithSession(session, { prompt: false });
+    void Promise.resolve(task).catch(() => {});
   }
 
   function queueAdminPageData(options = {}) {
@@ -4806,6 +4817,7 @@
       state.onboardingPwaDone = true;
       if (state.onboardingStep === 'pwa') queueOnboarding();
       showToast('📲 사원증이 홈 화면에 생겼어요. 다음부터 바로 출근할 수 있어요.', 'success');
+      if (authState.session) syncMemberPush(authState.session, { prompt: true });
       render();
     });
   }
@@ -4832,6 +4844,9 @@
     await lockDepositReveal({ silent: true });
     noticesHydrated = false;
     stopMemberLive();
+    if (!isAdmin && authState.session && window.PUTDUK_PUSH?.unsubscribeWithSession) {
+      try { await window.PUTDUK_PUSH.unsubscribeWithSession(authState.session); } catch (_) {}
+    }
     if (supabaseClient) {
       const { error } = await supabaseClient.auth.signOut();
       if (error) { showToast('로그아웃을 완료하지 못했어요. 잠시 후 다시 시도해 주세요.', 'info'); return; }
@@ -5038,6 +5053,7 @@
     queueOnboarding();
     render();
     settleMobileViewportAfterAuth();
+    syncMemberPush(data.session, { prompt: true });
     showToast('👋 다시 만나서 반가워요. 작업실을 준비했어요.', 'success');
   }
 
@@ -6108,6 +6124,7 @@
     };
   }
 
+  window.__putdukShowToast = showToast;
   window.__putdukOpenNotices = openMemberNotices;
   window.__putdukOpenNoticeItem = openNoticeItem;
   window.__putdukMarkAllNoticesRead = markAllNoticesRead;

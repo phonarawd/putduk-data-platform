@@ -288,8 +288,8 @@ test('회원·운영 셸은 자체 스크립트와 캐시 우선 서비스워커
   assert.doesNotMatch(adminHtml, /channel-talk\.js/);
   assert.doesNotMatch(adminHtml, /channelPluginKey/);
   assert.match(adminHtml, /vendor\/supabase\.min\.js/);
-  assert.match(sw, /putduk-sw-off-v37/);
-  assert.match(sw, /unregister/);
+  assert.match(sw, /putduk-sw-push-v1/);
+  assert.match(sw, /showNotification/);
   assert.doesNotMatch(sw, /staleWhileRevalidate/);
   assert.doesNotMatch(sw, /cache\.addAll/);
   assert.match(memberHtml, /channel-talk\.js/);

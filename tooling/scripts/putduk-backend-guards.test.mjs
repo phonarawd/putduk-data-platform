@@ -46,7 +46,12 @@ const deployWorkflow = readFileSync(new URL("../../.github/workflows/supabase-de
 const edgeEnv = readFileSync(new URL("../supabase/lib/load-env.mjs", import.meta.url), "utf8");
 const adminHtml = readFileSync(new URL("../../dist/admin/index.html", import.meta.url), "utf8");
 
-for (const functionName of ["admin-control", "admin-phase5", "member-finance"]) {
+for (const functionName of ["admin-control", "admin-phase5", "member-finance", "member-push", "push-dispatch"]) {
+  if (functionName === "push-dispatch") {
+    assert.match(supabaseConfig, /\[functions\.push-dispatch\]\s+verify_jwt\s*=\s*false/, "push-dispatch must skip gateway JWT verification");
+    assert.match(deployWorkflow, new RegExp(`supabase functions deploy ${functionName}\\b`), `${functionName} must be deployed by the production workflow`);
+    continue;
+  }
   assert.match(supabaseConfig, new RegExp(`\\[functions\\.${functionName}\\]\\s+verify_jwt\\s*=\\s*true`), `${functionName} must require gateway JWT verification`);
   assert.match(deployWorkflow, new RegExp(`supabase functions deploy ${functionName}\\b`), `${functionName} must be deployed by the production workflow`);
   assert.match(edgeEnv, new RegExp(`["]${functionName}["]`), `${functionName} must be included in Edge smoke verification`);

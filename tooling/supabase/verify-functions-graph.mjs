@@ -7,7 +7,9 @@ const functionsRoot = join(root, "supabase/functions");
 const entrypoints = [
   "admin-control/index.ts",
   "admin-phase5/index.ts",
-  "member-finance/index.ts"
+  "member-finance/index.ts",
+  "member-push/index.ts",
+  "push-dispatch/index.ts"
 ];
 const IMPORT_RE = /from\s+['"](\.\.?\/[^'"]+)['"]/g;
 

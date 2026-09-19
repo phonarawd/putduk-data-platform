@@ -27,7 +27,8 @@ for (const name of EDGE_FUNCTIONS) {
   const status = String(row?.status || "").toUpperCase();
   const version = row?.version ?? "?";
   const jwt = row?.verify_jwt;
-  const ok = Boolean(row) && status === "ACTIVE" && jwt !== false;
+  const jwtOk = name === "push-dispatch" ? jwt === false : jwt !== false;
+  const ok = Boolean(row) && status === "ACTIVE" && jwtOk;
   if (!ok) failed = true;
   console.log(`${name}: ${ok ? "ACTIVE" : "FAIL"} version=${version} verify_jwt=${jwt === false ? "false" : "true"}`);
 }
@@ -36,10 +37,11 @@ const unauthorizedOk = new Set([401, 403]);
 for (const name of EDGE_FUNCTIONS) {
   const headers = { "Content-Type": "application/json" };
   if (isPresent(anon)) headers.apikey = anon;
+  const body = name === "member-push" ? JSON.stringify({ action: "subscribe" }) : "{}";
   const response = await fetch(`${supabaseUrl}/functions/v1/${name}`, {
     method: "POST",
     headers,
-    body: "{}"
+    body
   });
   const ok = unauthorizedOk.has(response.status);
   if (!ok) failed = true;

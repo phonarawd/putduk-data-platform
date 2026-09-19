@@ -9,3 +9,9 @@ verify_jwt = true
 
 [functions.member-finance]
 verify_jwt = true
+
+[functions.member-push]
+verify_jwt = true
+
+[functions.push-dispatch]
+verify_jwt = false

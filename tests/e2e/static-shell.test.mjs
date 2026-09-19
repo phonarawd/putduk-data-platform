@@ -54,8 +54,8 @@ test('정적 셸 경로가 회원·운영자·PWA 파일을 제공한다', async
 
   const sw = await fetchText(`${started.url}/sw.js`);
   assert.equal(sw.status, 200);
-  assert.match(sw.text, /putduk-sw-off-v37/);
-  assert.match(sw.text, /unregister/);
+  assert.match(sw.text, /putduk-sw-push-v1/);
+  assert.match(sw.text, /showNotification/);
 
   const favicon = await fetchText(`${started.url}/favicon.svg`);
   assert.equal(favicon.status, 200);

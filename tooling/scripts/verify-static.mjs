@@ -120,12 +120,14 @@ if (!complianceJs.includes('주민등록번호 뒷자리') || !complianceJs.incl
   throw new Error('KYC 화면에 불필요한 고유식별정보 마스킹 안내가 포함되어야 합니다.');
 }
 
-if (!sw.includes('putduk-sw-off-v37')
+if (!sw.includes('putduk-sw-push-v1')
   || sw.includes('cache.addAll')
   || sw.includes('staleWhileRevalidate')
-  || !sw.includes('unregister')
+  || sw.includes('unregister')
+  || !sw.includes("addEventListener('push'")
+  || !sw.includes('showNotification')
   || !sw.includes('fetch(event.request)')) {
-  throw new Error('서비스워커는 캐시 없이 네트워크만 통과한 뒤 등록을 풀어야 합니다.');
+  throw new Error('서비스워커는 Web Push를 받고 캐시 없이 네트워크만 통과해야 합니다.');
 }
 
 for (const forbidden of ['운영자 데모', '미리보기 화면', 'putduk-demo-state']) {
