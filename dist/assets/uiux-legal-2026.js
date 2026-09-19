@@ -19,8 +19,8 @@
     privacyOfficerTitle: '개인정보 보호책임자',
     privacyContact: 'help@hiptk.app',
     website: 'https://app.hiptk.app',
-    certificateNumber: 'PDK-BIZ-20260919',
-    issuedAt: '2026년 9월 19일'
+    confirmationNumber: 'PDK-BIZ-20260919',
+    confirmedAt: '2026년 9월 19일'
   };
 
   const DOCS = {
@@ -33,7 +33,7 @@
         { title: '대표자', body: BUSINESS_INFO.representative },
         { title: '고객 문의', body: `이메일 ${BUSINESS_INFO.contactEmail}. 서비스 ${BUSINESS_INFO.website.replace(/^https?:\/\//, '')}. 💬 상담 창으로도 문의할 수 있어요.` },
         { title: '개인정보 보호책임자', body: `${BUSINESS_INFO.privacyOfficerName}, ${BUSINESS_INFO.privacyOfficerTitle}. 연락처 ${BUSINESS_INFO.privacyContact}.` },
-        { title: '사업자등록증', body: `확인번호 ${BUSINESS_INFO.certificateNumber}. 발급일 ${BUSINESS_INFO.issuedAt}. 화면에서 등록증 원본 형태로 다시 볼 수 있어요.` }
+        { title: '사업자정보 확인서', body: `확인번호 ${BUSINESS_INFO.confirmationNumber}. 확인일 ${BUSINESS_INFO.confirmedAt}. 화면에서 사업자정보 확인서를 다시 볼 수 있어요.` }
       ]
     },
     terms: {
@@ -49,7 +49,7 @@
         { title: '업무 수행과 제출', body: '회원은 배정된 업무 지시와 입력 조건을 확인하고 실제 확인한 내용만 제출해야 합니다. 허위 입력, 자동화 도구를 이용한 부정 제출, 타인의 결과 복사, 조작된 증빙 제출 등은 검수 반려, 업무 제한 또는 계정 제한 사유가 될 수 있습니다.' },
         { title: '검수와 수당 확정', body: '업무 카드에 표시되는 금액은 검수 전에는 예상 수당일 수 있습니다. 제출 완료는 검수 완료 또는 정산 완료를 의미하지 않습니다. 운영자 검수 결과가 승인되고 실제 정산 기록이 생성된 경우에만 확정 수당으로 표시됩니다. 퍼뜩은 특정 수익, 반복 수익 또는 일정한 수당 발생을 보장하지 않습니다.' },
         { title: '지갑·입금·출금', body: '지갑은 서비스 내 업무 관련 금액과 정산 상태를 확인하기 위한 기능입니다. 입금 요청은 실제 증빙 제출과 운영자 확인을 거쳐 반영되며, 요청만으로 잔액이 증가하지 않습니다. 출금은 본인확인, 보안 PIN, 출금 가능 금액, 보류 상태 등 실제 조건에 따라 처리됩니다. 신청 접수와 지급 완료는 구분해서 표시되며 처리 전에는 완료로 표시하지 않습니다.' },
-        { title: '본인확인과 보안', body: '출금 또는 보안이 필요한 기능에는 신분증, 얼굴 확인 등 추가 본인확인이 요구될 수 있습니다. 회원은 법적 근거 없이 수집할 필요가 없는 주민등록번호 등 고유식별정보를 제출하지 않아야 하며, 별도 안내가 없는 경우 신분증의 불필요한 번호는 가린 뒤 제출해 주세요. 비밀번호와 PIN은 타인과 공유하지 않아야 합니다.' },
+        { title: '본인확인과 보안', body: '출금 또는 보안이 필요한 기능에는 신분증, 얼굴 확인 등 추가 본인확인이 요구될 수 있습니다. 회원은 법적 근거 없이 수집할 필요가 없는 주민확인번호 등 고유식별정보를 제출하지 않아야 하며, 별도 안내가 없는 경우 신분증의 불필요한 번호는 가린 뒤 제출해 주세요. 비밀번호와 PIN은 타인과 공유하지 않아야 합니다.' },
         { title: '등급·혜택·추천', body: '등급, 이용 가능한 업무 수, 추천 보상 등의 조건은 서비스에 표시된 실제 기준과 서버 상태에 따라 적용됩니다. 추천 코드를 공유한 사실만으로 보상이 확정되지 않으며, 서비스가 정한 실제 조건을 충족하고 서버에 확정 상태가 기록된 경우에만 보상으로 반영됩니다.' },
         { title: '외부 서비스와 표시 정보', body: '업무 화면에 외부 브랜드, 판매처, 구매처 또는 제3자 서비스 정보가 표시될 수 있습니다. 해당 표시는 실제 업무 데이터 또는 운영상 필요한 정보 제공을 위한 것이며, 별도의 명시가 없는 한 해당 제3자가 퍼뜩의 모든 서비스나 수익을 보증·승인한다는 의미는 아닙니다.' },
         { title: '금지행위와 이용제한', body: '법령 위반, 타인의 권리 침해, 시스템 공격, 계정 도용, 허위·조작 자료 제출, 비정상 거래, 검수 회피, 서비스 운영 방해, 부정한 추천 보상 취득 시도 등은 금지됩니다. 회사는 필요한 범위에서 이용을 일시 제한하고 사실관계를 확인할 수 있으며, 회원에게 제한 사유와 해제 절차를 안내합니다.' },
@@ -66,7 +66,7 @@
         { title: '회원가입 시 처리 항목', body: '이름, 생년월일 입력값, 이메일, 휴대폰 번호, 비밀번호 인증정보, 추천인 코드(입력한 경우)를 처리할 수 있습니다. 비밀번호 원문을 서비스 화면에 저장하거나 표시하지 않습니다.' },
         { title: '서비스 이용 중 생성되는 정보', body: '회원번호, 로그인 일시, 접속 기록, 접속 IP, 기기·브라우저 정보, 보안 이벤트, 알림·문의 기록, 업무 매칭·배정·수행·제출·검수·정산 이력 등 서비스 이용 과정에서 생성되는 정보를 처리할 수 있습니다.' },
         { title: '지갑·입출금 관련 정보', body: '입금·출금 요청 금액, 통화, 처리 상태, 입금 증빙, 출금 수단, 마스킹된 계좌 또는 지갑 표시정보, 정산·원장 기록을 처리할 수 있습니다. 민감한 출금 목적지 원문은 회원 화면에 불필요하게 노출하지 않고 권한이 있는 처리 절차에서만 사용합니다.' },
-        { title: '본인확인 정보', body: '본인확인이 필요한 경우 신분증 앞면·뒷면 이미지와 얼굴 확인 이미지 등 별도 안내한 자료를 처리할 수 있습니다. 법령상 처리 근거가 없는 주민등록번호는 수집하지 않는 것을 원칙으로 하며, 별도 법적 근거와 고지가 없는 경우 주민등록번호 뒷자리 등 불필요한 고유식별정보는 가린 뒤 제출해 주세요.' },
+        { title: '본인확인 정보', body: '본인확인이 필요한 경우 신분증 앞면·뒷면 이미지와 얼굴 확인 이미지 등 별도 안내한 자료를 처리할 수 있습니다. 법령상 처리 근거가 없는 주민확인번호는 수집하지 않는 것을 원칙으로 하며, 별도 법적 근거와 고지가 없는 경우 주민확인번호 뒷자리 등 불필요한 고유식별정보는 가린 뒤 제출해 주세요.' },
         { title: '처리 목적', body: '회원 식별과 계정 생성, 인증·보안, 업무 매칭과 수행기록 관리, 운영자 검수, 수당 정산, 입출금 처리, 본인확인, 부정이용 방지, 고객 문의 대응, 법적 의무 이행을 위해 필요한 범위에서 개인정보를 처리합니다.' },
         { title: '보유기간', body: '회원 기본정보는 원칙적으로 회원 탈퇴 또는 처리 목적 달성 시까지 보관하며, 관계 법령에 별도 보존의무가 있거나 분쟁·부정이용 대응을 위해 필요한 경우 해당 법적 근거와 필요한 범위에서 분리 보관할 수 있습니다. 전자상거래법 적용 대상 거래기록은 표시·광고 6개월, 계약 또는 청약철회 5년, 대금결제 및 재화 등의 공급 5년, 소비자 불만 또는 분쟁처리 3년의 법정 보존기간이 적용될 수 있습니다.' },
         { title: '파기', body: '보유기간이 끝나거나 처리 목적이 달성된 개인정보는 관계 법령에 따라 보존해야 하는 경우를 제외하고 지체 없이 파기합니다. 전자적 파일은 복구하기 어려운 방법으로 삭제하고, 출력물 등은 분쇄 또는 이에 준하는 방법으로 폐기합니다.' },
@@ -117,12 +117,12 @@
     return `<article class="uiux-business-certificate" aria-labelledby="uiuxBusinessCertTitle">
       <header class="uiux-biz-cert-head">
         <p class="uiux-biz-cert-kicker">Business Registration Certificate</p>
-        <h2 id="uiuxBusinessCertTitle">사업자등록증</h2>
+        <h2 id="uiuxBusinessCertTitle">사업자정보 확인서</h2>
         <p class="uiux-biz-cert-sub">${esc(BUSINESS_INFO.serviceName)} 서비스 운영자 정보 확인서</p>
       </header>
       <table class="uiux-biz-cert-table">
         <tbody>
-          <tr><th scope="row">등록번호</th><td>${esc(BUSINESS_INFO.certificateNumber)}</td></tr>
+          <tr><th scope="row">확인번호</th><td>${esc(BUSINESS_INFO.confirmationNumber)}</td></tr>
           <tr><th scope="row">상&nbsp;&nbsp;&nbsp;&nbsp;호</th><td>${esc(BUSINESS_INFO.legalName)}</td></tr>
           <tr><th scope="row">서비스명</th><td>${esc(BUSINESS_INFO.serviceName)}</td></tr>
           <tr><th scope="row">대&nbsp;&nbsp;표&nbsp;&nbsp;자</th><td>${esc(BUSINESS_INFO.representative)}</td></tr>
@@ -130,10 +130,10 @@
           <tr><th scope="row">종&nbsp;&nbsp;&nbsp;&nbsp;목</th><td>${esc(BUSINESS_INFO.businessItem)}</td></tr>
           <tr><th scope="row">문의처</th><td>${esc(BUSINESS_INFO.contactEmail)}</td></tr>
           <tr><th scope="row">서비스 주소</th><td>${esc(site)}</td></tr>
-          <tr><th scope="row">발급일</th><td>${esc(BUSINESS_INFO.issuedAt)}</td></tr>
+          <tr><th scope="row">확인일</th><td>${esc(BUSINESS_INFO.confirmedAt)}</td></tr>
         </tbody>
       </table>
-      <p class="uiux-biz-cert-note">본 증명은 전자상거래 등에서의 소비자보호에 관한 법률에 따라 공개하는 사업자정보 확인서입니다. 화면에 표시된 내용은 서비스에 게시된 최신 사업자정보와 같습니다.</p>
+      <p class="uiux-biz-cert-note">본 화면은 서비스에 게시하는 사업자정보 확인서입니다. 화면에 표시된 내용은 서비스에 게시된 최신 사업자정보와 같습니다.</p>
       <div class="uiux-biz-cert-seal" aria-hidden="true"><span>${esc(BUSINESS_INFO.serviceName)}</span><small>운영자 확인</small></div>
     </article>`;
   }
@@ -148,8 +148,8 @@
     backdrop.dataset.returnFocus = trigger?.id || '';
     backdrop.innerHTML = `<section class="uiux-legal-sheet uiux-business-cert-sheet" role="dialog" aria-modal="true" aria-labelledby="uiuxBusinessCertTitle">
       <header class="uiux-legal-head uiux-biz-cert-toolbar">
-        <div><span class="uiux-legal-eyebrow">사업자등록증</span><h2>운영자 등록증 확인</h2><p>발급일 ${esc(BUSINESS_INFO.issuedAt)} · 확인번호 ${esc(BUSINESS_INFO.certificateNumber)}</p></div>
-        <button type="button" class="uiux-legal-close" data-uiux-business-cert-close aria-label="등록증 닫기">${closeIcon}</button>
+        <div><span class="uiux-legal-eyebrow">사업자정보 확인서</span><h2>사업자정보 확인</h2><p>확인일 ${esc(BUSINESS_INFO.confirmedAt)} · 확인번호 ${esc(BUSINESS_INFO.confirmationNumber)}</p></div>
+        <button type="button" class="uiux-legal-close" data-uiux-business-cert-close aria-label="확인서 닫기">${closeIcon}</button>
       </header>
       <div class="uiux-biz-cert-body">${businessCertificateHtml()}</div>
       <footer class="uiux-legal-footer uiux-biz-cert-footer">
@@ -181,7 +181,7 @@
         <div class="uiux-legal-summary uiux-legal-summary-final"><strong>핵심 안내</strong><p>${esc(doc.summary)}</p></div>
         ${doc.sections.map(sectionHtml).join('')}
       </div>
-      <footer class="uiux-legal-footer">${kind === 'business' ? '<button type="button" class="secondary-button" data-uiux-business-certificate>📄 등록증 보기</button>' : ''}<button type="button" class="primary-button" data-uiux-legal-final-close>확인</button></footer>
+      <footer class="uiux-legal-footer">${kind === 'business' ? '<button type="button" class="secondary-button" data-uiux-business-certificate>📄 사업자정보 확인서 보기</button>' : ''}<button type="button" class="primary-button" data-uiux-legal-final-close>확인</button></footer>
     </section>`;
     document.body.appendChild(backdrop);
     backdrop.querySelector('[data-uiux-legal-final-close]')?.focus();
