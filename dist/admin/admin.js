@@ -1525,6 +1525,31 @@
     }
   }
 
+  async function submitAdminAssignment(event) {
+    const api = core();
+    if (!api) return;
+    const values = api.formValues(event.target);
+    const memberId = String(values.user_id || '').trim();
+    try {
+      await api.adminRequest('assign_task', {
+        ...values,
+        reward_amount: Number(values.reward_amount || 0),
+        estimated_seconds: Number(values.estimated_seconds || 60),
+        notify: Boolean(event.target.notify?.checked)
+      });
+      window.PUTDUK_PHASE31?.invalidateMember?.(memberId);
+      const state = api.getState();
+      const currentMember = state.adminMemberDetail || {};
+      const returnToDetail = memberId && String(currentMember.id || currentMember.user_id || '') === memberId;
+      api.closeModal();
+      if (returnToDetail) {
+        api.openModal('member-detail', { ...currentMember, id: memberId, user_id: memberId });
+      }
+      api.showToast('🎉 회원님에게 새로운 우선 업무가 배정됐어요.', 'success');
+    } catch (error) {
+      api.showToast(api.friendlyAdminError(error), api.isUnsupportedAction(error) ? 'warning' : 'error');
+    }
+  }
   window.PUTDUK_ADMIN = {
     renderPage(page) {
       wrapCore();
@@ -1674,6 +1699,12 @@
 
   wrapCore();
   document.addEventListener('submit', (event) => {
+    if (event.target?.id === 'assignForm') {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      submitAdminAssignment(event);
+      return;
+    }
     if (event.target?.id === 'nodeForm') {
       event.preventDefault();
       event.stopImmediatePropagation();
