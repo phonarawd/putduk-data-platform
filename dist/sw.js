@@ -3,12 +3,12 @@ const CACHE_ADMIN = 'putduk-admin-v35';
 
 const MEMBER_SHELL = [
   '/',
-  '/assets/app.css?v=20260920-perf2',
-  '/assets/app.js?v=20260920-perf2',
+  '/assets/app.css?v=20260920-perf3',
+  '/assets/app.js?v=20260920-perf3',
   '/assets/overlay-surface.css?v=20260918-flash2',
   '/assets/overlay-surface.js?v=20260918-ui3',
-  '/assets/origin-split.js?v=20260920-perf2',
-  '/assets/perf-deferred.js?v=20260920-perf2',
+  '/assets/origin-split.js?v=20260920-perf3',
+  '/assets/perf-deferred.js?v=20260920-perf3',
   '/assets/ui-icons.js?v=20260918-ui3',
   '/assets/vendor/supabase.min.js?v=20260918-ui3',
   '/manifest.webmanifest',

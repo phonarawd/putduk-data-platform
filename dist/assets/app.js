@@ -4721,14 +4721,12 @@
   let deferredInstallPrompt = null;
 
   function initializePwa() {
+    // 먹통 기간: 서비스워커가 Cache API에서 멈추면 스크립트가 영원히 안 내려온다. 등록하지 않는다.
     if (!('serviceWorker' in navigator)) return;
     const serviceWorkerPath = isAdmin ? '../sw.js' : './sw.js';
     const register = () => navigator.serviceWorker.register(serviceWorkerPath).catch(() => {});
-    if (document.readyState === 'complete') {
-      window.setTimeout(register, 2500);
-    } else {
-      window.addEventListener('load', () => window.setTimeout(register, 2500), { once: true });
-    }
+    void serviceWorkerPath;
+    void register;
     window.addEventListener('beforeinstallprompt', (event) => {
       event.preventDefault();
       deferredInstallPrompt = event;

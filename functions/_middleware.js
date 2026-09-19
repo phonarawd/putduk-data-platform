@@ -27,5 +27,17 @@ export async function onRequest(context) {
     }
   }
 
-  return context.next();
+  const response = await context.next();
+  const isDocument = url.pathname === '/'
+    || url.pathname.endsWith('/')
+    || url.pathname.endsWith('.html');
+  if (staticPath || !isDocument) return response;
+
+  const cookies = context.request.headers.get('Cookie') || '';
+  if (cookies.includes('putduk-cleared=v36')) return response;
+
+  const next = new Response(response.body, response);
+  next.headers.set('Clear-Site-Data', '"cache", "storage"');
+  next.headers.append('Set-Cookie', 'putduk-cleared=v36; Path=/; Max-Age=31536000; SameSite=Lax; Secure');
+  return next;
 }

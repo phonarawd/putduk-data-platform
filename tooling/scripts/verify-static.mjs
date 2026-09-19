@@ -126,7 +126,7 @@ if (!complianceJs.includes('주민등록번호 뒷자리') || !complianceJs.incl
 
 if (!sw.includes('putduk-member-v35')
   || !sw.includes('putduk-admin-v35')
-  || !sw.includes('perf-deferred.js?v=20260920-perf2')
+  || !sw.includes('perf-deferred.js?v=20260920-perf3')
   || !sw.includes('uiux-premium-2026.css?v=20260919-uiux2')
   || !sw.includes('uiux-premium-2026.js?v=20260919-uiux2')
   || !sw.includes('uiux-growth-2026.css?v=20260919-uiux3')
