@@ -123,7 +123,8 @@ test('legal runtime publishes GOGOX HOLDINGS LIMITED business operator info', as
   assert.match(legal, /confirmationNumber: 'PDK-BIZ-20260919'/);
   assert.match(legal, /function openBusinessCertificate/);
   assert.match(legal, /uiux-business-certificate/);
-  assert.match(legal, /사업자정보 확인서/);\n  assert.doesNotMatch(legal, /사업자등록증/);
+  assert.match(legal, /사업자정보 확인서/);
+  assert.doesNotMatch(legal, /사업자등록증/);
   assert.match(legal, /business:\s*\{/);
   assert.match(legal, /title: '사업자정보'/);
   assert.doesNotMatch(legal, /[\u4e00-\u9fff]/);
