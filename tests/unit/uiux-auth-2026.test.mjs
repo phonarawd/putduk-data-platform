@@ -38,13 +38,13 @@ test('auth UX exposes required labels, password visibility, password validation 
   assert.match(runtime, /signupPrivacy/);
   assert.match(runtime, /이용약관 동의/);
   assert.match(runtime, /개인정보 수집·이용 동의/);
-  assert.match(runtime, /업무 상태 및 서비스 안내 알림 수신/);
 });
 
-test('legal UX presents structured member-facing legal documents', async () => {
-  const [legal, authCss] = await Promise.all([
+test('legal UX presents structured member-facing legal documents and marketing choice', async () => {
+  const [legal, authCss, legalCss] = await Promise.all([
     readRepo('dist', 'assets', 'uiux-legal-2026.js'),
-    readRepo('dist', 'assets', 'uiux-auth-2026.css')
+    readRepo('dist', 'assets', 'uiux-auth-2026.css'),
+    readRepo('dist', 'assets', 'uiux-legal-2026.css')
   ]);
 
   assert.match(legal, /퍼뜩 이용약관/);
@@ -55,19 +55,27 @@ test('legal UX presents structured member-facing legal documents', async () => {
   assert.match(legal, /주민등록번호/);
   assert.match(legal, /오후 9시/);
   assert.match(legal, /개인정보 보호책임자/);
+  assert.match(legal, /혜택·이벤트 등 광고성 정보 수신/);
+  assert.match(legal, /필수 서비스 알림은 광고성 수신 동의와 구분/);
   assert.match(legal, /uiux-legal-final/);
   assert.match(authCss, /\.uiux-legal-sheet/);
   assert.match(authCss, /@media \(max-width: 430px\)[\s\S]*min-height:\s*100dvh/);
+  assert.match(legalCss, /\.uiux-legal-section-final/);
+  assert.match(legalCss, /\.uiux-agreement-service-note/);
 });
 
-test('KYC compliance guidance tells members to mask unnecessary identity numbers', async () => {
+test('KYC compliance guidance tells members to mask unnecessary identity numbers and keeps legal docs accessible', async () => {
   const compliance = await readRepo('dist', 'assets', 'uiux-compliance-2026.js');
   assert.match(compliance, /신분증 제출 전 확인해 주세요/);
   assert.match(compliance, /주민등록번호 뒷자리/);
   assert.match(compliance, /필요하지 않은 정보는 가린 뒤 제출/);
+  assert.match(compliance, /uiux-legal-access/);
+  assert.match(compliance, /uiux-auth-legal-access/);
+  assert.match(compliance, /이용약관/);
+  assert.match(compliance, /개인정보 처리 안내/);
 });
 
-test('auth/legal overlays do not change Supabase, finance, payout or work contracts', async () => {
+test('auth/legal overlays do not change finance, payout or work contracts', async () => {
   const [authRuntime, legalRuntime, complianceRuntime] = await Promise.all([
     readRepo('dist', 'assets', 'uiux-auth-2026.js'),
     readRepo('dist', 'assets', 'uiux-legal-2026.js'),
