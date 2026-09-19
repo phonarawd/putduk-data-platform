@@ -194,6 +194,8 @@ test('static release verification requires the UIUX FINAL and Premium assets and
   assert.match(verify, /dist\/assets\/uiux-premium-2026\.js/);
   assert.match(verify, /dist\/admin\/uiux-admin-premium-2026\.css/);
   assert.match(verify, /dist\/admin\/uiux-admin-premium-2026\.js/);
+  assert.match(verify, /dist\/admin\/admin\.js/);
+  assert.match(verify, /--check[\s\S]*dist\/admin\/admin\.js/);
   assert.match(verify, /--check[\s\S]*uiux-admin-premium-2026\.js/);
   assert.match(verify, /putduk-shell-v32/);
 });
