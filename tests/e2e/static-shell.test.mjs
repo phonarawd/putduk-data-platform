@@ -18,7 +18,8 @@ test('정적 셸 경로가 회원·운영자·PWA 파일을 제공한다', async
   assert.match(member.text, /lang="ko"/);
   assert.match(member.text, /data-mode="member"/);
   assert.match(member.text, /enableWorkApi:\s*true/);
-  assert.match(member.text, /enableFinanceApi:\s*true/);
+  // 자동 PG/자동 정산은 닫아 둔다. 입출금 신청은 별도 Edge 신청 계약으로 열린다.
+  assert.match(member.text, /enableFinanceApi:\s*false/);
   assert.match(member.text, /channel-talk\.js/);
   assert.match(member.text, /channelPluginKey/);
 
