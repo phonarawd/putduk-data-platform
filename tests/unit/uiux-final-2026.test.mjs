@@ -11,11 +11,15 @@ test('UIUX FINAL 2026 assets are wired into member/admin shells and service work
 
   assert.match(memberHtml, /uiux-final-2026\.css\?v=20260919-uiux1/);
   assert.match(memberHtml, /uiux-final-2026\.js\?v=20260919-uiux1/);
+  assert.match(memberHtml, /uiux-premium-2026\.css\?v=20260919-uiux2/);
+  assert.match(memberHtml, /uiux-premium-2026\.js\?v=20260919-uiux2/);
   assert.match(adminHtml, /uiux-final-2026\.css\?v=20260919-uiux1/);
-  assert.match(adminHtml, /uiux-final-2026\.js\?v=20260919-uiux1/);
-  assert.match(sw, /putduk-shell-v24/);
+  assert.match(adminHtml, /uiux-premium-2026\.css\?v=20260919-uiux2/);
+  assert.match(sw, /putduk-shell-v25/);
   assert.match(sw, /uiux-final-2026\.css\?v=20260919-uiux1/);
   assert.match(sw, /uiux-final-2026\.js\?v=20260919-uiux1/);
+  assert.match(sw, /uiux-premium-2026\.css\?v=20260919-uiux2/);
+  assert.match(sw, /uiux-premium-2026\.js\?v=20260919-uiux2/);
 });
 
 test('member-facing work copy normalizes to 업무 매칭 without renaming generic internal line taxonomy', async () => {
@@ -98,6 +102,33 @@ test('work journey feels continuous from order confirmation through settlement w
   assert.match(css, /\.uiux-result-document/);
 });
 
+test('premium member layer rebuilds history wallet identity and help wording without finance contracts', async () => {
+  const runtime = await readRepo('dist', 'assets', 'uiux-premium-2026.js');
+  assert.match(runtime, /function enhanceHistoryPage/);
+  assert.match(runtime, /function enhanceWalletPage/);
+  assert.match(runtime, /function enhanceKycModal/);
+  assert.match(runtime, /function enhanceFinanceModals/);
+  assert.match(runtime, /function enhanceHelp/);
+  assert.match(runtime, /업무 내역/);
+  assert.match(runtime, /출금 가능 금액/);
+  assert.match(runtime, /본인확인 제출/);
+  assert.match(runtime, /운영자가 요청 내용을 확인 중이에요/);
+  assert.doesNotMatch(runtime, /submit_deposit|withdrawal_requests|admin-phase5|service_role|nodeStake\(|nodePay\(/);
+});
+
+test('premium visual system replaces demo-like blur and card styling with restrained SaaS surfaces', async () => {
+  const css = await readRepo('dist', 'assets', 'uiux-premium-2026.css');
+  assert.match(css, /--premium-surface:\s*#ffffff/);
+  assert.match(css, /\.main > div[\s\S]*width:\s*min\(100%, 1440px\)/);
+  assert.match(css, /\.sidebar[\s\S]*backdrop-filter:\s*none/);
+  assert.match(css, /\.hero-card::after[\s\S]*display:\s*none/);
+  assert.match(css, /\.modal-backdrop[\s\S]*backdrop-filter:\s*none/);
+  assert.match(css, /\.player-sheet[\s\S]*width:\s*min\(720px, 100%\)/);
+  assert.match(css, /\.record-card/);
+  assert.match(css, /\.wallet-slot/);
+  assert.match(css, /@media \(max-width: 840px\)/);
+});
+
 test('member-facing finance copy follows Korean spacing without changing finance contracts', async () => {
   const runtime = await readRepo('dist', 'assets', 'uiux-final-2026.js');
   assert.match(runtime, /\['업무잔액', '업무 잔액'\]/);
@@ -125,9 +156,12 @@ test('member boot copy is phrased around work rather than internal line terminol
   assert.doesNotMatch(memberHtml, /오늘 라인 자리를 확인하고 있어요/);
 });
 
-test('static release verification requires the UIUX FINAL assets and syntax-checks the runtime', async () => {
+test('static release verification requires the UIUX FINAL and Premium assets and syntax-checks runtimes', async () => {
   const verify = await readRepo('tooling', 'scripts', 'verify-static.mjs');
   assert.match(verify, /dist\/assets\/uiux-final-2026\.css/);
   assert.match(verify, /dist\/assets\/uiux-final-2026\.js/);
-  assert.match(verify, /--check[\s\S]*uiux-final-2026\.js/);
+  assert.match(verify, /dist\/assets\/uiux-premium-2026\.css/);
+  assert.match(verify, /dist\/assets\/uiux-premium-2026\.js/);
+  assert.match(verify, /--check[\s\S]*uiux-premium-2026\.js/);
+  assert.match(verify, /putduk-shell-v25/);
 });
