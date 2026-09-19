@@ -20,7 +20,6 @@ body {
   line-height: var(--uiux-line-body);
   letter-spacing: var(--uiux-letter-body);
   font-kerning: normal;
-  font-synthesis: none;
 }
 
 button, input, select, textarea {
@@ -48,7 +47,7 @@ h1, h2, h3, h4,
 .nav-item {
   min-height: var(--uiux-touch);
   font-size: 14px;
-  font-weight: 720;
+  font-weight: 700;
   line-height: 1.35;
 }
 .nav-item:hover { transform: none; }
@@ -71,7 +70,7 @@ h1, h2, h3, h4,
 .small-button, .kyc-file-btn {
   min-height: var(--uiux-touch);
   border-radius: 12px;
-  font-weight: 780;
+  font-weight: 800;
   line-height: 1.25;
 }
 .primary-button:hover, .secondary-button:hover, .gold-button:hover,
