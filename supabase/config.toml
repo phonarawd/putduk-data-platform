@@ -4,5 +4,8 @@ project_id = "gaugwamwceqdnqdqrxqg"
 [functions.admin-control]
 verify_jwt = true
 
+[functions.admin-phase5]
+verify_jwt = true
+
 [functions.member-finance]
 verify_jwt = true
