@@ -63,49 +63,8 @@
     return;
   }
   let fomoTimer = null;
-  let fomoClockBound = false;
   let fomoFeedCache = { bucket: -1, items: [] };
   let fomoNameCooldown = [];
-  const CREW_PULSE_MIN_MS = 60000;
-  const FOMO_POLL_MS = 60000;
-  let deferredHydrateToken = 0;
-
-  function isLowPerfDevice() {
-    if (document.documentElement.dataset.lowPerf === '1') return true;
-    const nav = typeof navigator !== 'undefined' ? navigator : {};
-    const conn = nav.connection || nav.mozConnection || nav.webkitConnection;
-    const cores = Number(nav.hardwareConcurrency || 4);
-    const memory = Number(nav.deviceMemory || 4);
-    return conn?.saveData === true || cores <= 2 || memory <= 2;
-  }
-
-  function scheduleIdle(fn, timeoutMs) {
-    if (typeof requestIdleCallback === 'function') requestIdleCallback(() => fn(), { timeout: timeoutMs || 2500 });
-    else setTimeout(fn, timeoutMs || 120);
-  }
-
-  function ensurePerfBundle(name) {
-    const api = window.PutdukPerf;
-    if (api && typeof api.ensure === 'function') return api.ensure(name);
-    return Promise.resolve();
-  }
-
-  function ensureMotionRuntime() {
-    return ensurePerfBundle('motion');
-  }
-
-  function fomoBoardVisible() {
-    if (isAdmin) return false;
-    const board = document.getElementById('fomoBoard');
-    return Boolean(board && !board.classList.contains('is-off'));
-  }
-
-  function stopFomoClock() {
-    if (fomoTimer) {
-      clearInterval(fomoTimer);
-      fomoTimer = null;
-    }
-  }
 
   const defaultState = {
     theme: 'light',
@@ -191,12 +150,12 @@
 
   let activeStorageKey = storageKey;
   let state = loadState();
-  if (isLowPerfDevice()) document.documentElement.dataset.lowPerf = '1';
   if (isAdmin) scrubLegacyAdminFinanceStorage();
   let runFrame = null;
   let chartInstance = null;
   let chartLoading = null;
   let syncTimer = null;
+  let fomoClockBound = false;
   let noticesHydrated = false;
   let memberLiveChannel = null;
   let memberLiveUserId = null;
@@ -1499,62 +1458,6 @@
     if (state.modal === 'notifications') render();
   }
 
-  async function hydrateSessionDeferred(session, token) {
-    if (token !== deferredHydrateToken || !supabaseClient || !session?.user?.id) return;
-    if (!authState.session || authState.session.user.id !== session.user.id) return;
-    try {
-      await hydratePublishedCatalog();
-      if (token !== deferredHydrateToken) return;
-      await hydrateCrewPulse({ force: true });
-      if (token !== deferredHydrateToken) return;
-      void refreshMemberNotices({ toastNew: false }).catch(() => {});
-      void memberFinanceRequest('daily_task_quota').then((quotaResult) => {
-        state.dailyTaskQuota = quotaResult.quota || null;
-      }).catch(() => {});
-      const [referralResult, depositResult, withdrawalResult] = await Promise.all([
-        supabaseClient
-          .from('referral_relations')
-          .select('id,invitee_id,status,created_at,updated_at')
-          .eq('referrer_id', session.user.id)
-          .order('created_at', { ascending: false })
-          .limit(50),
-        supabaseClient
-          .from('deposit_requests')
-          .select('id,public_id,currency,amount,status,note,created_at,updated_at')
-          .eq('user_id', session.user.id)
-          .order('created_at', { ascending: false })
-          .limit(20),
-        supabaseClient
-          .from('withdrawal_requests')
-          .select('id,public_id,currency,amount,destination_type,status,transaction_reference,created_at,updated_at')
-          .eq('user_id', session.user.id)
-          .order('created_at', { ascending: false })
-          .limit(20)
-      ]);
-      if (token !== deferredHydrateToken) return;
-      if (!referralResult.error && Array.isArray(referralResult.data)) {
-        state.referrals = referralResult.data.map((row, index) => ({
-          id: row.id,
-          label: `추천 회원 ${index + 1}`,
-          status: row.status,
-          createdAt: row.created_at
-        }));
-      }
-      if (!depositResult.error && Array.isArray(depositResult.data)) state.deposits = depositResult.data;
-      if (!withdrawalResult.error && Array.isArray(withdrawalResult.data)) state.withdrawals = withdrawalResult.data;
-      const app = document.getElementById('app');
-      if (!state.modal && app?.querySelector('.app-shell')) {
-        patchAppShell(app);
-        finishPaint({ replayMotion: false, rebindOverlayUi: false });
-      } else if (!state.modal) render();
-    } catch (_) {}
-  }
-
-  function scheduleSessionDeferred(session) {
-    const token = ++deferredHydrateToken;
-    scheduleIdle(() => { hydrateSessionDeferred(session, token); }, 1200);
-  }
-
   async function hydrateSession(session, options = {}) {
     const light = options.light === true;
     const previousHistory = Array.isArray(state.history) ? state.history : [];
@@ -1568,7 +1471,7 @@
       authState.profile = null;
       activeStorageKey = storageKey;
       state = loadState(storageKey);
-      if (!isAdmin) scheduleIdle(() => { hydrateCrewPulse({ force: true }).then(() => patchFomoDom()).catch(() => {}); }, 2000);
+      if (!isAdmin) await hydrateCrewPulse({ force: true });
       return;
     }
     const sameUser = activeStorageKey === `${storageKey}:${session.user.id}`;
@@ -1604,7 +1507,9 @@
           .select('id,public_id,node_id,status,reward_amount,reward_status,started_at,created_at,completed_at,expected_completed_at,motion_variant,motion_seed,updated_at')
           .eq('user_id', session.user.id)
           .order('created_at', { ascending: false })
-          .limit(50)
+          .limit(50),
+        light && nodes.length ? Promise.resolve() : hydratePublishedCatalog(),
+        hydrateCrewPulse({ force: !light })
       ]);
       if (profileResult.error) throw profileResult.error;
       authState.profile = profileResult.data || null;
@@ -1731,7 +1636,43 @@
         }
       }
 
-      if (!light) scheduleSessionDeferred(session);
+      void memberFinanceRequest('daily_task_quota').then((quotaResult) => {
+        state.dailyTaskQuota = quotaResult.quota || null;
+      }).catch(() => {});
+      void refreshMemberNotices({ toastNew: !light }).catch(() => {});
+      if (!light) {
+        void Promise.all([
+          supabaseClient
+            .from('referral_relations')
+            .select('id,invitee_id,status,created_at,updated_at')
+            .eq('referrer_id', session.user.id)
+            .order('created_at', { ascending: false })
+            .limit(50),
+          supabaseClient
+            .from('deposit_requests')
+            .select('id,public_id,currency,amount,status,note,created_at,updated_at')
+            .eq('user_id', session.user.id)
+            .order('created_at', { ascending: false })
+            .limit(20),
+          supabaseClient
+            .from('withdrawal_requests')
+            .select('id,public_id,currency,amount,destination_type,status,transaction_reference,created_at,updated_at')
+            .eq('user_id', session.user.id)
+            .order('created_at', { ascending: false })
+            .limit(20)
+        ]).then(([referralResult, depositResult, withdrawalResult]) => {
+          if (!referralResult.error && Array.isArray(referralResult.data)) {
+            state.referrals = referralResult.data.map((row, index) => ({
+              id: row.id,
+              label: `추천 회원 ${index + 1}`,
+              status: row.status,
+              createdAt: row.created_at
+            }));
+          }
+          if (!depositResult.error && Array.isArray(depositResult.data)) state.deposits = depositResult.data;
+          if (!withdrawalResult.error && Array.isArray(withdrawalResult.data)) state.withdrawals = withdrawalResult.data;
+        }).catch(() => {});
+      }
     } catch (error) {
       authState.error = error;
     } finally {
@@ -2341,33 +2282,16 @@
   function brandAssetSrc(path, slug, kind) {
     const raw = String(path || '').trim();
     if (/^https?:\/\//i.test(raw) || raw.startsWith('/')) return raw;
-    if (raw.startsWith('brand-logos/')) {
-      const asset = raw.replace(/^brand-logos\//, '');
-      if (/-photo\.(png|webp)$/i.test(asset)) return `/assets/brand-logos/${asset.replace(/-photo\.(png|webp)$/i, '-logo.$1')}`;
-      return `/assets/${raw}`;
-    }
+    if (raw.startsWith('brand-logos/')) return `/assets/${raw}`;
     const key = String(slug || '').trim().toLowerCase();
-    if (key) return `/assets/brand-logos/${key}-logo.webp`;
+    if (key) return `/assets/brand-logos/${key}-${kind === 'photo' ? 'photo' : 'logo'}.png`;
     return '';
-  }
-
-  function brandImgFallbackSrc(src) {
-    return String(src || '').replace(/\.webp($|\?)/i, '.png$1');
-  }
-
-  function brandImgTag(src, alt, opts = {}) {
-    if (!src) return '';
-    const width = Number(opts.width || 48);
-    const height = Number(opts.height || 48);
-    const loading = opts.eager ? 'eager' : 'lazy';
-    const fallback = brandImgFallbackSrc(src);
-    return `<img src="${esc(src)}" alt="${esc(alt)}" width="${width}" height="${height}" loading="${loading}" decoding="async" onerror="if(this.dataset.fb!=='1'){this.dataset.fb='1';this.src='${esc(fallback)}';}" />`;
   }
 
   function renderBrandVisual(company, extraClass = '') {
     const src = company.logoUrl || brandAssetSrc(company.logo_asset_path, company.slug, 'logo');
     if (src) {
-      return `<div class="company-logo has-image ${extraClass}">${brandImgTag(src, `${company.name || '협력사'} 로고`, { width: 48, height: 48 })}</div>`;
+      return `<div class="company-logo has-image ${extraClass}"><img src="${esc(src)}" alt="${esc(company.name || '협력사')} 로고" /></div>`;
     }
     return `<div class="company-logo ${extraClass}" style="--node-color:${company.color || '#0d9f76'};background:${company.color || '#0d9f76'}">${esc(company.mark || 'PD')}</div>`;
   }
@@ -2422,9 +2346,7 @@
   }
 
   function playMemberWorkPhase(canvas, partner, phase, extras = {}) {
-    if (isAdmin || isLowPerfDevice() || !canvas) return false;
-    if (!window.PutdukMotion || typeof window.PutdukMotion.playWorkPhase !== 'function') {
-      ensureMotionRuntime().then(() => playMemberWorkPhase(canvas, partner, phase, extras)).catch(() => {});
+    if (isAdmin || !canvas || !window.PutdukMotion || typeof window.PutdukMotion.playWorkPhase !== 'function') {
       return false;
     }
     window.PutdukMotion.playWorkPhase(canvas, partner, phase, extras);
@@ -2469,7 +2391,7 @@
   let crewPulseFetchedAt = 0;
   async function hydrateCrewPulse({ force = false } = {}) {
     if (isAdmin || !supabaseClient) return;
-    if (!force && crewPulseFetchedAt && Date.now() - crewPulseFetchedAt < CREW_PULSE_MIN_MS) return;
+    if (!force && crewPulseFetchedAt && Date.now() - crewPulseFetchedAt < 12000) return;
     crewPulseFetchedAt = Date.now();
     try {
       const result = await supabaseClient
@@ -2689,22 +2611,12 @@
   }
 
   function bindFomoClock() {
-    if (isAdmin) return;
-    if (!fomoBoardVisible()) {
-      stopFomoClock();
-      fomoClockBound = false;
-      return;
-    }
-    if (fomoClockBound) return;
+    if (isAdmin || fomoClockBound) return;
     fomoClockBound = true;
     fomoTimer = setInterval(() => {
-      if (document.hidden || !fomoBoardVisible()) {
-        stopFomoClock();
-        fomoClockBound = false;
-        return;
-      }
+      if (document.hidden) return;
       hydrateCrewPulse().then(() => patchFomoDom()).catch(() => patchFomoDom());
-    }, FOMO_POLL_MS);
+    }, 4000);
   }
 
 
@@ -2787,7 +2699,7 @@
       ? companies.map((company) => {
         const src = company.logoUrl || brandAssetSrc(company.logo_asset_path, company.slug, 'logo');
         const mark = src
-          ? `<span class="pill-logo">${brandImgTag(src, '', { width: 24, height: 24 })}</span>`
+          ? `<span class="pill-logo"><img src="${esc(src)}" alt="" /></span>`
           : `<span class="dot"></span>`;
         return `<span class="partner-pill">${mark}${esc(company.name)}</span>`;
       }).join('')
@@ -2807,7 +2719,7 @@
     const partnerName = company?.name || (signedIn ? '라인 배정 전' : '로그인 후 배정');
     const markSrc = company ? (company.logoUrl || brandAssetSrc(company.logo_asset_path, company.slug, 'logo')) : '';
     const mark = markSrc
-      ? `<div class="id-badge has-image">${brandImgTag(markSrc, `${partnerName} 마크`, { width: 56, height: 56, eager: true })}</div>`
+      ? `<div class="id-badge has-image"><img src="${esc(markSrc)}" alt="${esc(partnerName)} 마크" /></div>`
       : `<div class="id-badge">${esc(company?.mark || 'PD')}</div>`;
     const flipped = Boolean(state.idCardFlipped);
     const attendance = crewAttendance(company);
@@ -2928,7 +2840,7 @@
     const ready = enabled && canStartNode(node) && !busy;
     const markSrc = company.logoUrl || brandAssetSrc(company.logo_asset_path, company.slug, 'logo');
     const mark = markSrc
-      ? `<div class="company-mark has-image">${brandImgTag(markSrc, `${company.name} 로고`, { width: 40, height: 40 })}</div>`
+      ? `<div class="company-mark has-image"><img src="${esc(markSrc)}" alt="${esc(company.name)} 로고" /></div>`
       : `<div class="company-mark">${esc(company.mark)}</div>`;
     const cta = !enabled ? '대기 중' : state.reviewWait ? '검수 대기 중' : ready ? '출근하기' : '입금 안내';
     const slotsLeft = fomoSlotsLeft(node);
@@ -3157,7 +3069,7 @@
     const cards = companies.map((company) => {
       const logo = company.logoUrl || brandAssetSrc(company.logo_asset_path, company.slug, 'logo');
       const photo = company.photoUrl || brandAssetSrc(company.photo_asset_path, company.slug, 'photo') || logo;
-      return `<article class="partner-card"><div class="partner-photo">${photo ? brandImgTag(photo, `${company.name} 사진`, { width: 120, height: 80 }) : ''}</div><div class="partner-card-body">${renderBrandVisual(company)}<div><strong>${esc(company.name)}</strong><small>${esc(company.category)}</small></div></div>${company.copy ? `<p>${esc(company.copy)}</p>` : ''}</article>`;
+      return `<article class="partner-card"><div class="partner-photo">${photo ? `<img src="${esc(photo)}" alt="${esc(company.name)} 사진" />` : ''}</div><div class="partner-card-body">${renderBrandVisual(company)}<div><strong>${esc(company.name)}</strong><small>${esc(company.category)}</small></div></div>${company.copy ? `<p>${esc(company.copy)}</p>` : ''}</article>`;
     }).join('');
     return `<div class="section-heading"><div><h2>공개 협력사</h2><p>운영자가 로고·사진·소개를 넣고 승인한 8곳입니다.</p></div></div><section class="partner-gallery">${cards}</section>`;
   }
@@ -3215,7 +3127,7 @@
         ? '<small style="display:block;color:var(--muted);max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + esc(company.logo_asset_path) + '">로고 경로 등록됨</small>'
         : '<small style="display:block;color:var(--muted)">로고 경로 미등록</small>';
       const photo = photoSrc
-        ? brandImgTag(photoSrc, `${company.name} 사진`, { width: 72, height: 48 })
+        ? '<img src="' + esc(photoSrc) + '" alt="' + esc(company.name) + ' 사진" style="width:72px;height:48px;object-fit:contain;background:#fff;border:1px solid var(--line);border-radius:8px;padding:3px" />'
         : '<small style="color:var(--muted)">사진 없음</small>';
       return '<tr><td><div style="display:flex;align-items:center;gap:9px">' + renderBrandVisual(company, 'lg') + '<div><strong>' + esc(company.name) + '</strong>' + detail + '</div></div></td><td>' + photo + '</td><td>' + esc(company.category) + '</td><td><span class="pill ' + (verified ? 'ok' : 'wait') + '">' + (verified ? '승인 완료' : company.verification_status === 'submitted' ? '자료 확인 필요' : '자료 미등록') + '</span></td><td><span class="pill ' + (logoApproved ? 'ok' : 'wait') + '">' + (logoApproved ? '사용 승인' : company.logo_usage_status === 'submitted' ? '사용 확인 필요' : '파일 필요') + '</span></td><td><span class="pill ' + (published ? 'ok' : '') + '">' + (published ? '공개 중' : '비공개') + '</span></td><td><div class="action-row"><button class="small-button ' + buttonClass + '" data-brand-action="' + action + '" data-brand-id="' + esc(company.id) + '">' + label + '</button><button class="small-button" data-action="edit-company" data-brand-id="' + esc(company.id) + '">수정</button></div></td></tr>';
     }).join('');
@@ -3368,7 +3280,7 @@
           </div>
           <div class="wms-target-card">
             <div class="wms-card-tag">${icon('package', 13)} 상품 사진</div>
-            <div class="player-photo">${photo ? brandImgTag(photo, `${company.name} 근무 사진`, { width: 96, height: 64 }) : `<div class="player-photo-fallback">${esc(company.mark || '라인')}</div>`}</div>
+            <div class="player-photo">${photo ? `<img src="${esc(photo)}" alt="${esc(company.name)} 근무 사진" />` : `<div class="player-photo-fallback">${esc(company.mark || '라인')}</div>`}</div>
           </div>
         </div>
         <form class="catalog-entry" data-catalog-entry="1">
@@ -3450,7 +3362,7 @@
 
           <div class="wms-target-card">
             <div class="wms-card-tag">${icon('package', 13)} 현장 입고 화물 사진</div>
-            <div class="player-photo">${photo ? brandImgTag(photo, `${company.name} 근무 사진`, { width: 96, height: 64 }) : `<div class="player-photo-fallback">${esc(company.mark || '라인')}</div>`}</div>
+            <div class="player-photo">${photo ? `<img src="${esc(photo)}" alt="${esc(company.name)} 근무 사진" />` : `<div class="player-photo-fallback">${esc(company.mark || '라인')}</div>`}</div>
             <div class="wms-target-match-bar">
               <span class="wms-match-label">실물 부착 라벨</span>
               <span class="wms-match-code" aria-label="실물 부착 라벨 ${esc(currentItem.targetCode)}"><span class="wms-code-prefix">PDK-</span><span class="wms-code-tail">${esc(targetTail)}</span></span>
@@ -3825,21 +3737,17 @@
 
   function syncChannelTalk() {
     if (isAdmin) return;
-    if (state.memberPage !== 'support') return;
-    if (isLowPerfDevice()) return;
-    ensurePerfBundle('channel').then(() => {
-      const api = window.PutdukChannelTalk;
-      if (!api || typeof api.sync !== 'function') return;
-      api.sync({
-        enabled: true,
-        pluginKey: config.channelPluginKey,
-        session: authState.session,
-        profile: authState.profile,
-        page: 'support',
-        theme: state.theme,
-        overlayKey: overlaySurfaceKey()
-      });
-    }).catch(() => {});
+    const api = window.PutdukChannelTalk;
+    if (!api || typeof api.sync !== 'function') return;
+    api.sync({
+      enabled: true,
+      pluginKey: config.channelPluginKey,
+      session: authState.session,
+      profile: authState.profile,
+      page: state.memberPage || 'dashboard',
+      theme: state.theme,
+      overlayKey: overlaySurfaceKey()
+    });
   }
 
   function overlaySurfaceKey() {
@@ -3941,14 +3849,9 @@
     refreshIcons();
     if (isAdmin && window.PUTDUK_ADMIN && typeof window.PUTDUK_ADMIN.afterRender === 'function') window.PUTDUK_ADMIN.afterRender();
     const overlayOpen = Boolean(overlaySurfaceKey());
-    if (!overlayOpen && !isLowPerfDevice()) {
-      scheduleIdle(() => {
-        if (isAdmin) {
-          if (state.adminPage === 'overview') drawAdminChart();
-        } else if (state.memberPage === 'dashboard') {
-          drawMemberChart();
-        }
-      }, 2400);
+    if (!overlayOpen) {
+      if (!isAdmin && state.memberPage === 'dashboard') drawMemberChart();
+      if (isAdmin && state.adminPage === 'overview') drawAdminChart();
     }
     if (replayMotion) {
       if (state.run && state.run.overlayOpen && !state.player) {
@@ -3977,7 +3880,7 @@
     document.documentElement.dataset.theme = state.theme;
     const app = document.getElementById('app');
     if (!app) return;
-    // data-boot-shell="1" 가 있어도 세션 조회를 기다리지 않고 로그인 버튼이 있는 실제 셸을 바로 그린다.
+    if (authState.loading && !authState.session && app.querySelector('[data-boot-shell="1"]')) return;
     const existingType = app.querySelector('[data-modal]')?.getAttribute('data-modal');
     const nextKey = overlaySurfaceKey();
     const existing = app.querySelector('[data-surface]');
@@ -4444,12 +4347,8 @@
   }
 
   function flushMotionCue() {
-    if (isLowPerfDevice()) return;
     const motion = window.PutdukMotion;
-    if (!motion || typeof motion.playWorkPhase !== 'function') {
-      ensureMotionRuntime().then(() => flushMotionCue()).catch(() => {});
-      return;
-    }
+    if (!motion || typeof motion.playWorkPhase !== 'function') return;
 
     if (state.startNodeId && !state.player) {
       return;
@@ -4500,18 +4399,9 @@
     releaseNamedCanvas('motionCanvas');
   }
 
-  let motionEnsurePromise = null;
   function drawMotionCanvas() {
     const canvas = document.getElementById('motionCanvas');
     if (!canvas || !state.run) return;
-    if (isLowPerfDevice()) return;
-    if (!window.PutdukMotion) {
-      if (!motionEnsurePromise) {
-        motionEnsurePromise = ensureMotionRuntime().finally(() => { motionEnsurePromise = null; });
-      }
-      motionEnsurePromise.then(() => drawMotionCanvas()).catch(() => {});
-      return;
-    }
     const node = nodeById(state.run.nodeId) || {};
     if (window.PutdukMotion && typeof window.PutdukMotion.tick === 'function') {
       window.PutdukMotion.tick(canvas, {
@@ -4721,11 +4611,10 @@
   let deferredInstallPrompt = null;
 
   function initializePwa() {
-    // 이미 깔린 워커를 끄기 위해 한 번 등록한다. 새 워커(putduk-sw-off-v37)는 즉시 등록을 푼다.
-    if (!('serviceWorker' in navigator)) return;
-    const serviceWorkerPath = isAdmin ? '../sw.js' : './sw.js';
-    const register = () => navigator.serviceWorker.register(serviceWorkerPath).catch(() => {});
-    register();
+    if ('serviceWorker' in navigator) {
+      const serviceWorkerPath = isAdmin ? '../sw.js' : './sw.js';
+      navigator.serviceWorker.register(serviceWorkerPath).catch(() => {});
+    }
     window.addEventListener('beforeinstallprompt', (event) => {
       event.preventDefault();
       deferredInstallPrompt = event;
@@ -5043,10 +4932,8 @@
     if (action === 'open-login') { state.authMode = 'login'; openModal('auth'); return; }
     if (action === 'logout') { signOut(); return; }
     if (action === 'open-channel-talk') {
-      ensurePerfBundle('channel').then(() => {
-        const api = window.PutdukChannelTalk;
-        if (api && typeof api.openMessenger === 'function') api.openMessenger();
-      }).catch(() => {});
+      const api = window.PutdukChannelTalk;
+      if (api && typeof api.openMessenger === 'function') api.openMessenger();
       return;
     }
     if (action === 'lock-deposit-info') { lockDepositReveal({ silent: false }); showToast('🔒 입금 안내를 다시 잠갔어요.', 'info'); return; }
@@ -5983,13 +5870,7 @@
         if (isAdmin && authState.adminAuthorized) {
           await refreshAdminPageData({ silent: true });
         }
-      }).then(() => {
-        const app = document.getElementById('app');
-        if (!state.modal && app?.querySelector('.app-shell')) {
-          patchAppShell(app);
-          finishPaint({ replayMotion: false, rebindOverlayUi: false });
-        } else render();
-      }).catch(() => {});
+      }).then(() => render()).catch(() => {});
     }
   });
   window.addEventListener('resize', () => { if (state.run) drawMotionCanvas(); });
@@ -6021,15 +5902,6 @@
     };
   }
 
-  window.__putdukOpenAuth = (action) => {
-    state.authMode = action === 'open-signup' ? 'signup' : 'login';
-    openModal('auth');
-  };
-  if (window.__putdukWantAuth) {
-    const pending = window.__putdukWantAuth;
-    window.__putdukWantAuth = null;
-    window.__putdukOpenAuth(pending);
-  }
   initializePwa();
   initializeAuth().then(() => render());
   const overlay = overlayApi();
