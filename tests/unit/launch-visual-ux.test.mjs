@@ -36,9 +36,10 @@ test('입금은 원화·USDT를 먼저 고른다', async () => {
   assert.match(appJs, /depositMethod \|\| ''/);
 });
 
-test('관리자 입출금은 다섯 탭이고 모바일 카드가 있다', async () => {
+test('관리자 입출금은 다섯 탭이고 모바일 카드가 있으며 지급정보 확인 후 완료한다', async () => {
   const adminJs = await readRepo('dist', 'admin', 'admin.js');
   const adminCss = await readRepo('dist', 'admin', 'admin.css');
+  const safety = await readRepo('dist', 'admin', 'withdrawal-safety.js');
   assert.match(adminJs, /data-finance-tab="\$\{item\.id\}"/);
   assert.match(adminJs, /id: 'payouts'/);
   assert.match(adminJs, /id: 'deposits'/);
@@ -47,4 +48,9 @@ test('관리자 입출금은 다섯 탭이고 모바일 카드가 있다', async
   assert.match(adminJs, /id: 'security'/);
   assert.match(adminJs, /admin-mobile-card/);
   assert.match(adminCss, /admin-mobile-cards/);
+  assert.match(adminJs, /reveal-withdrawal-destination/);
+  assert.match(adminJs, /withdraw-complete/);
+  assert.match(safety, /REVEAL_WINDOW_MS = 60_000/);
+  assert.match(safety, /지급정보를 먼저 확인한 뒤 60초 안에 완료해 주세요/);
+  assert.match(safety, /stopImmediatePropagation\(\)/);
 });
