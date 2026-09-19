@@ -8,6 +8,13 @@
   const MAX_BATCHES = 100;
   const activityCache = new Map();
   const memberPackCache = new Map();
+
+  function invalidateMemberCanonicalDetail(memberId) {
+    const key = String(memberId || '').trim();
+    if (!key) return;
+    memberPackCache.delete(key);
+    activityCache.delete(key);
+  }
   let membersRequestId = 0;
   let membersHydrateQueued = false;
 
@@ -284,6 +291,8 @@
     const query = event.target.querySelector('#memberSearchInput')?.value || '';
     loadMemberPage({ page: 1, query });
   }, true);
+
+  window.PUTDUK_PHASE31 = { invalidateMember: invalidateMemberCanonicalDetail };
 
   if (!installRenderHooks()) {
     window.addEventListener('DOMContentLoaded', installRenderHooks, { once: true });
