@@ -25,7 +25,10 @@ const required = [
   "supabase/migrations/20260918061600_putduk_catalog_checkpoint_submit.sql",
   "supabase/migrations/20260918160000_putduk_task_start_events_after_insert.sql",
   "supabase/migrations/20260919120000_putduk_phase5_kyc_payout_security.sql",
-  "supabase/migrations/20260920041000_putduk_work_lifecycle_rework_and_timing_guard.sql"
+  "supabase/migrations/20260920041000_putduk_work_lifecycle_rework_and_timing_guard.sql",
+  "supabase/migrations/20260920054000_putduk_assignment_rls_unify.sql",
+  "supabase/migrations/20260920054500_putduk_assignment_rls_recursion_fix.sql",
+  "supabase/migrations/20260920055000_putduk_member_payout_ciphertext_cleanup.sql"
 ];
 
 const missing = required.filter((file) => !existsSync(path.join(root, file)));
