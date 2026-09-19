@@ -1,56 +1,35 @@
-name: legal-version-one-shot
+name: 퍼뜩 품질 확인
 
+# GitHub Actions 유료 한도에 의존하지 않습니다.
+# 기본 검증은 로컬에서 `pnpm quality:local`로 실행합니다.
+# 이 workflow는 향후 Actions를 다시 사용할 수 있을 때 수동 실행용으로만 남깁니다.
 on:
-  push:
-    branches:
-      - feat/uiux-final-2026
+  workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  patch:
+  verify:
+    name: 정적 파일·테스트·보안 확인
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout feature branch
+      - name: 저장소 가져오기
         uses: actions/checkout@v4
+
+      - name: pnpm 준비
+        uses: pnpm/action-setup@v4
         with:
-          fetch-depth: 0
-          ref: feat/uiux-final-2026
+          version: 12.4.2
 
-      - name: Patch exactly two legal evidence literals
-        shell: bash
-        run: |
-          set -euo pipefail
-          node <<'NODE'
-          const fs = require('fs');
-          const path = 'dist/assets/app.js';
-          let source = fs.readFileSync(path, 'utf8');
-          const replacements = [
-            ["terms_version: '2026-09-16'", "terms_version: '2026-09-19'"],
-            ["privacy_version: '2026-09-16'", "privacy_version: '2026-09-19'"]
-          ];
-          for (const [from, to] of replacements) {
-            const count = source.split(from).length - 1;
-            if (count !== 1) throw new Error(`Expected one occurrence of ${from}, found ${count}`);
-            source = source.replace(from, to);
-          }
-          fs.writeFileSync(path, source);
-          NODE
+      - name: Node.js 준비
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
 
-          node --check dist/assets/app.js
-          node --test tests/unit/uiux-auth-2026.test.mjs
+      - name: 의존성 설치
+        run: pnpm install --frozen-lockfile
 
-          stats="$(git diff --numstat -- dist/assets/app.js)"
-          expected=$'2\t2\tdist/assets/app.js'
-          test "$stats" = "$expected"
-
-          git fetch origin main --depth=1
-          git show origin/main:.github/workflows/ci.yml > .github/workflows/ci.yml
-          git diff --check
-
-          git config user.name "phonarawd"
-          git config user.email "4tencpkr@gmail.com"
-          git add dist/assets/app.js .github/workflows/ci.yml
-          git commit -m "fix: align signup legal evidence version"
-          git push origin HEAD:feat/uiux-final-2026
+      - name: 로컬 표준 품질검증과 동일한 검사
+        run: pnpm quality:local
