@@ -5208,13 +5208,16 @@
       return;
     }
     try {
+      const form = event.target;
+      if (form && !form.dataset.operationId) form.dataset.operationId = crypto.randomUUID();
       await adminRequest('adjust_balance', {
         user_id: values.user_id,
         direction,
         amount,
         currency: values.currency || 'KRW',
         reason: values.reason,
-        bucket
+        bucket,
+        operation_id: form?.dataset?.operationId
       });
       await loadAdminMembers({ silent: true });
       if (values.user_id) {

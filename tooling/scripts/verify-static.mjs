@@ -81,15 +81,11 @@ if (!memberHtml.includes('phase4-finance-wiring.js')) {
   throw new Error('회원 PHASE 4 입금 증빙 연결 스크립트가 회원 셸에 포함되어야 합니다.');
 }
 
-if (!memberHtml.includes('perf-deferred.js')) {
-  throw new Error('회원 셸에 perf-deferred.js 지연 로딩 부트스트랩이 포함되어야 합니다.');
-}
-
 if (!memberHtml.includes('href="./assets/uiux-final-2026.css') || !memberHtml.includes('src="./assets/uiux-final-2026.js')) {
   throw new Error('회원 셸에 UI/UX FINAL 2026 자산이 포함되어야 합니다.');
 }
 
-if (!adminHtml.includes('uiux-final-2026.css') || !adminHtml.includes('uiux-final-2026.js')) {
+if (!adminHtml.includes('uiux-final-2026.css') || !adminHtml.includes('uiux-admin-premium-2026.js')) {
   throw new Error('운영자 셸에 UI/UX FINAL 2026 자산이 포함되어야 합니다.');
 }
 

@@ -1,9 +1,12 @@
 name: 퍼뜩 품질 확인
 
-# GitHub Actions 유료 한도에 의존하지 않습니다.
-# 기본 검증은 로컬에서 `pnpm quality:local`로 실행합니다.
-# 이 workflow는 향후 Actions를 다시 사용할 수 있을 때 수동 실행용으로만 남깁니다.
+# PR과 main에서 자동으로 로컬 표준 품질검증을 돌린다.
+# 배포 전 차단은 GitHub required check + 이 workflow가 함께 담당한다.
 on:
+  pull_request:
+  push:
+    branches:
+      - main
   workflow_dispatch:
 
 permissions:

@@ -424,8 +424,14 @@ function payloadSubmittedAt(payload: unknown, fallback: unknown): string | null 
   return extra || null;
 }
 
-function allowDevSeed(payload: JsonRecord): boolean {
+export function isDevSeedAllowed(payload: JsonRecord, envName = Deno.env.get("PUTDUK_ENV")): boolean {
+  const mode = String(envName || "").trim().toLowerCase();
+  if (mode !== "development" && mode !== "staging") return false;
   return payload.dev_seed === true;
+}
+
+function allowDevSeed(payload: JsonRecord): boolean {
+  return isDevSeedAllowed(payload);
 }
 
 async function listMemberTaskRuns(admin: AdminClient, memberId: string) {
@@ -1340,39 +1346,26 @@ export async function listFinance(admin: AdminClient, userId: string) {
 export async function adjustMemberBalance(admin: AdminClient, userId: string, payload: JsonRecord) {
   await requireRole(admin, userId, financeRoles);
   const memberId = assertUuid(payload.user_id || payload.member_id, "회원");
+  const operationId = assertUuid(payload.operation_id, "작업 번호");
   const direction = normalizeAdjustDirection(payload.direction);
   const amount = amountValue(payload.amount, "금액");
   const currency = currencyValue(payload.currency);
   const reason = textValue(payload.reason, "사유", 500);
   const bucket = normalizeAdjustBucket(payload.bucket);
-  const args = {
+  const { data, error } = await admin.rpc("putduk_admin_adjust_balance", {
     p_admin_id: userId,
     p_user_id: memberId,
     p_direction: direction,
     p_amount: amount,
     p_currency: currency,
-    p_reason: reason
-  };
-  let { data, error } = await admin.rpc("putduk_admin_adjust_balance", { ...args, p_bucket: bucket });
-  if (error && isMissingRpc(error)) {
-    const retry = await admin.rpc("putduk_admin_adjust_balance", args);
-    data = retry.data;
-    error = retry.error;
-  }
+    p_reason: reason,
+    p_bucket: bucket,
+    p_operation_id: operationId
+  });
   if (error || data == null) {
     console.error("putduk_admin_adjust_balance failed", error);
     throw new HttpError(400, rpcMessage(error, "잔액 조정을 저장하지 못했습니다."));
   }
-  await appendAudit(
-    admin,
-    userId,
-    direction === "credit" ? "잔액 입금" : "잔액 차감",
-    "wallet_account",
-    memberId,
-    reason,
-    null,
-    data
-  );
   return data;
 }
 

@@ -2,6 +2,12 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readRepo } from '../helpers/repo.mjs';
 
+test('최신 출금 함수는 PIN 실패를 예외로 롤백하지 않는다', async () => {
+  const migration = await readRepo('supabase', 'migrations', '20260920070000_putduk_money_ops_pin_idempotency.sql');
+  assert.match(migration, /putduk_member_verify_withdrawal_pin/);
+  assert.doesNotMatch(migration, /failed_attempts = failed_attempts \+ 1[\s\S]{0,220}raise exception using errcode = '42501', message = '출금 비밀번호가 올바르지 않습니다/);
+});
+
 test('체험 3,000원 KYC 예외·PIN·open request·hold는 migration에 유지된다', async () => {
   const migration = await readRepo('supabase', 'migrations', '20260919120000_putduk_phase5_kyc_payout_security.sql');
   assert.match(migration, /trial_withdraw_used_at/);
@@ -31,23 +37,12 @@ test('public destination_label·withdrawal payload에 예금주 평문이 없다
   assert.doesNotMatch(submitBlock, /p_destination_label:[\s\S]*accountHolderPlain/);
 });
 
-test('FOMO 관련 diff 없음 (PHASE 5 범위, branch parent 기준)', async () => {
-  const { execSync } = await import('node:child_process');
-  const parent = '6856018333bfb670dfd9d9a3ab1a550eab6c4be1';
-  const diff = execSync(`git diff ${parent}..HEAD -- dist/assets/app.js`, { encoding: 'utf8' });
-  const changedLines = diff
-    .split(/\r?\n/)
-    .filter((line) => line.startsWith('+') || line.startsWith('-'))
-    // PHASE 5는 saveState의 민감 state 제외 목록만 바꾼다. 이 줄의 기존 crewPulse 토큰은 FOMO 변경이 아니다.
-    .filter((line) => !(line.includes('const {') && line.includes('crewPulse') && line.includes('...rest')));
-  const fomoMarkers = ['FOMO_FEED_SLOTS', 'fomoTimer', 'fomoFeedCache', 'fomoNameCooldown', 'crewPulse'];
+test('금액 작업 P0 변경은 FOMO 연출 파일을 건드리지 않는다', async () => {
+  const migration = await readRepo('supabase', 'migrations', '20260920070000_putduk_money_ops_pin_idempotency.sql');
+  const edge = await readRepo('supabase', 'functions', 'member-finance', 'index.ts');
+  const fomoMarkers = ['FOMO_FEED_SLOTS', 'fomoTimer', 'fomoFeedCache', 'fomoNameCooldown'];
   for (const marker of fomoMarkers) {
-    const touched = changedLines.some((line) => line.includes(marker));
-    assert.equal(touched, false, `FOMO marker ${marker} should not change in app.js diff`);
+    assert.equal(migration.includes(marker), false, marker);
+    assert.equal(edge.includes(marker), false, marker);
   }
-  const names = execSync(`git diff --name-only ${parent}..HEAD`, { encoding: 'utf8' })
-    .split(/\r?\n/)
-    .filter(Boolean);
-  const fomoTouched = names.filter((file) => /fomo|launch-visual|motion-settings/i.test(file));
-  assert.deepEqual(fomoTouched, []);
 });

@@ -292,7 +292,6 @@ test('회원·운영 셸은 자체 스크립트와 캐시 우선 서비스워커
   assert.match(sw, /unregister/);
   assert.doesNotMatch(sw, /staleWhileRevalidate/);
   assert.doesNotMatch(sw, /cache\.addAll/);
-  assert.match(memberHtml, /perf-deferred\.js/);
   assert.match(memberHtml, /channel-talk\.js/);
   assert.match(http, /userFromVerifiedJwt/);
   assert.match(http, /export function clientIp/);

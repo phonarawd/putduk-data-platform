@@ -117,16 +117,20 @@
     balanceBusy = true;
     const original = button.textContent || '';
     button.disabled = true;
-    button.textContent = '처리 중…';
+    button.textContent = '처리 결과 확인 중…';
 
     try {
+      if (!form.dataset.operationId) {
+        form.dataset.operationId = crypto.randomUUID();
+      }
       await api.adminRequest('adjust_balance', {
         user_id: payload.userId,
         direction: payload.direction,
         amount: payload.amount,
         currency: payload.currency,
         reason: payload.reason,
-        bucket: payload.bucket
+        bucket: payload.bucket,
+        operation_id: form.dataset.operationId
       });
 
       let member = null;

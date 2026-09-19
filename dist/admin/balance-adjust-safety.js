@@ -26,7 +26,7 @@
     if (busy) {
       if (!submit.dataset.balanceAdjustLabel) submit.dataset.balanceAdjustLabel = submit.textContent || '';
       submit.disabled = true;
-      submit.textContent = '처리 중…';
+      submit.textContent = '처리 결과 확인 중…';
     } else {
       submit.disabled = false;
       if (submit.dataset.balanceAdjustLabel) submit.textContent = submit.dataset.balanceAdjustLabel;
@@ -121,6 +121,10 @@
       return;
     }
 
+    if (!form.dataset.operationId) {
+      form.dataset.operationId = crypto.randomUUID();
+    }
+
     setBusy(form, true);
     try {
       await api.adminRequest('adjust_balance', {
@@ -129,7 +133,8 @@
         amount: payload.amount,
         currency: payload.currency,
         reason: payload.reason,
-        bucket: payload.bucket
+        bucket: payload.bucket,
+        operation_id: form.dataset.operationId
       });
       api.showToast?.(
         payload.direction === 'credit' ? '✅ 잔액 입금을 반영했어요.' : '✅ 잔액 차감을 반영했어요.',

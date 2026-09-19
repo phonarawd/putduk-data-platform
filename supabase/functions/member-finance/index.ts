@@ -132,11 +132,55 @@ async function submitDeposit(userId: string, payload: JsonRecord) {
   return data;
 }
 
+type WithdrawalPinCheck = {
+  valid?: boolean;
+  pin_set?: boolean;
+  attempts?: number;
+  remaining?: number;
+  locked?: boolean;
+  locked_until?: string | null;
+};
+
+async function verifyWithdrawalPin(userId: string, pin: string): Promise<WithdrawalPinCheck> {
+  const { data, error } = await admin.rpc("putduk_member_verify_withdrawal_pin", {
+    p_user_id: userId,
+    p_pin: pin
+  });
+  if (error || data == null || typeof data !== "object") {
+    throw new HttpError(400, rpcMessage(error, "출금 비밀번호를 확인하지 못했어요."));
+  }
+  return data as WithdrawalPinCheck;
+}
+
+function throwIfPinRejected(result: WithdrawalPinCheck): void {
+  if (result.valid === true) return;
+  if (result.pin_set === false) {
+    throw new HttpError(400, "출금 비밀번호를 먼저 설정해 주세요.");
+  }
+  if (result.locked === true) {
+    throw new HttpError(403, "🔒 출금 비밀번호가 잠겨 있어요. 15분 뒤에 다시 시도해 주세요.", "WITHDRAWAL_PIN_LOCKED");
+  }
+  const left = Number(result.remaining || 0);
+  throw new HttpError(
+    403,
+    left > 0
+      ? `🙂 출금 비밀번호가 올바르지 않아요. ${left}번 더 시도할 수 있어요.`
+      : "🔒 출금 비밀번호를 여러 번 틀려서 잠시 잠갔어요. 15분 뒤에 다시 해 주세요.",
+    "WITHDRAWAL_PIN_INVALID"
+  );
+}
+
 async function setPin(userId: string, payload: JsonRecord) {
   if (!isSixDigitPin(payload.pin)) throw new HttpError(400, "출금 비밀번호는 숫자 6자리여야 합니다.");
+  const current = String(payload.current_pin || payload.old_pin || "");
+  if (current) {
+    if (!isSixDigitPin(current)) throw new HttpError(400, "현재 출금 비밀번호는 숫자 6자리여야 합니다.");
+    throwIfPinRejected(await verifyWithdrawalPin(userId, current));
+  }
   const { error } = await admin.rpc("putduk_member_set_withdrawal_pin", {
     p_user_id: userId,
-    p_pin: String(payload.pin)
+    p_pin: String(payload.pin),
+    p_current_pin: current || null
   });
   if (error) throw new HttpError(400, rpcMessage(error, "출금 비밀번호를 저장하지 못했습니다."));
   return { saved: true };
@@ -321,6 +365,8 @@ async function submitWithdrawal(userId: string, payload: JsonRecord) {
       : "PAYOUT_SECRET_MISSING";
     throw new HttpError(status, error instanceof Error ? error.message : "출금 지급정보를 저장하지 못했습니다.", code);
   }
+
+  throwIfPinRejected(await verifyWithdrawalPin(userId, String(payload.pin)));
 
   const { data, error } = await admin.rpc("putduk_member_withdraw_request", {
     p_user_id: userId,

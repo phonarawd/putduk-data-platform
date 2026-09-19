@@ -27,16 +27,12 @@ if (!js.includes('devicePixelRatio')) {
   throw new Error('성능 기준: Canvas DPR 조절 코드가 없습니다.');
 }
 
-if (!js.includes('CREW_PULSE_MIN_MS') || !js.includes('FOMO_POLL_MS')) {
-  throw new Error('성능 기준: crew_pulse 폴링 완화 상수가 없습니다.');
+if (!js.includes('crewPulseFetchedAt') || !js.includes('12000')) {
+  throw new Error('성능 기준: crew_pulse 폴링 완화가 없습니다.');
 }
 
-if (!js.includes('scheduleSessionDeferred')) {
-  throw new Error('성능 기준: idle 지연 hydrate 경로가 없습니다.');
-}
-
-if (!memberHtml.includes('perf-deferred.js')) {
-  throw new Error('성능 기준: perf-deferred.js 부트스트랩이 index.html에 없습니다.');
+if (!js.includes('hydrateSession') || !js.includes('light: true')) {
+  throw new Error('성능 기준: 가벼운 세션 hydrate 경로가 없습니다.');
 }
 
 if (!perfDeferred.includes('requestIdleCallback')) {

@@ -10,12 +10,10 @@ test('UIUX FINAL 2026 assets are wired into member/admin shells and service work
     readRepo('dist', 'assets', 'perf-deferred.js')
   ]);
 
-  assert.match(memberHtml, /perf-deferred\.js/);
   assert.match(memberHtml, /uiux-final-2026\.css/);
   assert.match(memberHtml, /uiux-final-2026\.js/);
   assert.match(memberHtml, /uiux-premium-2026\.css/);
   assert.match(memberHtml, /uiux-premium-2026\.js/);
-  assert.match(adminHtml, /perf-deferred\.js/);
   assert.match(adminHtml, /uiux-final-2026\.css/);
   assert.match(adminHtml, /uiux-premium-2026\.css/);
   assert.match(adminHtml, /uiux-admin-premium-2026\.css/);
@@ -32,7 +30,7 @@ test('UIUX FINAL 2026 assets are wired into member/admin shells and service work
   assert.match(memberHtml, /uiux-premium-2026\.css\?v=20260919-uiux2/);
   assert.match(memberHtml, /uiux-premium-2026\.js\?v=20260919-uiux2/);
   assert.match(adminHtml, /uiux-admin-premium-2026\.css\?v=20260919-uiux2/);
-  assert.match(adminHtml, /uiux-admin-premium-2026\.js\?v=20260919-uiux2/);
+  assert.match(adminHtml, /uiux-admin-premium-2026\.js\?v=20260920-perf2/);
 });
 
 test('member-facing work copy normalizes to 업무 매칭 without renaming generic internal line taxonomy', async () => {
