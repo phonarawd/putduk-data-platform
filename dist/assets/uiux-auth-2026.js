@@ -5,29 +5,6 @@
   if (root.dataset.mode !== 'member') return;
   root.dataset.uiuxAuth = '2026-09';
 
-  const LEGAL_DOCUMENTS = {
-    terms: {
-      title: '퍼뜩 이용약관',
-      eyebrow: '필수 약관',
-      version: '2026.09.16',
-      sections: [
-        ['서비스 이용', '퍼뜩은 공개된 업무 조건에 따라 데이터 확인 작업을 제공하며, 제출 내용은 자동검사와 운영 검수를 거칩니다.'],
-        ['보상 기준', '카드에 표시된 금액은 예상 보상이며, 실제 보상은 작업 결과와 검수 완료 후 확정됩니다. 입금만으로 수익이 발생한다고 안내하지 않습니다.'],
-        ['계정 보호', '본인 계정의 비밀번호와 인증 수단을 안전하게 보관해야 합니다. 이상 활동이 확인되면 작업·출금이 일시 제한될 수 있습니다.']
-      ]
-    },
-    privacy: {
-      title: '개인정보 수집·이용 안내',
-      eyebrow: '필수 안내',
-      version: '2026.09.16',
-      sections: [
-        ['수집 항목', '가입 시 이름, 생년월일 입력값, 이메일, 휴대폰번호를 받습니다. 업무·출금 기능을 사용할 때 추가 본인확인 자료가 별도 요청될 수 있습니다.'],
-        ['이용 목적', '회원 계정 생성, 작업내역 제공, 고객 문의 응대, 부정 이용 방지와 운영 기록 보관에 사용합니다.'],
-        ['보관 및 열람', '필요한 기간 동안 보호된 저장소에 보관하며, 운영자 권한에 따라 접근을 기록합니다. 화면에 표시되는 정보는 최소화합니다.']
-      ]
-    }
-  };
-
   const eyeIcon = (visible) => visible
     ? '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z"/><circle cx="12" cy="12" r="2.8"/><path d="m4 4 16 16"/></svg>'
     : '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z"/><circle cx="12" cy="12" r="2.8"/></svg>';
@@ -211,39 +188,6 @@
     }
   }
 
-  function closeLegalSheet() {
-    const sheet = document.querySelector('.uiux-legal-sheet-backdrop');
-    if (!sheet) return;
-    const returnId = sheet.dataset.returnFocus;
-    sheet.remove();
-    if (returnId) document.getElementById(returnId)?.focus();
-  }
-
-  function openLegalSheet(kind, trigger) {
-    const doc = LEGAL_DOCUMENTS[kind];
-    if (!doc) return;
-    closeLegalSheet();
-    if (trigger && !trigger.id) trigger.id = `uiux-legal-trigger-${kind}`;
-
-    const backdrop = document.createElement('div');
-    backdrop.className = 'uiux-legal-sheet-backdrop';
-    backdrop.dataset.returnFocus = trigger?.id || '';
-    backdrop.innerHTML = `<section class="uiux-legal-sheet" role="dialog" aria-modal="true" aria-labelledby="uiuxLegalTitle">
-      <header class="uiux-legal-head">
-        <div><span class="uiux-legal-eyebrow">${doc.eyebrow}</span><h2 id="uiuxLegalTitle">${doc.title}</h2><p>버전 ${doc.version} · 현재 서비스에 게시된 내용을 보기 쉽게 정리했어요.</p></div>
-        <button type="button" class="uiux-legal-close" data-uiux-legal-close aria-label="약관 닫기">${eyeIcon(false).replace(/<circle[^>]*\/>/, '')}</button>
-      </header>
-      <nav class="uiux-legal-nav" aria-label="약관 목차">${doc.sections.map((section, index) => `<a href="#uiuxLegalSection${index + 1}">${index + 1}. ${section[0]}</a>`).join('')}</nav>
-      <div class="uiux-legal-body">
-        <div class="uiux-legal-summary"><strong>가입 전 확인해 주세요</strong><p>아래 내용은 현재 서비스에 게시된 원문을 항목별로 나눈 화면입니다.</p></div>
-        ${doc.sections.map((section, index) => `<section class="uiux-legal-section" id="uiuxLegalSection${index + 1}"><span>${String(index + 1).padStart(2, '0')}</span><div><h3>${section[0]}</h3><p>${section[1]}</p></div></section>`).join('')}
-      </div>
-      <footer class="uiux-legal-footer"><button type="button" class="primary-button" data-uiux-legal-close>확인</button></footer>
-    </section>`;
-    document.body.appendChild(backdrop);
-    backdrop.querySelector('[data-uiux-legal-close]')?.focus();
-  }
-
   document.addEventListener('click', (event) => {
     const passwordToggle = event.target.closest('[data-uiux-password-target]');
     if (passwordToggle) {
@@ -258,26 +202,11 @@
       }
       return;
     }
-
-    const legal = event.target.closest('[data-uiux-legal]');
-    if (legal) {
-      event.preventDefault();
-      openLegalSheet(legal.dataset.uiuxLegal, legal);
-      return;
-    }
-
-    if (event.target.closest('[data-uiux-legal-close]') || event.target.classList.contains('uiux-legal-sheet-backdrop')) {
-      closeLegalSheet();
-    }
   });
 
   document.addEventListener('input', (event) => {
     if (!['signupPassword', 'signupPasswordConfirm'].includes(event.target?.id)) return;
     updatePasswordHints(event.target.closest('form'));
-  });
-
-  document.addEventListener('keydown', (event) => {
-    if (event.key === 'Escape' && document.querySelector('.uiux-legal-sheet-backdrop')) closeLegalSheet();
   });
 
   let queued = false;

@@ -20,9 +20,14 @@
 
 - 화면에 노출하는 이용약관 버전과 signup metadata의 `terms_version`이 정확히 일치해야 한다.
 - 화면에 노출하는 개인정보 동의/처리 안내 버전과 signup metadata의 `privacy_version`이 정확히 일치해야 한다.
-- 현재 FINAL 법률문구 버전은 `2026.09.19`다.
-- 현재 기존 `app.js` 가입 metadata는 `terms_version: 2026-09-16`, `privacy_version: 2026-09-16`으로 확인되므로 이 불일치가 해소되기 전에는 merge 금지.
-- 선택 광고성 수신동의는 `marketing_opt_in`으로 실제 signup metadata에 저장되는 것을 확인했다.
+- 현재 FINAL 법률문구 버전은 `2026.09.19`이며, 회원-facing 법률본문 Source of Truth는 `dist/assets/uiux-legal-2026.js`다.
+- 현재 `app.js` signup metadata는 필수 동의가 모두 true인 경우에만 가입을 진행하고, 실제 선택 결과를 저장한다.
+  - `terms_accepted`: 이용약관 필수 동의 여부
+  - `privacy_accepted`: 개인정보 수집·이용 필수 동의 여부
+  - `terms_version: 2026-09-19`
+  - `privacy_version: 2026-09-19`
+  - `marketing_opt_in`: 선택 광고성 수신 동의(미동의여도 가입 가능)
+- `uiux-auth-2026.js`는 동의 UI와 `[data-uiux-legal]` 버튼만 제공하고, 법률본문은 `uiux-legal-2026.js`가 전담한다.
 - 가능하면 광고성 수신동의의 버전·동의시각·철회시각을 감사 가능한 형태로 저장하는 별도 설계를 검토한다.
 
 ## 3. 이용약관 실제 서비스 일치

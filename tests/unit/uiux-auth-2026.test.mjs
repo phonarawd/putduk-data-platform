@@ -21,6 +21,10 @@ test('member shell wires premium auth/legal assets and service worker v29 caches
   assert.match(sw, /uiux-compliance-2026\.js\?v=20260919-uiux5/);
   assert.match(sw, /uiux-growth-2026\.css\?v=20260919-uiux3/);
   assert.match(sw, /uiux-growth-2026\.js\?v=20260919-uiux3/);
+
+  const authScriptIdx = memberHtml.indexOf('uiux-auth-2026.js');
+  const legalScriptIdx = memberHtml.indexOf('uiux-legal-2026.js');
+  assert.ok(authScriptIdx >= 0 && legalScriptIdx > authScriptIdx, 'auth runtime must load before final legal runtime');
 });
 
 test('auth UX exposes required labels, password visibility, password validation and separate consent items', async () => {
@@ -53,6 +57,20 @@ test('signup consent evidence uses the FINAL 2026-09-19 legal version', async ()
   assert.doesNotMatch(app, /privacy_version:\s*['"]2026-09-16['"]/);
 });
 
+test('auth runtime delegates legal document ownership to uiux-legal-2026.js', async () => {
+  const authRuntime = await readRepo('dist', 'assets', 'uiux-auth-2026.js');
+
+  assert.doesNotMatch(authRuntime, /2026\.09\.16/);
+  assert.doesNotMatch(authRuntime, /const LEGAL_DOCUMENTS/);
+  assert.doesNotMatch(authRuntime, /function openLegalSheet/);
+  assert.doesNotMatch(authRuntime, /function closeLegalSheet/);
+  assert.match(authRuntime, /dataset\.uiuxLegal/);
+  assert.match(authRuntime, /signupAgreeAll/);
+  assert.match(authRuntime, /signupPrivacy/);
+  assert.match(authRuntime, /이용약관 동의/);
+  assert.match(authRuntime, /개인정보 수집·이용 동의/);
+});
+
 test('legal UX presents structured member-facing legal documents and marketing choice', async () => {
   const [legal, authCss, legalCss] = await Promise.all([
     readRepo('dist', 'assets', 'uiux-legal-2026.js'),
@@ -60,6 +78,7 @@ test('legal UX presents structured member-facing legal documents and marketing c
     readRepo('dist', 'assets', 'uiux-legal-2026.css')
   ]);
 
+  assert.match(legal, /const VERSION = ['"]2026\.09\.19['"]/);
   assert.match(legal, /퍼뜩 이용약관/);
   assert.match(legal, /개인정보 수집·이용 및 처리 안내/);
   assert.match(legal, /광고성 정보 수신 동의/);
