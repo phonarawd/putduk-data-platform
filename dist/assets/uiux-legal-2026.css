@@ -121,6 +121,41 @@
   font-weight: 820;
 }
 
+.uiux-legal-access,
+.uiux-auth-legal-access {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.uiux-legal-access {
+  margin-top: 14px;
+  padding-top: 13px;
+  border-top: 1px solid var(--premium-line);
+}
+
+.uiux-auth-legal-access {
+  justify-content: center;
+  margin-top: 16px;
+  padding-top: 15px;
+  border-top: 1px solid var(--premium-line);
+}
+
+.uiux-legal-access .text-link,
+.uiux-auth-legal-access .text-link {
+  min-height: 32px;
+  padding: 0;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 720;
+}
+
+.uiux-legal-access .text-link:hover,
+.uiux-auth-legal-access .text-link:hover {
+  color: var(--text);
+}
+
 @media (max-width: 640px) {
   .uiux-legal-final .uiux-legal-head,
   .uiux-legal-final .uiux-legal-nav,
