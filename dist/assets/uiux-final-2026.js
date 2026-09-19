@@ -106,7 +106,12 @@
     hero.querySelectorAll('.hero-metrics .metric-label').forEach((label) => {
       const current = String(label.textContent || '').trim();
       const next = DASHBOARD_METRIC_LABELS.get(current);
-      if (next) label.textContent = next;
+      if (!next) return;
+      label.textContent = next;
+      if (next === '매칭 가능 업무') {
+        const unit = label.parentElement?.querySelector('.metric-value small');
+        if (unit) unit.textContent = '건';
+      }
     });
 
     hero.querySelectorAll('.hero-metrics .metric-value').forEach((value) => {
