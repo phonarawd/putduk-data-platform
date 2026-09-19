@@ -15,7 +15,7 @@ test('자동 정산은 닫아도 회원 입금·출금 신청은 인증된 membe
   assert.match(html, /enableFinanceApi:\s*false/);
   assert.match(html, /phase4-finance-wiring\.js/);
   assert.match(perfDeferred, /phase4-finance-wiring\.js\?v=20260919-p4r2/);
-  assert.match(html, /app\.js\?v=20260920-p0money1/);
+  assert.match(html, /app\.js\?v=20260920-worktap1/);
   assert.match(wiring, /request_upload/);
   assert.match(wiring, /purpose:\s*'deposit_proof'/);
   assert.match(wiring, /uploadToSignedUrl/);

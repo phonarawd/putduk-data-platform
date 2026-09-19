@@ -2313,6 +2313,7 @@
       if (!syncTimer) {
         syncTimer = window.setInterval(async () => {
           if (!authState.session || document.hidden) return;
+          if (isLiveWorkOverlay() || state._startingWork || state.run?._submitting || state.run?._submitWaiting) return;
           if (state.modal) {
             if (isAdmin && authState.adminAuthorized) await refreshAdminPageData({ silent: true });
             if (!isAdmin) {
@@ -3918,16 +3919,18 @@
       bindAuxMotion();
       if (state.player && state.run?.overlayOpen) drawMotionCanvas();
     }
-    bindFomoClock();
-    patchFomoDom();
-    if (replayMotion || rebindOverlayUi) {
-      bindDepositJumpUi();
-      bindKycFilePickers();
+    if (!isLiveWorkOverlay()) {
+      bindFomoClock();
+      patchFomoDom();
+      if (replayMotion || rebindOverlayUi) {
+        bindDepositJumpUi();
+        bindKycFilePickers();
+      }
+      restoreDepositForm();
+      paintDepositQr();
+      paintNoticeBadge();
+      syncChannelTalk();
     }
-    restoreDepositForm();
-    paintDepositQr();
-    paintNoticeBadge();
-    syncChannelTalk();
     if (state.toast) {
       const pendingToast = state.toast;
       state.toast = null;
@@ -4132,21 +4135,97 @@
     render();
   }
 
+  function isLiveWorkOverlay() {
+    return Boolean(state.player && state.run?.overlayOpen);
+  }
+
+  function workActionButtons() {
+    return document.querySelectorAll('[data-action="confirm-start"], [data-action="submit-player"], .inspect-entry .primary-button, .catalog-entry .primary-button');
+  }
+
+  function setWorkActionBusy(busy, label) {
+    workActionButtons().forEach((btn) => {
+      if (!(btn instanceof HTMLButtonElement)) return;
+      if (busy) {
+        if (!btn.dataset.idleLabel) btn.dataset.idleLabel = btn.textContent || '';
+        btn.disabled = true;
+        if (label) btn.textContent = label;
+        return;
+      }
+      btn.disabled = false;
+      if (btn.dataset.idleLabel) btn.textContent = btn.dataset.idleLabel;
+      delete btn.dataset.idleLabel;
+    });
+  }
+
+  function submitWaitLabel(ms) {
+    const sec = Math.max(1, Math.ceil(Number(ms || 0) / 1000));
+    return sec > 1 ? `제출 준비 중… ${sec}초` : '제출하는 중…';
+  }
+
+  function clearSubmitWait(run) {
+    if (!run) return;
+    if (run._submitWaitTimer) {
+      window.clearTimeout(run._submitWaitTimer);
+      run._submitWaitTimer = null;
+    }
+    run._submitWaiting = false;
+  }
+
+  function scheduleSubmitRetry(node, run, remainMs) {
+    const started = Date.now();
+    const tick = () => {
+      if (state.run !== run || run._submitted) return;
+      const left = remainMs - (Date.now() - started);
+      if (left <= 0) {
+        run._submitWaiting = false;
+        if (!run._submitting) finishRun(node);
+        return;
+      }
+      setWorkActionBusy(true, submitWaitLabel(left));
+      run._submitWaitTimer = window.setTimeout(tick, 400);
+    };
+    run._submitWaiting = true;
+    setWorkActionBusy(true, submitWaitLabel(remainMs));
+    run._submitWaitTimer = window.setTimeout(tick, 400);
+  }
+
+  async function refreshWorkSideState() {
+    await refreshMemberWallet();
+    try {
+      const quotaResult = await memberFinanceRequest('daily_task_quota');
+      state.dailyTaskQuota = quotaResult.quota || null;
+    } catch (_) {}
+    if (!isLiveWorkOverlay() && !state.startNodeId) render();
+  }
+
   async function confirmStartWork() {
     const nodeId = state.startNodeId;
-    if (!nodeId) return;
+    if (!nodeId || state._startingWork) return;
+    state._startingWork = true;
+    setWorkActionBusy(true, '출근하는 중…');
     const node = nodeById(nodeId);
     const company = companyById(node.companyId);
     const photo = node.questionImage
       ? brandAssetSrc(node.questionImage, company.slug, 'photo')
       : (company.photoUrl || brandAssetSrc(company.photo_asset_path, company.slug, 'photo'));
     if (workEnabled() && authState.session && supabaseClient) {
-      const { data, error } = await supabaseClient
-        .from('task_runs')
-        .insert({ node_id: nodeId, user_id: authState.session.user.id })
-        .select('id,public_id,node_id,status,started_at,expected_completed_at,motion_variant,motion_seed,reward_amount')
-        .single();
+      let data = null;
+      let error = null;
+      try {
+        const started = await supabaseClient
+          .from('task_runs')
+          .insert({ node_id: nodeId, user_id: authState.session.user.id })
+          .select('id,public_id,node_id,status,started_at,expected_completed_at,motion_variant,motion_seed,reward_amount')
+          .single();
+        data = started.data;
+        error = started.error;
+      } catch (startError) {
+        error = startError;
+      }
       if (error || !data) {
+        state._startingWork = false;
+        setWorkActionBusy(false);
         showToast(taskApiErrorMessage(error), 'info');
         return;
       }
@@ -4174,16 +4253,13 @@
         _submitted: false
       };
       state.player = { nodeId: state.run.nodeId, choice: null, question: playerQuestion(node), photo, bundle: initBundleForNode(node, company, state.run), listing: {} };
-      await refreshMemberWallet();
-      try {
-        const quotaResult = await memberFinanceRequest('daily_task_quota');
-        state.dailyTaskQuota = quotaResult.quota || null;
-      } catch (_) {}
       overlayDismissed = false;
+      state._startingWork = false;
       saveState();
       render();
       showToast(isCatalogWork(node) ? '🟢 출근했어요. 상품명·가격·옵션·배송을 적어 주세요.' : '🟢 출근했어요. 전표와 실물 번호를 대조해 주세요.', 'success');
       runFrame = requestAnimationFrame(tickRun);
+      void refreshWorkSideState();
       return;
     }
 
@@ -4201,6 +4277,7 @@
     };
     state.player = { nodeId, choice: null, question: playerQuestion(node), photo, bundle: initBundleForNode(node, company, state.run), listing: {} };
     overlayDismissed = false;
+    state._startingWork = false;
     saveState();
     render();
     showToast('👀 근무 화면을 열었어요. 실제 제출·정산은 아직 잠겨 있을 수 있어요.', 'info');
@@ -4221,6 +4298,7 @@
 
   async function submitPlayer() {
     const node = nodeById(state.player?.nodeId);
+    if (state.run?._submitting || state.run?._submitWaiting) return;
     if (isCatalogWork(node)) {
       const listing = catalogFormValues();
       state.player.listing = listing;
@@ -4232,6 +4310,7 @@
       showToast('🙂 오늘 배정 물량 5건을 모두 대조해 주세요.', 'info');
       return;
     }
+    setWorkActionBusy(true, '제출하는 중…');
     if (state.run?.serverBacked && workEnabled() && authState.session) {
       await finishRun(node);
       if (!state.reviewWait) return;
@@ -4290,6 +4369,7 @@
 
     if (run.serverBacked && authState.session && config.enableWorkApi === true) {
       if (run._submitting) return;
+      if (run._submitWaiting) return;
       const catalog = isCatalogWork(node);
       const listing = catalog ? (document.getElementById('catalogProductName') ? catalogFormValues() : readCatalogListing(state.player?.listing)) : null;
       if (catalog) {
@@ -4297,6 +4377,7 @@
           run.overlayOpen = true;
           saveState();
           render();
+          setWorkActionBusy(false);
           showToast('🙂 상품명·가격·옵션·배송을 카드와 같게 적어 주세요.', 'info');
           return;
         }
@@ -4305,6 +4386,7 @@
         run.overlayOpen = true;
         saveState();
         render();
+        setWorkActionBusy(false);
         showToast('🙂 오늘 배정 물량 5건을 모두 대조해 주세요.', 'info');
         return;
       }
@@ -4332,18 +4414,17 @@
       } catch (error) {
         run._submitting = false;
         run.overlayOpen = true;
-        saveState();
-        render();
         const message = String(error?.message || '');
         if (message.includes('예상 처리 시간이')) {
-          showToast('📋 검수 전표를 넣고 있어요. 바로 다시 넣을게요.', 'info');
-          const waitMs = Math.max(800, (Number(run.expectedCompletedAt) || Date.now()) - Date.now() + 400);
-          window.setTimeout(() => {
-            if (state.run === run && !run._submitting) finishRun(node);
-          }, waitMs);
-        } else {
-          showToast(message.includes('대조') || message.includes('번호') || message.includes('골라') || message.includes('물량') || message.includes('상품') ? message : taskApiErrorMessage(error), 'info');
+          const waitMs = Math.max(800, (Number(run.expectedCompletedAt) || Date.now()) - Date.now() + 200);
+          showToast('🙂 제출 준비만 조금 더 하면 바로 넣어요.', 'info');
+          scheduleSubmitRetry(node, run, waitMs);
+          return;
         }
+        saveState();
+        render();
+        setWorkActionBusy(false);
+        showToast(message.includes('대조') || message.includes('번호') || message.includes('골라') || message.includes('물량') || message.includes('상품') ? message : taskApiErrorMessage(error), 'info');
         return;
       }
 
@@ -4352,6 +4433,7 @@
         run.overlayOpen = true;
         saveState();
         render();
+        setWorkActionBusy(false);
         showToast(taskApiErrorMessage(null), 'info');
         return;
       }
@@ -4381,6 +4463,7 @@
         submittedAt: data.completed_at || new Date().toISOString(),
         overlayOpen: false
       };
+      clearSubmitWait(run);
       state.run = null;
       state.player = null;
       saveState();
@@ -4812,6 +4895,7 @@
 
   function confirmInspectLabel() {
     if (!state.player) return;
+    setWorkActionBusy(true, '확인하는 중…');
     const bundle = syncInspectBundle(state.player.bundle, nodeById(state.player.nodeId), state.run);
     state.player.bundle = bundle;
     if (isInspectBundleComplete(bundle)) {
@@ -4820,13 +4904,18 @@
       return;
     }
     const item = bundle.items[bundle.current];
-    if (!item) return;
+    if (!item) {
+      setWorkActionBusy(false);
+      return;
+    }
     const typed = normalizeTypedLabel(document.getElementById('inspectLabelInput')?.value || '');
     if (!typed) {
+      setWorkActionBusy(false);
       showToast('🙂 실물에 적힌 라벨 번호를 입력해 주세요.', 'info');
       return;
     }
     if (typed !== normalizeTypedLabel(item.targetCode)) {
+      setWorkActionBusy(false);
       tapHaptic('bad');
       showToast('🔍 실물 라벨 번호를 다시 확인해 주세요.', 'info');
       return;
