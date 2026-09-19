@@ -40,3 +40,11 @@ export function arrivedNoticeToast(item) {
   if (item?.type === 'work') return '📬 새 근무가 배정됐어요. 라인 찾기에서 확인해 주세요.';
   return '📬 새 안내가 도착했어요. 종을 눌러 확인해 주세요.';
 }
+
+/** 오버레이 본문 토큰. 목록·읽음 상태가 바뀌면 DOM 패치가 일어나게 한다. */
+export function notificationsOverlayBody(notifications) {
+  const rows = Array.isArray(notifications) ? notifications : [];
+  const unread = unreadNoticeCount(rows);
+  const digest = rows.slice(0, 16).map((item) => `${item?.id || ''}:${item?.read ? 1 : 0}`).join('|');
+  return `${unread}:${rows.length}:${digest}`;
+}

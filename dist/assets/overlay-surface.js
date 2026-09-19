@@ -59,6 +59,12 @@ function overlayBodyToken(state = {}, helpers = {}) {
     const phase = preset.confirmAmount != null ? 'confirm' : 'entry';
     return `${phase}:${preset.user_id || preset.id || ''}:${preset.amount ?? ''}:${preset.bucket || ''}:${preset.confirmAmount ?? ''}`;
   }
+  if (key === 'modal:notifications') {
+    const rows = Array.isArray(state.notifications) ? state.notifications : [];
+    const unread = rows.filter((item) => item && !item.read).length;
+    const digest = rows.slice(0, 16).map((item) => `${item?.id || ''}:${item?.read ? 1 : 0}`).join('|');
+    return `${unread}:${rows.length}:${digest}`;
+  }
   return key;
 }
 
@@ -87,9 +93,13 @@ function overlayPaintPlan(input = {}) {
   const hasShell = Boolean(input.hasShell);
   const sameBody = input.sameBody !== false;
   const memberDetailReuse = Boolean(input.memberDetailReuse);
+  const notificationsModalReuse = Boolean(input.notificationsModalReuse);
 
   if (memberDetailReuse) {
     return { action: 'patch-member-detail', replayMotion: false, rebindOverlayUi: false, releaseCanvases: false };
+  }
+  if (notificationsModalReuse) {
+    return { action: 'patch-notifications', replayMotion: false, rebindOverlayUi: false, releaseCanvases: false };
   }
   if (nextKey && hasExisting && existingKey === nextKey) {
     return {

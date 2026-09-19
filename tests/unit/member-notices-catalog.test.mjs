@@ -7,7 +7,8 @@ import {
   unreadNoticeCount,
   noticeBadgeLabel,
   arrivedUnreadNotice,
-  arrivedNoticeToast
+  arrivedNoticeToast,
+  notificationsOverlayBody
 } from '../../src/work/member-notices.mjs';
 import { sanitizeMemberNotice } from '../../src/work/run-status.mjs';
 import { readLaunchFiles } from '../helpers/repo.mjs';
@@ -39,14 +40,28 @@ test('알림은 본문이 비어도 남고 안 읽음 숫자를 센다', () => {
   assert.match(arrivedNoticeToast(arrived), /라인 찾기/);
 });
 
+test('알림 목록 본문 토큰은 읽음·건수가 바뀌면 달라진다', () => {
+  const unread = [
+    { id: 'a', read: false },
+    { id: 'b', read: true }
+  ];
+  const read = unread.map((item, index) => (index === 0 ? { ...item, read: true } : item));
+  assert.notEqual(notificationsOverlayBody(unread), notificationsOverlayBody(read));
+});
+
 test('회원 화면은 종 숫자·읽음 처리·배정 조회를 실제로 쓴다', async () => {
-  const { appJs, appCss } = await readLaunchFiles();
+  const { memberHtml, adminHtml, appJs, appCss } = await readLaunchFiles();
   assert.match(appJs, /from\('task_assignments'\)/);
   assert.match(appJs, /node\.assigned/);
   assert.match(appJs, /notice-badge/);
   assert.match(appJs, /read_at/);
   assert.match(appJs, /mark-notices-read/);
   assert.match(appJs, /postgres_changes/);
+  assert.match(appJs, /data-modal="notifications"/);
+  assert.match(appJs, /patchNotificationsModal/);
+  assert.match(memberHtml, /notice-inbox\.js/);
+  assert.match(adminHtml, /notice-inbox\.js/);
   assert.match(appCss, /\.notice-badge/);
   assert.match(appCss, /\.notice-row\.is-unread/);
+  assert.match(appCss, /\.notice-list/);
 });

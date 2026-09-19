@@ -1297,7 +1297,47 @@
   function noticeBellButtonHtml() {
     const unread = unreadNoticeCount();
     const badge = unread > 0 ? `<span class="notice-badge">${unread > 99 ? '99+' : unread}</span>` : '';
-    return `<button class="icon-button notice-bell" data-notification aria-label="알림${unread ? `, 안 읽은 안내 ${unread}건` : ''}">${icon('bell', 17)}${badge}</button>`;
+    return `<button type="button" class="icon-button notice-bell" data-notification="1" aria-label="알림${unread ? `, 안 읽은 안내 ${unread}건` : ''}">${icon('bell', 17)}${badge}</button>`;
+  }
+
+  function notificationsOverlayBody() {
+    const rows = Array.isArray(state.notifications) ? state.notifications : [];
+    const unread = unreadNoticeCount();
+    const digest = rows.slice(0, 16).map((item) => `${item?.id || ''}:${item?.read ? 1 : 0}`).join('|');
+    return `${unread}:${rows.length}:${digest}`;
+  }
+
+  function noticeListMarkup() {
+    const hasItems = (state.notifications || []).length > 0;
+    if (!hasItems) {
+      return `<div class="empty-state compact"><strong>새 안내가 없어요.</strong><p>운영자가 보내면 종 숫자에 바로 보여요.</p></div>`;
+    }
+    return (state.notifications || []).map((item) => {
+      const unreadMark = item.read ? '읽음' : '안 읽음';
+      return `<button type="button" class="notice-row ${item.read ? '' : 'is-unread'}" data-notice-id="${esc(item.id || '')}"><span class="notice-dot" aria-hidden="true"></span><div class="company-info"><strong>${esc(item.text)}</strong><small>${esc(item.time)} · ${unreadMark}</small></div></button>`;
+    }).join('');
+  }
+
+  function noticeToolbarMarkup() {
+    const unread = unreadNoticeCount();
+    const hasItems = (state.notifications || []).length > 0;
+    if (!hasItems) return '';
+    const markAll = unread > 0
+      ? `<button class="text-link" type="button" data-action="mark-notices-read">모두 읽음</button>`
+      : '';
+    return `<div class="notice-toolbar">${unread ? `<span>📬 안 읽은 안내 ${unread}건</span>` : '<span>✅ 모두 확인했어요</span>'}${markAll}</div>`;
+  }
+
+  function patchNotificationsModal() {
+    const root = document.querySelector('[data-modal="notifications"]');
+    if (!root) return;
+    const toolbar = root.querySelector('.notice-toolbar');
+    const list = root.querySelector('.notice-list');
+    const nextToolbar = noticeToolbarMarkup();
+    if (toolbar) toolbar.outerHTML = nextToolbar;
+    else if (nextToolbar) root.querySelector('.modal-body')?.insertAdjacentHTML('afterbegin', nextToolbar);
+    if (list) list.innerHTML = noticeListMarkup();
+    root.setAttribute('data-stable', '1');
   }
 
   function paintNoticeBadge() {
@@ -1441,6 +1481,7 @@
 
   async function openNoticeItem(id) {
     if (id) await markNoticesRead([id]);
+    paintNoticeBadge();
     const item = (state.notifications || []).find((row) => String(row.id) === String(id));
     if (item?.type === 'work') {
       state.memberPage = 'nodes';
@@ -1449,13 +1490,37 @@
       showToast('✅ 배정된 라인을 라인 찾기에서 확인해요.', 'success');
       return;
     }
+    if (state.modal === 'notifications') {
+      patchNotificationsModal();
+      return;
+    }
+    render();
+  }
+
+  async function markAllNoticesRead() {
+    const ids = (state.notifications || []).filter((item) => item && !item.read).map((item) => item.id).filter(Boolean);
+    if (!ids.length) return;
+    await markNoticesRead(ids);
+    paintNoticeBadge();
+    if (state.modal === 'notifications') {
+      patchNotificationsModal();
+      return;
+    }
     render();
   }
 
   async function openMemberNotices() {
-    openModal('notifications');
     await refreshMemberNotices({ toastNew: false });
-    if (state.modal === 'notifications') render();
+    const unreadIds = (state.notifications || []).filter((item) => item && !item.read).map((item) => item.id).filter(Boolean);
+    openModal('notifications');
+    if (unreadIds.length) {
+      await markNoticesRead(unreadIds);
+      paintNoticeBadge();
+    }
+    if (state.modal === 'notifications') {
+      if (document.querySelector('[data-modal="notifications"]')) patchNotificationsModal();
+      else render();
+    }
   }
 
   async function hydrateSession(session, options = {}) {
@@ -1709,6 +1774,7 @@
       }
       authState.adminAuthorized = true;
       authState.adminRoles = Array.isArray(result.roles) ? result.roles : [];
+      void refreshMemberNotices({ toastNew: false }).then(() => paintNoticeBadge()).catch(() => {});
     } catch (error) {
       authState.error = error;
     } finally {
@@ -3568,21 +3634,7 @@
   }
 
   function renderNotificationsModal() {
-    const unread = unreadNoticeCount();
-    const hasItems = (state.notifications || []).length > 0;
-    const items = hasItems
-      ? (state.notifications || []).map((item) => {
-        const unreadMark = item.read ? '읽음' : '안 읽음';
-        return `<button type="button" class="notice-row ${item.read ? '' : 'is-unread'}" data-notice-id="${esc(item.id || '')}"><span class="notice-dot" aria-hidden="true"></span><div class="company-info"><strong>${esc(item.text)}</strong><small>${esc(item.time)} · ${unreadMark}</small></div></button>`;
-      }).join('')
-      : `<div class="empty-state compact"><strong>새 안내가 없어요.</strong><p>운영자가 보내면 종 숫자에 바로 보여요.</p></div>`;
-    const markAll = unread > 0
-      ? `<button class="text-link" type="button" data-action="mark-notices-read">모두 읽음</button>`
-      : '';
-    const toolbar = hasItems
-      ? `<div class="notice-toolbar">${unread ? `<span>📬 안 읽은 안내 ${unread}건</span>` : '<span>✅ 모두 확인했어요</span>'}${markAll}</div>`
-      : '';
-    return `<div class="modal-backdrop" data-modal="alerts"><div class="modal"><div class="modal-head"><div><h2>알림</h2><p>사원증으로 온 안내예요. 안 읽은 건 숫자에 보여요.</p></div><button class="icon-button" data-action="close-modal" aria-label="알림 창 닫기">${icon('x',18)}</button></div><div class="modal-body">${toolbar}<div class="notice-list">${items}</div></div></div></div>`;
+    return `<div class="modal-backdrop" data-modal="notifications"><div class="modal notice-inbox-modal"><div class="modal-head"><div><h2>알림</h2><p>사원증으로 온 안내예요. 종을 누르면 확인한 걸로 표시돼요.</p></div><button type="button" class="icon-button" data-action="close-modal" aria-label="알림 창 닫기">${icon('x',18)}</button></div><div class="modal-body">${noticeToolbarMarkup()}<div class="notice-list">${noticeListMarkup()}</div></div></div></div>`;
   }
 
   function renderCompanyForm() {
@@ -3787,6 +3839,7 @@
       const phase = preset.confirmAmount != null ? 'confirm' : 'entry';
       return `${phase}:${preset.user_id || preset.id || ''}:${preset.amount ?? ''}:${preset.bucket || ''}:${preset.confirmAmount ?? ''}`;
     }
+    if (key === 'modal:notifications') return notificationsOverlayBody();
     return key;
   }
 
@@ -3873,6 +3926,7 @@
     }
     restoreDepositForm();
     paintDepositQr();
+    paintNoticeBadge();
     syncChannelTalk();
     if (state.toast) {
       const pendingToast = state.toast;
@@ -3899,13 +3953,20 @@
           hasExisting: Boolean(existing),
           hasShell: Boolean(app.querySelector('.app-shell')),
           sameBody: (existing?.getAttribute('data-overlay-body') || '') === nextBody,
-          memberDetailReuse: state.modal === 'member-detail' && existingType === 'member-detail'
+          memberDetailReuse: state.modal === 'member-detail' && existingType === 'member-detail',
+          notificationsModalReuse: state.modal === 'notifications' && existingType === 'notifications'
         })
       : null;
     const action = plan?.action || '';
     if (action === 'patch-member-detail' || (!plan && state.modal === 'member-detail' && existingType === 'member-detail')) {
       patchAppShell(app);
       patchMemberDetailModal(state.modalPayload || state.adminMemberDetail);
+      finishPaint({ replayMotion: false, rebindOverlayUi: false });
+      return;
+    }
+    if (action === 'patch-notifications' || (!plan && state.modal === 'notifications' && existingType === 'notifications')) {
+      patchAppShell(app);
+      patchNotificationsModal();
       finishPaint({ replayMotion: false, rebindOverlayUi: false });
       return;
     }
@@ -4944,7 +5005,7 @@
     if (action === 'lock-deposit-info') { lockDepositReveal({ silent: false }); showToast('🔒 입금 안내를 다시 잠갔어요.', 'info'); return; }
     if (action === 'install-app') { installApp(); return; }
     if (action === 'mark-notices-read') {
-      markNoticesRead((state.notifications || []).filter((item) => !item.read).map((item) => item.id)).then(() => render());
+      void markAllNoticesRead();
       return;
     }
     if (action === 'close-modal') {
@@ -5906,8 +5967,25 @@
       submitBalanceAdjustForm,
       submitMemberTierForm,
       submitMemberBlockForm,
+      openMemberNotices,
+      openNoticeItem,
+      markAllNoticesRead,
+      patchNotificationsModal,
       MOTION_PROFILES
     };
+  }
+
+  window.__putdukOpenNotices = openMemberNotices;
+  window.__putdukOpenNoticeItem = openNoticeItem;
+  window.__putdukMarkAllNoticesRead = markAllNoticesRead;
+  window.__putdukOpenAuth = (action) => {
+    state.authMode = action === 'open-signup' ? 'signup' : 'login';
+    openModal('auth');
+  };
+  if (window.__putdukWantAuth) {
+    const pending = window.__putdukWantAuth;
+    window.__putdukWantAuth = null;
+    window.__putdukOpenAuth(pending);
   }
 
   initializePwa();

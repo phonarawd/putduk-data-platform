@@ -41,6 +41,25 @@ test('클래스 목록을 깨지 않고 data-surface를 붙인다', () => {
   assert.match(stamped, /data-overlay-body="inspect:1:5:0"/);
 });
 
+test('알림 모달은 읽음 상태가 바뀌면 표면 본문이 바뀐다', () => {
+  const unread = {
+    modal: 'notifications',
+    notifications: [{ id: 'n1', read: false }, { id: 'n2', read: true }]
+  };
+  const read = {
+    modal: 'notifications',
+    notifications: [{ id: 'n1', read: true }, { id: 'n2', read: true }]
+  };
+  assert.notEqual(overlayBodyToken(unread), overlayBodyToken(read));
+  assert.deepEqual(overlayPaintPlan({
+    nextKey: 'modal:notifications',
+    existingKey: 'modal:notifications',
+    hasExisting: true,
+    hasShell: true,
+    sameBody: false
+  }).action, 'patch-overlay');
+});
+
 test('잔액 입금·차감 모달은 확인 단계로 넘어갈 때 표면 본문이 바뀐다', () => {
   const entry = {
     modal: 'balance-adjust',
