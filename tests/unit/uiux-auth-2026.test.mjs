@@ -125,6 +125,9 @@ test('legal runtime publishes GOGOX HOLDINGS LIMITED business operator info', as
   assert.match(legal, /uiux-business-certificate/);
   assert.match(legal, /사업자정보 확인서/);
   assert.doesNotMatch(legal, /사업자등록증/);
+  const businessInfo = legal.slice(legal.indexOf('const BUSINESS_INFO = {'), legal.indexOf('\n  const DOCS'));
+  assert.doesNotMatch(businessInfo, /\b(address|phone|businessRegistrationNumber|ecommerceReportNumber)\s*:/);
+  assert.doesNotMatch(businessInfo, /사업장 주소|전화번호|통신판매업 신고번호/);
   assert.match(legal, /business:\s*\{/);
   assert.match(legal, /title: '사업자정보'/);
   assert.doesNotMatch(legal, /[\u4e00-\u9fff]/);
