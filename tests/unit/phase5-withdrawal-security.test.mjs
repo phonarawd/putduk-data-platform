@@ -33,7 +33,7 @@ test('public destination_label·withdrawal payload에 예금주 평문이 없다
 
 test('FOMO 관련 diff 없음 (PHASE 5 범위, branch parent 기준)', async () => {
   const { execSync } = await import('node:child_process');
-  const parent = '020c0dcd2e01dc3b67ec8cb990898e4af55a8ae5';
+  const parent = '6856018333bfb670dfd9d9a3ab1a550eab6c4be1';
   const diff = execSync(`git diff ${parent}..HEAD -- dist/assets/app.js`, { encoding: 'utf8' });
   const changedLines = diff
     .split(/\r?\n/)

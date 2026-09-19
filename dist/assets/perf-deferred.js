@@ -102,20 +102,8 @@
     }
   }
 
-  async function bootMember() {
-    await ensureMany(['uiuxFinal', 'uiuxPremium', 'uiuxGrowth', 'uiuxAuth', 'uiuxLegal', 'brand', 'finance']);
-    if (document.documentElement.dataset.lowPerf !== '1') {
-      idle(() => { ensure('channel').catch(() => {}); }, 4000);
-    }
-  }
-
-  async function bootAdmin() {
-    await ensureMany(['uiuxFinal', 'uiuxPremium', 'adminUiux', 'brand']);
-  }
-
-  idle(() => {
-    (isAdmin ? bootAdmin() : bootMember()).catch(() => {});
-  }, 1800);
+  // UIUX·입금·브랜드는 셸이 직접 로드한다. 여기서는 무거운 3D/채널톡만 늦게 붙인다.
+  idle(() => { ensure('motion').catch(() => {}); }, 4000);
 
   window.PutdukPerf = {
     ensure,

@@ -1,14 +1,19 @@
-const CACHE_MEMBER = 'putduk-member-v33';
-const CACHE_ADMIN = 'putduk-admin-v33';
+const CACHE_MEMBER = 'putduk-member-v34';
+const CACHE_ADMIN = 'putduk-admin-v34';
 
 const MEMBER_SHELL = [
   '/',
-  '/assets/app.css?v=20260920-perf1',
-  '/assets/app.js?v=20260920-perf1',
+  '/assets/app.css?v=20260920-perf2',
+  '/assets/app.js?v=20260920-perf2',
   '/assets/overlay-surface.css?v=20260918-flash2',
   '/assets/overlay-surface.js?v=20260918-ui3',
-  '/assets/origin-split.js?v=20260920-perf1',
-  '/assets/perf-deferred.js?v=20260920-perf1',
+  '/assets/origin-split.js?v=20260920-perf2',
+  '/assets/perf-deferred.js?v=20260920-perf2',
+  '/assets/uiux-final-2026.css?v=20260919-uiux1',
+  '/assets/uiux-premium-2026.css?v=20260919-uiux2',
+  '/assets/uiux-growth-2026.css?v=20260919-uiux3',
+  '/assets/uiux-auth-2026.css?v=20260919-uiux4',
+  '/assets/uiux-legal-2026.css?v=20260919-uiux8',
   '/assets/ui-icons.js?v=20260918-ui3',
   '/assets/vendor/supabase.min.js?v=20260918-ui3',
   '/manifest.webmanifest',

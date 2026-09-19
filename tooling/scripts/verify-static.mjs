@@ -85,7 +85,7 @@ if (!memberHtml.includes('perf-deferred.js')) {
   throw new Error('회원 셸에 perf-deferred.js 지연 로딩 부트스트랩이 포함되어야 합니다.');
 }
 
-if (!memberHtml.includes('uiux-final-2026.css') || !memberHtml.includes('uiux-final-2026.js')) {
+if (!memberHtml.includes('href="./assets/uiux-final-2026.css') || !memberHtml.includes('src="./assets/uiux-final-2026.js')) {
   throw new Error('회원 셸에 UI/UX FINAL 2026 자산이 포함되어야 합니다.');
 }
 
@@ -124,9 +124,9 @@ if (!complianceJs.includes('주민등록번호 뒷자리') || !complianceJs.incl
   throw new Error('KYC 화면에 불필요한 고유식별정보 마스킹 안내가 포함되어야 합니다.');
 }
 
-if (!sw.includes('putduk-member-v33')
-  || !sw.includes('putduk-admin-v33')
-  || !sw.includes('perf-deferred.js?v=20260920-perf1')
+if (!sw.includes('putduk-member-v34')
+  || !sw.includes('putduk-admin-v34')
+  || !sw.includes('perf-deferred.js?v=20260920-perf2')
   || !sw.includes('uiux-premium-2026.css?v=20260919-uiux2')
   || !sw.includes('uiux-premium-2026.js?v=20260919-uiux2')
   || !sw.includes('uiux-growth-2026.css?v=20260919-uiux3')

@@ -3825,17 +3825,17 @@
 
   function syncChannelTalk() {
     if (isAdmin) return;
-    const allowChannel = state.memberPage === 'support' || !isLowPerfDevice();
-    if (!allowChannel && !authState.session) return;
+    if (state.memberPage !== 'support') return;
+    if (isLowPerfDevice()) return;
     ensurePerfBundle('channel').then(() => {
       const api = window.PutdukChannelTalk;
       if (!api || typeof api.sync !== 'function') return;
       api.sync({
-        enabled: allowChannel || Boolean(authState.session),
+        enabled: true,
         pluginKey: config.channelPluginKey,
         session: authState.session,
         profile: authState.profile,
-        page: state.memberPage || 'dashboard',
+        page: 'support',
         theme: state.theme,
         overlayKey: overlaySurfaceKey()
       });
@@ -3941,9 +3941,14 @@
     refreshIcons();
     if (isAdmin && window.PUTDUK_ADMIN && typeof window.PUTDUK_ADMIN.afterRender === 'function') window.PUTDUK_ADMIN.afterRender();
     const overlayOpen = Boolean(overlaySurfaceKey());
-    if (!overlayOpen) {
-      if (!isAdmin && state.memberPage === 'dashboard') drawMemberChart();
-      if (isAdmin && state.adminPage === 'overview') drawAdminChart();
+    if (!overlayOpen && !isLowPerfDevice()) {
+      scheduleIdle(() => {
+        if (isAdmin) {
+          if (state.adminPage === 'overview') drawAdminChart();
+        } else if (state.memberPage === 'dashboard') {
+          drawMemberChart();
+        }
+      }, 2400);
     }
     if (replayMotion) {
       if (state.run && state.run.overlayOpen && !state.player) {
@@ -3972,7 +3977,7 @@
     document.documentElement.dataset.theme = state.theme;
     const app = document.getElementById('app');
     if (!app) return;
-    if (authState.loading && !authState.session && app.querySelector('[data-boot-shell="1"]')) return;
+    // data-boot-shell="1" 가 있어도 세션 조회를 기다리지 않고 로그인 버튼이 있는 실제 셸을 바로 그린다.
     const existingType = app.querySelector('[data-modal]')?.getAttribute('data-modal');
     const nextKey = overlaySurfaceKey();
     const existing = app.querySelector('[data-surface]');
@@ -5037,8 +5042,10 @@
     if (action === 'open-login') { state.authMode = 'login'; openModal('auth'); return; }
     if (action === 'logout') { signOut(); return; }
     if (action === 'open-channel-talk') {
-      const api = window.PutdukChannelTalk;
-      if (api && typeof api.openMessenger === 'function') api.openMessenger();
+      ensurePerfBundle('channel').then(() => {
+        const api = window.PutdukChannelTalk;
+        if (api && typeof api.openMessenger === 'function') api.openMessenger();
+      }).catch(() => {});
       return;
     }
     if (action === 'lock-deposit-info') { lockDepositReveal({ silent: false }); showToast('🔒 입금 안내를 다시 잠갔어요.', 'info'); return; }
