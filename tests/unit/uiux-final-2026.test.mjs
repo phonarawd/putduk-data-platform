@@ -42,7 +42,12 @@ test('member dashboard hero uses clear matching-first Korean copy and scoped met
   assert.match(runtime, /\['오늘 작업 가능', '오늘 남은 횟수'\]/);
   assert.match(runtime, /\['근무 상태', '현재 상태'\]/);
   assert.match(runtime, /로그인 후 확인/);
-  assert.doesNotMatch(runtime, /\['검수 완료', '완료한 업무'\][\s\S]*COPY_REPLACEMENTS/);
+
+  const copyStart = runtime.indexOf('const COPY_REPLACEMENTS');
+  const metricStart = runtime.indexOf('const DASHBOARD_METRIC_LABELS');
+  assert.ok(copyStart >= 0 && metricStart > copyStart);
+  const copySection = runtime.slice(copyStart, metricStart);
+  assert.doesNotMatch(copySection, /\['검수 완료', '완료한 업무'\]/);
 });
 
 test('member-facing finance copy follows Korean spacing without changing finance contracts', async () => {
@@ -61,6 +66,8 @@ test('Korean typography, touch targets, six-tab mobile nav and reduced-motion sa
   assert.match(css, /button:focus-visible/);
   assert.match(css, /grid-template-columns:\s*repeat\(6, minmax\(0, 1fr\)\)/);
   assert.match(css, /@media \(prefers-reduced-motion: reduce\)/);
+  assert.match(css, /\.hero-card \.hero-metrics[\s\S]*grid-template-columns:\s*repeat\(4, minmax\(0, 1fr\)\)/);
+  assert.match(css, /@media \(max-width: 840px\)[\s\S]*\.hero-card \.hero-metrics \{ grid-template-columns: repeat\(2, minmax\(0, 1fr\)\); \}/);
   assert.match(css, /grid-template-columns:\s*repeat\(2, minmax\(0, 1fr\)\)/);
 });
 
