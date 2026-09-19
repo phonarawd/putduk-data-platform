@@ -42,6 +42,7 @@ test('member dashboard hero uses clear matching-first Korean copy and scoped met
   assert.match(runtime, /\['오늘 작업 가능', '오늘 남은 횟수'\]/);
   assert.match(runtime, /\['근무 상태', '현재 상태'\]/);
   assert.match(runtime, /로그인 후 확인/);
+  assert.match(runtime, /next === '매칭 가능 업무'[\s\S]*unit\.textContent = '건'/);
 
   const copyStart = runtime.indexOf('const COPY_REPLACEMENTS');
   const metricStart = runtime.indexOf('const DASHBOARD_METRIC_LABELS');
