@@ -1,0 +1,533 @@
+.uiux-auth-modal {
+  width: min(760px, 100%) !important;
+  border-radius: 24px !important;
+}
+
+.uiux-auth-modal.is-login {
+  width: min(520px, 100%) !important;
+}
+
+.uiux-auth-modal .modal-head {
+  padding: 24px 26px 18px;
+}
+
+.uiux-auth-modal .modal-head h2 {
+  font-size: 24px;
+  line-height: 1.2;
+  letter-spacing: -.035em;
+}
+
+.uiux-auth-modal .modal-head p {
+  margin-top: 7px;
+  max-width: 560px;
+  font-size: 13px;
+  line-height: 1.65;
+}
+
+.uiux-auth-modal .auth-tabs {
+  gap: 4px;
+  padding: 14px 26px 0;
+  border-top: 0;
+}
+
+.uiux-auth-modal .auth-tabs button {
+  min-height: 44px;
+  border-radius: 11px;
+  border-color: var(--premium-line);
+  background: var(--premium-surface-soft);
+}
+
+.uiux-auth-modal .auth-tabs button.active {
+  color: var(--text);
+  border-color: color-mix(in srgb, var(--emerald) 28%, var(--premium-line));
+  background: color-mix(in srgb, var(--emerald) 8%, var(--premium-surface));
+}
+
+.uiux-auth-modal .modal-body {
+  padding: 22px 26px 26px;
+}
+
+.uiux-auth-modal .form-grid {
+  gap: 16px 14px;
+}
+
+.uiux-auth-modal .field {
+  gap: 8px;
+}
+
+.uiux-auth-modal .field > label {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 18px;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.uiux-field-badge,
+.uiux-agreement-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 20px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 850;
+  line-height: 1;
+  letter-spacing: -.01em;
+}
+
+.uiux-field-badge.is-required,
+.uiux-agreement-badge.is-required {
+  color: var(--emerald-strong);
+  background: color-mix(in srgb, var(--emerald) 10%, var(--premium-surface));
+}
+
+.uiux-field-badge.is-optional,
+.uiux-agreement-badge.is-optional {
+  color: var(--muted);
+  background: var(--premium-surface-soft);
+}
+
+.uiux-auth-modal .field input,
+.uiux-auth-modal .field select,
+.uiux-auth-modal .field textarea {
+  min-height: 50px;
+  padding-inline: 14px;
+  border: 1px solid var(--premium-line-strong);
+  border-radius: 13px;
+  background: var(--premium-surface);
+  box-shadow: none;
+}
+
+.uiux-auth-modal .field input::placeholder {
+  color: color-mix(in srgb, var(--muted) 72%, transparent);
+}
+
+.uiux-auth-modal .field input:focus,
+.uiux-auth-modal .field select:focus,
+.uiux-auth-modal .field textarea:focus {
+  border-color: color-mix(in srgb, var(--emerald) 65%, var(--premium-line-strong));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--emerald) 10%, transparent);
+}
+
+.uiux-password-control {
+  position: relative;
+}
+
+.uiux-password-control input {
+  width: 100%;
+  padding-right: 52px !important;
+}
+
+.uiux-password-toggle {
+  position: absolute;
+  top: 50%;
+  right: 6px;
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  transform: translateY(-50%);
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--muted);
+}
+
+.uiux-password-toggle:hover,
+.uiux-password-toggle:focus-visible {
+  color: var(--text);
+  background: var(--premium-surface-soft);
+}
+
+.uiux-password-toggle svg,
+.uiux-legal-close svg {
+  width: 19px;
+  height: 19px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.uiux-password-hint {
+  margin: -1px 0 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.uiux-password-hint[data-state="ok"] {
+  color: var(--emerald-strong);
+}
+
+.uiux-password-hint[data-state="error"] {
+  color: var(--danger);
+}
+
+.uiux-agreements {
+  margin-top: 20px;
+  overflow: hidden;
+  border: 1px solid var(--premium-line);
+  border-radius: 16px;
+  background: var(--premium-surface);
+}
+
+.uiux-agreements-head {
+  padding: 15px 16px 12px;
+  border-bottom: 1px solid var(--premium-line);
+}
+
+.uiux-agreements-head strong {
+  display: block;
+  font-size: 14px;
+  font-weight: 850;
+}
+
+.uiux-agreements-head p {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.uiux-agreement-all,
+.uiux-agreement-row {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  min-height: 48px;
+  padding: 10px 14px;
+  border-top: 1px solid var(--premium-line);
+}
+
+.uiux-agreement-all {
+  grid-template-columns: 22px minmax(0, 1fr);
+  min-height: 52px;
+  border-top: 0;
+  background: var(--premium-surface-soft);
+}
+
+.uiux-agreement-all label,
+.uiux-agreement-row label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 750;
+  line-height: 1.45;
+}
+
+.uiux-agreement-all label {
+  font-size: 13px;
+  font-weight: 850;
+}
+
+.uiux-agreement-all input,
+.uiux-agreement-row input {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: var(--emerald);
+}
+
+.uiux-agreement-view {
+  min-height: 34px;
+  padding: 0 9px;
+  border: 1px solid var(--premium-line);
+  border-radius: 9px;
+  background: var(--premium-surface);
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.uiux-agreement-view:hover {
+  color: var(--text);
+  border-color: var(--premium-line-strong);
+}
+
+.uiux-auth-modal .notice {
+  margin-top: 16px !important;
+  padding: 13px 14px;
+  font-size: 12px;
+}
+
+.uiux-auth-modal .modal-actions {
+  margin-top: 18px;
+}
+
+.uiux-auth-modal.is-login .modal-actions {
+  align-items: center;
+}
+
+.uiux-auth-reset {
+  margin-right: auto;
+}
+
+.uiux-legal-sheet-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 420;
+  display: grid;
+  place-items: center;
+  padding: 18px;
+  background: rgba(5, 16, 12, .58);
+}
+
+.uiux-legal-sheet {
+  width: min(760px, 100%);
+  max-height: min(92dvh, 900px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--premium-line-strong);
+  border-radius: 24px;
+  background: var(--premium-surface);
+  box-shadow: 0 28px 90px rgba(4, 21, 16, .24);
+}
+
+.uiux-legal-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 24px 26px 18px;
+  border-bottom: 1px solid var(--premium-line);
+}
+
+.uiux-legal-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  color: var(--emerald-strong);
+  background: color-mix(in srgb, var(--emerald) 9%, var(--premium-surface));
+  font-size: 10px;
+  font-weight: 850;
+}
+
+.uiux-legal-head h2 {
+  margin: 10px 0 0;
+  font-size: 24px;
+  line-height: 1.2;
+  letter-spacing: -.035em;
+}
+
+.uiux-legal-head p {
+  margin: 7px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.uiux-legal-close {
+  width: 42px;
+  height: 42px;
+  flex: 0 0 42px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid var(--premium-line);
+  border-radius: 12px;
+  background: var(--premium-surface);
+  color: var(--muted);
+}
+
+.uiux-legal-nav {
+  display: flex;
+  gap: 7px;
+  overflow-x: auto;
+  padding: 12px 26px;
+  border-bottom: 1px solid var(--premium-line);
+  background: var(--premium-surface-soft);
+  scrollbar-width: none;
+}
+
+.uiux-legal-nav::-webkit-scrollbar {
+  display: none;
+}
+
+.uiux-legal-nav a {
+  flex: 0 0 auto;
+  padding: 7px 10px;
+  border: 1px solid var(--premium-line);
+  border-radius: 999px;
+  background: var(--premium-surface);
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.uiux-legal-body {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  padding: 20px 26px 28px;
+  scroll-behavior: smooth;
+}
+
+.uiux-legal-summary {
+  padding: 15px 16px;
+  margin-bottom: 18px;
+  border: 1px solid var(--premium-line);
+  border-radius: 14px;
+  background: var(--premium-surface-soft);
+}
+
+.uiux-legal-summary strong {
+  display: block;
+  font-size: 13px;
+  font-weight: 850;
+}
+
+.uiux-legal-summary p {
+  margin: 5px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.uiux-legal-section {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  gap: 14px;
+  padding: 18px 0;
+  border-top: 1px solid var(--premium-line);
+  scroll-margin-top: 12px;
+}
+
+.uiux-legal-section:first-of-type {
+  border-top: 0;
+}
+
+.uiux-legal-section > span {
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border-radius: 9px;
+  color: var(--emerald-strong);
+  background: color-mix(in srgb, var(--emerald) 8%, var(--premium-surface));
+  font-size: 10px;
+  font-weight: 900;
+}
+
+.uiux-legal-section h3 {
+  margin: 2px 0 0;
+  font-size: 15px;
+  font-weight: 850;
+  letter-spacing: -.02em;
+}
+
+.uiux-legal-section p {
+  margin: 7px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.78;
+}
+
+.uiux-legal-footer {
+  display: flex;
+  justify-content: flex-end;
+  padding: 14px 26px calc(14px + env(safe-area-inset-bottom));
+  border-top: 1px solid var(--premium-line);
+  background: var(--premium-surface);
+}
+
+.uiux-legal-footer .primary-button {
+  min-width: 120px;
+}
+
+@media (max-width: 640px) {
+  .uiux-auth-modal .form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .uiux-auth-modal .field.full {
+    grid-column: auto;
+  }
+}
+
+@media (max-width: 430px) {
+  .uiux-auth-modal {
+    width: 100% !important;
+    border-radius: 20px !important;
+  }
+
+  .uiux-auth-modal .modal-head {
+    padding: 18px 17px 14px;
+  }
+
+  .uiux-auth-modal .modal-head h2 {
+    font-size: 22px;
+  }
+
+  .uiux-auth-modal .auth-tabs {
+    padding: 12px 17px 0;
+  }
+
+  .uiux-auth-modal .modal-body {
+    padding: 17px 17px 20px;
+  }
+
+  .uiux-auth-modal .field input,
+  .uiux-auth-modal .field select,
+  .uiux-auth-modal .field textarea {
+    min-height: 48px;
+  }
+
+  .uiux-agreement-row {
+    grid-template-columns: 22px minmax(0, 1fr);
+  }
+
+  .uiux-agreement-view {
+    grid-column: 2;
+    width: fit-content;
+  }
+
+  .uiux-legal-sheet-backdrop {
+    align-items: flex-end;
+    padding: 0;
+  }
+
+  .uiux-legal-sheet {
+    width: 100%;
+    max-height: 100dvh;
+    min-height: 100dvh;
+    border: 0;
+    border-radius: 0;
+  }
+
+  .uiux-legal-head {
+    padding: calc(18px + env(safe-area-inset-top)) 17px 14px;
+  }
+
+  .uiux-legal-head h2 {
+    font-size: 22px;
+  }
+
+  .uiux-legal-nav {
+    padding: 10px 17px;
+  }
+
+  .uiux-legal-body {
+    padding: 18px 17px 24px;
+  }
+
+  .uiux-legal-footer {
+    padding: 12px 17px calc(12px + env(safe-area-inset-bottom));
+  }
+
+  .uiux-legal-footer .primary-button {
+    width: 100%;
+  }
+}

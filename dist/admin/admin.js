@@ -1395,6 +1395,17 @@
   }
 
   const packingIds = new Set();
+
+  function invalidateMemberCache(memberId) {
+    const key = String(memberId || '').trim();
+    if (!key) return;
+    memberPacks.delete(key);
+    packingIds.delete(key);
+    const api = core();
+    const state = api?.getState?.() || {};
+    const currentId = state.adminMemberDetail?.id || state.adminMemberDetail?.user_id || state.modalPayload?.id || state.modalPayload?.user_id || '';
+    if (String(currentId) === key) api?.patchState?.({ adminMemberPack: null });
+  }
   async function ensureMemberPack() {
     const api = wrapCore();
     if (!api || api.getState().modal !== 'member-detail') return;
@@ -1460,8 +1471,20 @@
     if (!api) return null;
     const preset = api.getState().modalPayload || {};
     const brands = api.adminBrandViews();
-    const nodeRows = api.adminNodeViews();
-    return `<div class="modal-backdrop" data-modal="assign-task"><div class="modal"><div class="modal-head"><div><h2>특정 회원 업무 배정</h2><p>실제로 배정한 뒤에만 회원 화면에 우선 업무가 나타납니다.</p></div><button class="icon-button" data-action="close-modal">${icon('x', 18)}</button></div><div class="modal-body"><form id="assignForm"><div class="form-grid"><div class="field"><label>사원번호</label>${memberPickerHtml(preset.id || preset.user_id, preset)}</div><div class="field"><label>협력사</label><select name="partner_brand_id">${brands.map((brand) => `<option value="${esc(brand.id)}">${esc(brand.name)}</option>`).join('')}</select></div><div class="field full"><label>업무 카드</label><select name="node_id" required>${nodeRows.map((node) => `<option value="${esc(node.id)}">${esc(node.title)}</option>`).join('') || '<option value="">등록된 업무 카드 없음</option>'}</select></div><div class="field"><label>수당(참고, 서버가 확정)</label><input name="reward_amount" type="number" min="0" value="0" /></div><div class="field"><label>예상시간(초)</label><input name="estimated_seconds" type="number" min="30" max="5400" value="60" /></div><div class="field"><label>노출 시작</label><input name="visible_from" type="datetime-local" /></div><div class="field"><label>노출 종료</label><input name="visible_until" type="datetime-local" /></div><div class="field full"><label>배정 사유</label><textarea name="reason" rows="2" required placeholder="배정 사유"></textarea></div><label class="check-row"><input name="notify" type="checkbox" checked /> <span>회원에게 배정 알림 보내기</span></label></div><div class="modal-actions"><button class="secondary-button" type="button" data-action="close-modal">취소</button><button class="primary-button" type="submit">배정하기</button></div></form></div></div></div>`;
+    const allNodeRows = api.adminNodeViews();
+    const nodeRows = allNodeRows.filter((node) => {
+      const brand = brands.find((item) => String(item.id) === String(node.companyId)) || api.adminBrandById?.(node.companyId) || {};
+      return node.supply_source === 'operator'
+        && node.catalogStatus === 'published'
+        && node.enabled === true
+        && brand.published === true
+        && brand.verified === true
+        && brand.logoApproved === true;
+    });
+    const nodeEligibilityNote = nodeRows.length
+      ? ''
+      : '<p class="field-hint">현재 배정 가능한 공개 업무 카드가 없습니다. 운영자 등록·협력사 승인·회원 공개 상태를 먼저 확인해 주세요.</p>';
+    return `<div class="modal-backdrop" data-modal="assign-task"><div class="modal"><div class="modal-head"><div><h2>특정 회원 업무 배정</h2><p>실제로 배정한 뒤에만 회원 화면에 우선 업무가 나타납니다.</p></div><button class="icon-button" data-action="close-modal">${icon('x', 18)}</button></div><div class="modal-body"><form id="assignForm"><div class="form-grid"><div class="field"><label>사원번호</label>${memberPickerHtml(preset.id || preset.user_id, preset)}</div><div class="field"><label>협력사</label><select name="partner_brand_id">${brands.map((brand) => `<option value="${esc(brand.id)}">${esc(brand.name)}</option>`).join('')}</select></div><div class="field full"><label>업무 카드</label>${nodeEligibilityNote}<select name="node_id" required>${nodeRows.map((node) => `<option value="${esc(node.id)}">${esc(node.title)}</option>`).join('') || '<option value="">등록된 업무 카드 없음</option>'}</select></div><div class="field"><label>수당(참고, 서버가 확정)</label><input name="reward_amount" type="number" min="0" value="0" /></div><div class="field"><label>예상시간(초)</label><input name="estimated_seconds" type="number" min="30" max="5400" value="60" /></div><div class="field"><label>노출 시작</label><input name="visible_from" type="datetime-local" /></div><div class="field"><label>노출 종료</label><input name="visible_until" type="datetime-local" /></div><p class="field-hint full">노출 시간은 운영자 기기 현지 시각 기준으로 서버에 기록됩니다.</p><div class="field full"><label>배정 사유</label><textarea name="reason" rows="2" required placeholder="배정 사유"></textarea></div><label class="check-row"><input name="notify" type="checkbox" checked /> <span>회원에게 배정 알림 보내기</span></label></div><div class="modal-actions"><button class="secondary-button" type="button" data-action="close-modal">취소</button><button class="primary-button" type="submit">배정하기</button></div></form></div></div></div>`;
   }
 
   function renderNoticeForm() {
@@ -1513,7 +1536,57 @@
     }
   }
 
+  function normalizeAdminDateTime(value, label) {
+    const raw = String(value || '').trim();
+    if (!raw) return null;
+    const date = new Date(raw);
+    if (Number.isNaN(date.getTime())) throw new Error(`${label} 시간을 확인해 주세요.`);
+    return date.toISOString();
+  }
+
+  async function submitAdminAssignment(event) {
+    const api = core();
+    if (!api) return;
+    const values = api.formValues(event.target);
+    const memberId = String(values.user_id || '').trim();
+    let visibleFrom = null;
+    let visibleUntil = null;
+    try {
+      visibleFrom = normalizeAdminDateTime(values.visible_from, '노출 시작');
+      visibleUntil = normalizeAdminDateTime(values.visible_until, '노출 종료');
+    } catch (error) {
+      api.showToast(error.message || '노출 시간을 확인해 주세요.', 'warning');
+      return;
+    }
+    if (visibleFrom && visibleUntil && new Date(visibleFrom).getTime() >= new Date(visibleUntil).getTime()) {
+      api.showToast('노출 종료 시간은 시작 이후여야 해요.', 'warning');
+      return;
+    }
+    try {
+      await api.adminRequest('assign_task', {
+        ...values,
+        visible_from: visibleFrom,
+        visible_until: visibleUntil,
+        reward_amount: Number(values.reward_amount || 0),
+        estimated_seconds: Number(values.estimated_seconds || 60),
+        notify: Boolean(event.target.notify?.checked)
+      });
+      window.PUTDUK_ADMIN?.invalidateMember?.(memberId);
+      window.PUTDUK_PHASE31?.invalidateMember?.(memberId);
+      const state = api.getState();
+      const currentMember = state.adminMemberDetail || {};
+      const returnToDetail = memberId && String(currentMember.id || currentMember.user_id || '') === memberId;
+      api.closeModal();
+      if (returnToDetail) {
+        api.openModal('member-detail', { ...currentMember, id: memberId, user_id: memberId });
+      }
+      api.showToast('🎉 회원님에게 새로운 우선 업무가 배정됐어요.', 'success');
+    } catch (error) {
+      api.showToast(api.friendlyAdminError(error), api.isUnsupportedAction(error) ? 'warning' : 'error');
+    }
+  }
   window.PUTDUK_ADMIN = {
+    invalidateMember: invalidateMemberCache,
     renderPage(page) {
       wrapCore();
       if (page === 'overview') return renderOverview();
@@ -1662,6 +1735,12 @@
 
   wrapCore();
   document.addEventListener('submit', (event) => {
+    if (event.target?.id === 'assignForm') {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      submitAdminAssignment(event);
+      return;
+    }
     if (event.target?.id === 'nodeForm') {
       event.preventDefault();
       event.stopImmediatePropagation();

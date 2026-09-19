@@ -1,0 +1,428 @@
+.uiux-growth-heading {
+  margin-bottom: 22px;
+}
+
+.uiux-growth-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--emerald-strong);
+  font-size: 11px;
+  font-weight: 850;
+  letter-spacing: -.005em;
+}
+
+.uiux-benefits-quota {
+  display: inline-flex;
+  width: fit-content;
+  margin-top: 10px !important;
+  padding: 7px 10px;
+  border: 1px solid var(--premium-line);
+  border-radius: 999px;
+  background: var(--premium-surface-soft);
+  color: var(--text) !important;
+  font-size: 12px !important;
+  font-weight: 750;
+}
+
+.uiux-tier-overview {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) minmax(260px, .75fr);
+  gap: 14px;
+  margin-bottom: 18px;
+}
+
+.uiux-tier-summary,
+.uiux-tier-next-summary {
+  border: 1px solid var(--premium-line);
+  border-radius: 20px;
+  background: var(--premium-surface);
+  box-shadow: var(--premium-shadow-xs);
+}
+
+.uiux-tier-summary {
+  padding: 24px;
+}
+
+.uiux-tier-summary h2 {
+  margin: 8px 0 0;
+  font-size: clamp(28px, 3vw, 38px);
+  line-height: 1.08;
+  letter-spacing: -.04em;
+}
+
+.uiux-tier-summary > p {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.uiux-tier-current-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 22px;
+}
+
+.uiux-tier-current-stats .benefit-stat {
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--premium-line);
+  border-radius: 13px;
+  background: var(--premium-surface-soft);
+}
+
+.uiux-tier-current-stats .benefit-stat small {
+  font-size: 10px;
+}
+
+.uiux-tier-current-stats .benefit-stat strong {
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.uiux-tier-next-summary {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 22px;
+  background: color-mix(in srgb, var(--emerald) 5%, var(--premium-surface));
+}
+
+.uiux-tier-next-summary strong {
+  display: block;
+  margin-top: 8px;
+  font-size: 22px;
+  line-height: 1.2;
+  letter-spacing: -.03em;
+}
+
+.uiux-tier-next-summary p {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.uiux-tier-roadmap {
+  display: grid !important;
+  grid-template-columns: 1fr !important;
+  gap: 8px !important;
+  margin-top: 0;
+}
+
+.uiux-tier-roadmap .uiux-tier-row {
+  position: relative;
+  display: grid;
+  grid-template-columns: 54px minmax(190px, .7fr) minmax(0, 1.3fr);
+  align-items: center;
+  gap: 16px;
+  min-height: 92px;
+  padding: 16px 18px;
+  border: 1px solid var(--premium-line) !important;
+  border-radius: 16px !important;
+  background: var(--premium-surface) !important;
+  box-shadow: var(--premium-shadow-xs) !important;
+}
+
+.uiux-tier-roadmap .uiux-tier-row::before {
+  content: counter(uiux-tier);
+  counter-increment: uiux-tier;
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--premium-line);
+  border-radius: 50%;
+  background: var(--premium-surface-soft);
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.uiux-tier-roadmap {
+  counter-reset: uiux-tier;
+}
+
+.uiux-tier-row .benefit-card-head {
+  gap: 10px;
+}
+
+.uiux-tier-row .benefit-badge {
+  display: none;
+}
+
+.uiux-tier-row .benefit-card-head h3 {
+  font-size: 17px;
+  line-height: 1.25;
+}
+
+.uiux-tier-row .benefit-ladder {
+  margin-top: 4px;
+  font-size: 12px;
+}
+
+.uiux-tier-row .benefit-stats {
+  margin-top: 0;
+}
+
+.uiux-tier-row.uiux-tier-current {
+  border-color: color-mix(in srgb, var(--emerald) 30%, var(--premium-line)) !important;
+  background: color-mix(in srgb, var(--emerald) 4%, var(--premium-surface)) !important;
+}
+
+.uiux-tier-row.uiux-tier-next {
+  border-color: color-mix(in srgb, var(--gold) 28%, var(--premium-line)) !important;
+}
+
+.uiux-benefit-policy {
+  margin-top: 18px;
+  border: 1px solid var(--premium-line) !important;
+  border-radius: 18px !important;
+  background: var(--premium-surface-soft) !important;
+  box-shadow: none !important;
+}
+
+.uiux-benefit-policy h2 {
+  font-size: 17px;
+  letter-spacing: -.02em;
+}
+
+.uiux-benefit-policy .help-line {
+  padding: 10px 0;
+  margin: 0 !important;
+  border-top: 1px solid var(--premium-line);
+}
+
+.uiux-benefit-policy .help-line:first-of-type {
+  border-top: 0;
+}
+
+.uiux-referral-overview {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1.45fr) minmax(280px, .75fr) !important;
+  gap: 14px !important;
+}
+
+.uiux-referral-code-card {
+  min-height: 0 !important;
+  padding: 26px !important;
+  border: 1px solid var(--premium-line) !important;
+  border-radius: 22px !important;
+  background: var(--premium-surface) !important;
+  box-shadow: var(--premium-shadow-sm) !important;
+}
+
+.uiux-referral-code-card::after {
+  display: none !important;
+}
+
+.uiux-referral-code-line {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between;
+  gap: 12px !important;
+  margin-top: 16px !important;
+  padding: 15px 16px;
+  border: 1px solid var(--premium-line-strong);
+  border-radius: 15px;
+  background: var(--premium-surface-soft);
+}
+
+.uiux-referral-code-value {
+  min-width: 0;
+  font-size: clamp(24px, 4vw, 34px) !important;
+  font-weight: 900 !important;
+  line-height: 1.05;
+  letter-spacing: .045em !important;
+  overflow-wrap: anywhere;
+}
+
+.uiux-referral-code-line .icon-button {
+  flex: 0 0 auto;
+}
+
+.uiux-referral-code-card .hero-copy {
+  margin-top: 14px !important;
+  color: var(--muted);
+}
+
+.uiux-referral-steps {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin: 20px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.uiux-referral-steps li {
+  position: relative;
+  min-width: 0;
+  padding: 30px 10px 10px;
+  border: 1px solid var(--premium-line);
+  border-radius: 12px;
+  background: var(--premium-surface-soft);
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 800;
+  text-align: center;
+}
+
+.uiux-referral-steps li::before {
+  content: attr(data-step);
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  width: 18px;
+  height: 18px;
+  display: grid;
+  place-items: center;
+  transform: translateX(-50%);
+  border-radius: 50%;
+  background: var(--emerald);
+  color: #fff;
+  font-size: 9px;
+  font-weight: 900;
+}
+
+.uiux-referral-stats-card {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+  padding: 22px !important;
+  border: 1px solid var(--premium-line) !important;
+  border-radius: 22px !important;
+  background: var(--premium-surface) !important;
+  box-shadow: var(--premium-shadow-xs) !important;
+}
+
+.uiux-referral-balance-label {
+  margin-top: 16px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 750;
+}
+
+.uiux-referral-stats-card .wallet-balance {
+  margin: 5px 0 20px !important;
+  font-size: 30px;
+  font-weight: 900;
+  letter-spacing: -.035em;
+  font-variant-numeric: tabular-nums;
+}
+
+.uiux-referral-stat-row {
+  min-height: 46px;
+  padding: 10px 0;
+  border-top: 1px solid var(--premium-line);
+}
+
+.uiux-referral-stat-row span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.uiux-referral-stat-row strong {
+  font-size: 14px;
+}
+
+.uiux-referral-timeline-card {
+  margin-top: 16px;
+  overflow: hidden;
+  border: 1px solid var(--premium-line) !important;
+  border-radius: 20px !important;
+  background: var(--premium-surface) !important;
+  box-shadow: var(--premium-shadow-xs) !important;
+}
+
+.uiux-referral-timeline-card .panel-head {
+  padding: 20px 22px 14px;
+  border-bottom: 1px solid var(--premium-line);
+}
+
+.uiux-referral-timeline-card .timeline {
+  padding: 4px 22px 18px;
+}
+
+.uiux-referral-timeline-item {
+  grid-template-columns: 14px minmax(0, 1fr) auto;
+  gap: 12px;
+  padding: 16px 0;
+  border-bottom: 1px solid var(--premium-line);
+}
+
+.uiux-referral-timeline-item:last-child {
+  border-bottom: 0;
+}
+
+.uiux-referral-timeline-item .timeline-content strong {
+  font-size: 14px;
+}
+
+.uiux-referral-timeline-item .timeline-content p {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.uiux-referral-timeline-item .timeline-time {
+  font-size: 12px;
+  font-weight: 850;
+  white-space: nowrap;
+}
+
+@media (max-width: 980px) {
+  .uiux-tier-overview,
+  .uiux-referral-overview {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+@media (max-width: 760px) {
+  .uiux-tier-roadmap .uiux-tier-row {
+    grid-template-columns: 38px minmax(0, 1fr);
+    gap: 12px;
+  }
+
+  .uiux-tier-row .benefit-stats {
+    grid-column: 2;
+  }
+
+  .uiux-tier-current-stats {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 430px) {
+  .uiux-tier-summary,
+  .uiux-tier-next-summary,
+  .uiux-referral-code-card,
+  .uiux-referral-stats-card {
+    padding: 18px !important;
+    border-radius: 18px !important;
+  }
+
+  .uiux-referral-code-line {
+    padding: 13px;
+  }
+
+  .uiux-referral-code-value {
+    font-size: 24px !important;
+    letter-spacing: .03em !important;
+  }
+
+  .uiux-referral-steps {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .uiux-tier-roadmap .uiux-tier-row {
+    padding: 14px;
+  }
+
+  .uiux-tier-row .benefit-stats {
+    grid-template-columns: 1fr;
+  }
+}
