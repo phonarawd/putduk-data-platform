@@ -9,6 +9,7 @@ const ledger = read('supabase/migrations/20260917210000_putduk_three_bucket_ledg
 const lifecycle = read('supabase/migrations/20260920041000_putduk_work_lifecycle_rework_and_timing_guard.sql');
 const memberEdge = read('supabase/functions/member-finance/index.ts');
 const adminEdge = read('supabase/functions/admin-control/index.ts');
+const appJs = read('dist/assets/app.js');
 
 // 시작: run 행이 생긴 뒤 AFTER INSERT에서만 시작 이벤트를 남겨 FK 오류를 막는다.
 assert.match(start, /create trigger record_putduk_task_run_started\s+after insert on public\.task_runs/i);
@@ -38,6 +39,14 @@ assert.match(lifecycle, /new\.status = 'rework'/);
 assert.match(lifecycle, /set status = 'checkpointed'/);
 assert.match(lifecycle, /reward_status = 'held'/);
 assert.match(lifecycle, /completed_at = null/);
+
+// 회원 UI는 checkpointed run을 활성 업무로 복원하고 저장된 초안을 다시 주입한다.
+assert.match(appJs, /const ACTIVE_RUN_STATUSES = \['reserved', 'in_progress', 'checkpointed'\]/);
+assert.match(appJs, /const active = runResult\.data\.find\(\(row\) => isActiveRunStatus\(row\.status\)\)/);
+assert.match(appJs, /\.from\('task_checkpoints'\)/);
+assert.match(appJs, /\.eq\('checkpoint_key', 'work-draft'\)/);
+assert.match(appJs, /if \(draft\.listing\) state\.player\.listing = readCatalogListing\(draft\.listing\)/);
+assert.match(appJs, /state\.player\.bundle\.answers = draft\.answers\.slice\(0, INSPECT_TOTAL\)/);
 
 // 승인 정산은 원금 반환과 수당 지급을 분리하고 idempotency key로 중복 반영을 막는다.
 assert.match(ledger, /if v_run\.status = 'approved' and v_run\.reward_status = 'posted' then\s+return v_run;/i);
