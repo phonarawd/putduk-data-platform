@@ -184,5 +184,14 @@ function buildBootOption(input = {}) {
     channelIO('showChannelButton');
     channelIO('showMessenger');
   }
+
+  loadChannelScript();
+  if (document.documentElement.getAttribute('data-mode') === 'member') {
+    sync({
+      enabled: true,
+      pluginKey: pluginKeyFromConfig(window.PUTDUK_CONFIG || {}),
+      theme: document.documentElement.dataset.theme || 'light'
+    });
+  }
   window.PutdukChannelTalk = { pluginKeyFromConfig, appearanceFromTheme, identityKey, memberPagePath, overlayHidesChannel, buildMemberProfile, buildBootOption, CHANNEL_PLUGIN_KEY, CHANNEL_SCRIPT_SRC, CHANNEL_Z_INDEX, MEMBER_PAGE_PATH, sync, openMessenger };
 })();
