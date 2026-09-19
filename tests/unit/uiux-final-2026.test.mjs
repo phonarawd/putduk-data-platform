@@ -51,6 +51,26 @@ test('member dashboard hero uses clear matching-first Korean copy and scoped met
   assert.doesNotMatch(copySection, /\['검수 완료', '완료한 업무'\]/);
 });
 
+test('work matching page explains conditions clearly and keeps business values intact', async () => {
+  const runtime = await readRepo('dist', 'assets', 'uiux-final-2026.js');
+  const css = await readRepo('dist', 'assets', 'uiux-final-2026.css');
+
+  assert.match(runtime, /function enhanceMatchingPage/);
+  assert.match(runtime, /업무별 시작 금액, 예상 수당, 예상 소요를 비교해 보세요/);
+  assert.match(runtime, /업무 시작 금액/);
+  assert.match(runtime, /예상 수당/);
+  assert.match(runtime, /예상 소요/);
+  assert.match(runtime, /참여 가능 \$\{count\}건/);
+  assert.match(runtime, /setButtonText\(button, '업무 시작'\)/);
+  assert.match(runtime, /setButtonText\(button, '시작 조건 확인'\)/);
+  assert.doesNotMatch(runtime, /nodeStake\(|nodePay\(|PAY_BY_STAKE|STAKE_LADDER/);
+
+  assert.match(css, /\.uiux-matching-grid \.uiux-work-card/);
+  assert.match(css, /\.uiux-work-card \.node-money[\s\S]*grid-template-columns:\s*repeat\(2, minmax\(0, 1fr\)\)/);
+  assert.match(css, /@media \(max-width: 430px\)[\s\S]*\.uiux-work-card \.node-money \{ grid-template-columns: 1fr; \}/);
+  assert.match(css, /\.uiux-work-card \.node-bottom \.small-button[\s\S]*min-height:\s*44px/);
+});
+
 test('member-facing finance copy follows Korean spacing without changing finance contracts', async () => {
   const runtime = await readRepo('dist', 'assets', 'uiux-final-2026.js');
   assert.match(runtime, /\['업무잔액', '업무 잔액'\]/);
