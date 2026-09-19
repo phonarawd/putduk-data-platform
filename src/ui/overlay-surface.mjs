@@ -52,6 +52,11 @@ export function overlayBodyToken(state = {}, helpers = {}) {
   if (key === 'modal:member-detail') {
     return String(state.modalPayload?.id || state.adminMemberDetail?.id || '');
   }
+  if (key === 'modal:balance-adjust') {
+    const preset = state.modalPayload || {};
+    const phase = preset.confirmAmount != null ? 'confirm' : 'entry';
+    return `${phase}:${preset.user_id || preset.id || ''}:${preset.amount ?? ''}:${preset.bucket || ''}:${preset.confirmAmount ?? ''}`;
+  }
   return key;
 }
 

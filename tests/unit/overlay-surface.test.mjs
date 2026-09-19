@@ -41,6 +41,27 @@ test('클래스 목록을 깨지 않고 data-surface를 붙인다', () => {
   assert.match(stamped, /data-overlay-body="inspect:1:5:0"/);
 });
 
+test('잔액 입금·차감 모달은 확인 단계로 넘어갈 때 표면 본문이 바뀐다', () => {
+  const entry = {
+    modal: 'balance-adjust',
+    modalPayload: { user_id: 'user-1', bucket: 'work_balance', amount: 100000 }
+  };
+  const confirm = {
+    modal: 'balance-adjust',
+    modalPayload: { user_id: 'user-1', bucket: 'work_balance', amount: 100000, confirmAmount: 100000 }
+  };
+  assert.equal(overlayBodyToken(entry), 'entry:user-1:100000:work_balance:');
+  assert.equal(overlayBodyToken(confirm), 'confirm:user-1:100000:work_balance:100000');
+  assert.notEqual(overlayBodyToken(entry), overlayBodyToken(confirm));
+  assert.deepEqual(overlayPaintPlan({
+    nextKey: 'modal:balance-adjust',
+    existingKey: 'modal:balance-adjust',
+    hasExisting: true,
+    hasShell: true,
+    sameBody: false
+  }).action, 'patch-overlay');
+});
+
 test('같은 표면은 패치하고 부트는 바로 그린다', () => {
   assert.deepEqual(overlayPaintPlan({
     nextKey: 'run:1',

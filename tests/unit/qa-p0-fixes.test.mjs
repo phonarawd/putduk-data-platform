@@ -114,6 +114,14 @@ test('잔액 입금·차감은 최종 확인 단계를 거친 뒤에만 서버�
   assert.match(appJs, /data-phase="confirm"/);
   assert.match(appJs, /confirmAmount/);
   assert.match(appJs, /back-balance-adjust/);
+  assert.match(appJs, /modal:balance-adjust/);
+  assert.match(appJs, /preset\.confirmAmount != null \? 'confirm' : 'entry'/);
+});
+
+test('어드민 셸은 잔액 입금 폼 제출을 직접 처리한다', async () => {
+  const adminJs = await readRepo('dist', 'admin', 'admin.js');
+  assert.match(adminJs, /balanceAdjustForm/);
+  assert.match(adminJs, /submitBalanceAdjustForm/);
 });
 
 test('회원 화면은 실행 ID를 실행번호로 크게 내걸지 않고, 대시보드 히어로에는 로그아웃 버튼이 없다', async () => {

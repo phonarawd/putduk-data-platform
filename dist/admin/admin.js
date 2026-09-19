@@ -1735,6 +1735,26 @@
 
   wrapCore();
   document.addEventListener('submit', (event) => {
+    if (event.target?.id === 'balanceAdjustForm') {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      core()?.submitBalanceAdjustForm?.(event);
+      return;
+    }
+    if (event.target?.id === 'memberTierForm') {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      const api = core();
+      if (typeof api?.submitMemberTierForm === 'function') api.submitMemberTierForm(event);
+      return;
+    }
+    if (event.target?.id === 'memberBlockForm') {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      const api = core();
+      if (typeof api?.submitMemberBlockForm === 'function') api.submitMemberBlockForm(event);
+      return;
+    }
     if (event.target?.id === 'assignForm') {
       event.preventDefault();
       event.stopImmediatePropagation();
