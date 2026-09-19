@@ -109,7 +109,7 @@ test('KYC compliance guidance tells members to mask unnecessary identity numbers
   assert.match(compliance, /사업자정보/);
   assert.match(compliance, /uiux-business-info-card/);
   assert.match(compliance, /data-uiux-business-certificate/);
-  assert.match(compliance, /사업자등록증 보기/);
+  assert.match(compliance, /사업자정보 확인서 보기/);
   assert.match(compliance, /이용약관/);
   assert.match(compliance, /개인정보 처리 안내/);
 });
@@ -120,10 +120,10 @@ test('legal runtime publishes GOGOX HOLDINGS LIMITED business operator info', as
   assert.match(legal, /GOGOX HOLDINGS LIMITED/);
   assert.match(legal, /representative: '퍼뜩'/);
   assert.match(legal, /help@hiptk\.app/);
-  assert.match(legal, /certificateNumber: 'PDK-BIZ-20260919'/);
+  assert.match(legal, /confirmationNumber: 'PDK-BIZ-20260919'/);
   assert.match(legal, /function openBusinessCertificate/);
   assert.match(legal, /uiux-business-certificate/);
-  assert.match(legal, /사업자등록증/);
+  assert.match(legal, /사업자정보 확인서/);\n  assert.doesNotMatch(legal, /사업자등록증/);
   assert.match(legal, /business:\s*\{/);
   assert.match(legal, /title: '사업자정보'/);
   assert.doesNotMatch(legal, /[\u4e00-\u9fff]/);
