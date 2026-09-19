@@ -29,6 +29,22 @@ test('member-facing work copy normalizes to 업무 매칭 without renaming gener
   assert.doesNotMatch(runtime, /split\('라인'\)/);
 });
 
+test('member dashboard hero uses clear matching-first Korean copy and scoped metric labels', async () => {
+  const runtime = await readRepo('dist', 'assets', 'uiux-final-2026.js');
+  assert.match(runtime, /function enhanceDashboardHero/);
+  assert.match(runtime, /지금 참여할 수 있는 업무/);
+  assert.match(runtime, /내 조건에 맞는 업무를/);
+  assert.match(runtime, /확인해 보세요\./);
+  assert.match(runtime, /현재 참여 가능한 업무와 필요한 조건을 한눈에 확인하고/);
+  assert.match(runtime, /업무 매칭 시작/);
+  assert.match(runtime, /\['오늘 업무', '매칭 가능 업무'\]/);
+  assert.match(runtime, /\['검수 완료', '완료한 업무'\]/);
+  assert.match(runtime, /\['오늘 작업 가능', '오늘 남은 횟수'\]/);
+  assert.match(runtime, /\['근무 상태', '현재 상태'\]/);
+  assert.match(runtime, /로그인 후 확인/);
+  assert.doesNotMatch(runtime, /\['검수 완료', '완료한 업무'\][\s\S]*COPY_REPLACEMENTS/);
+});
+
 test('member-facing finance copy follows Korean spacing without changing finance contracts', async () => {
   const runtime = await readRepo('dist', 'assets', 'uiux-final-2026.js');
   assert.match(runtime, /\['업무잔액', '업무 잔액'\]/);
