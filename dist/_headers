@@ -23,6 +23,9 @@
 /assets/perf-deferred.js
   Cache-Control: public, max-age=0, must-revalidate
 
+/assets/channel-talk.js
+  Cache-Control: public, max-age=0, must-revalidate
+
 /admin/admin.js
   Cache-Control: public, max-age=0, must-revalidate
 
