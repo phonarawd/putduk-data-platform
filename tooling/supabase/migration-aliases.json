@@ -7,11 +7,19 @@
     "putduk_member_storage_path_ok": ["20260918073334", "20260918171000"],
     "putduk_member_notice_and_assignment_visibility": ["20260918074110", "20260918180000"],
     "putduk_payout_destination_delete": ["20260918075042", "20260918190000"],
-    "putduk_session_ip_and_adjust_bucket": ["20260918111416", "20260918200000"]
+    "putduk_session_ip_and_adjust_bucket": ["20260918111416", "20260918200000"],
+    "putduk_phase5_kyc_payout_security": ["20260919120000", "20260918223139"],
+    "putduk_work_lifecycle_rework_and_timing_guard": ["20260920041000", "20260919202800"],
+    "putduk_assignment_rls_unify": ["20260920054000", "20260919203207"],
+    "putduk_assignment_rls_recursion_fix": ["20260920054500", "20260919203452"],
+    "putduk_member_payout_ciphertext_cleanup": ["20260920055000", "20260919203257"],
+    "putduk_money_ops_pin_idempotency": ["20260920070000", "20260919220312"]
   },
   "remote_history_only": [
     { "version": "20260918073323", "name": "putduk_payout_destination_upsert_keep" },
     { "version": "20260918073354", "name": "putduk_member_submit_path_ok" },
-    { "version": "20260918073429", "name": "putduk_ops_usdt_destination_replace" }
+    { "version": "20260918073429", "name": "putduk_ops_usdt_destination_replace" },
+    { "version": "20260918210000", "name": "putduk_admin_list_roles" },
+    { "version": "20260919220330", "name": "putduk_money_ops_pin_copy_fix" }
   ]
 }
