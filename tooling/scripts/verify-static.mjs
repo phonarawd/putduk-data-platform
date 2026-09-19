@@ -12,6 +12,7 @@ const requiredFiles = [
   'dist/index.html',
   'dist/admin/index.html',
   'dist/admin/phase3-admin-wiring.js',
+  'dist/admin/admin.js',
   'dist/assets/phase4-finance-wiring.js',
   'dist/assets/app.css',
   'dist/assets/app.js',
@@ -54,6 +55,7 @@ const sw = await readFile(join(root, 'dist/sw.js'), 'utf8');
 
 await execFileAsync(process.execPath, ['--check', join(root, 'dist/assets/app.js')]);
 await execFileAsync(process.execPath, ['--check', join(root, 'dist/admin/phase3-admin-wiring.js')]);
+await execFileAsync(process.execPath, ['--check', join(root, 'dist/admin/admin.js')]);
 await execFileAsync(process.execPath, ['--check', join(root, 'dist/assets/phase4-finance-wiring.js')]);
 await execFileAsync(process.execPath, ['--check', join(root, 'dist/assets/overlay-surface.js')]);
 await execFileAsync(process.execPath, ['--check', join(root, 'dist/assets/channel-talk.js')]);
@@ -128,7 +130,7 @@ if (!sw.includes("putduk-shell-v32")
   || !sw.includes('uiux-compliance-2026.js?v=20260919-uiux8')
   || !sw.includes('uiux-admin-premium-2026.css?v=20260919-uiux2')
   || !sw.includes('uiux-admin-premium-2026.js?v=20260919-uiux2')) {
-  throw new Error('서비스워커가 FINAL/Premium/Growth/Auth/Legal UI 자산과 v29 캐시를 사용해야 합니다.');
+  throw new Error('서비스워커가 FINAL/Premium/Growth/Auth/Legal UI 자산과 v32 캐시를 사용해야 합니다.');
 }
 
 for (const forbidden of ['운영자 데모', '미리보기 화면', 'putduk-demo-state']) {
