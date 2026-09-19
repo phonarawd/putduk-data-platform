@@ -15,11 +15,15 @@ test('UIUX FINAL 2026 assets are wired into member/admin shells and service work
   assert.match(memberHtml, /uiux-premium-2026\.js\?v=20260919-uiux2/);
   assert.match(adminHtml, /uiux-final-2026\.css\?v=20260919-uiux1/);
   assert.match(adminHtml, /uiux-premium-2026\.css\?v=20260919-uiux2/);
-  assert.match(sw, /putduk-shell-v25/);
+  assert.match(adminHtml, /uiux-admin-premium-2026\.css\?v=20260919-uiux2/);
+  assert.match(adminHtml, /uiux-admin-premium-2026\.js\?v=20260919-uiux2/);
+  assert.match(sw, /putduk-shell-v26/);
   assert.match(sw, /uiux-final-2026\.css\?v=20260919-uiux1/);
   assert.match(sw, /uiux-final-2026\.js\?v=20260919-uiux1/);
   assert.match(sw, /uiux-premium-2026\.css\?v=20260919-uiux2/);
   assert.match(sw, /uiux-premium-2026\.js\?v=20260919-uiux2/);
+  assert.match(sw, /uiux-admin-premium-2026\.css\?v=20260919-uiux2/);
+  assert.match(sw, /uiux-admin-premium-2026\.js\?v=20260919-uiux2/);
 });
 
 test('member-facing work copy normalizes to 업무 매칭 without renaming generic internal line taxonomy', async () => {
@@ -129,6 +133,22 @@ test('premium visual system replaces demo-like blur and card styling with restra
   assert.match(css, /@media \(max-width: 840px\)/);
 });
 
+test('premium admin layer clarifies operator terminology and responsive tables without backend contracts', async () => {
+  const runtime = await readRepo('dist', 'admin', 'uiux-admin-premium-2026.js');
+  const css = await readRepo('dist', 'admin', 'uiux-admin-premium-2026.css');
+  assert.match(runtime, /\['전체 현황', '운영 현황'\]/);
+  assert.match(runtime, /\['업무 카드 관리', '업무 관리'\]/);
+  assert.match(runtime, /function enhanceMembers/);
+  assert.match(runtime, /function enhanceAssignmentModal/);
+  assert.match(runtime, /function enhanceFinance/);
+  assert.match(runtime, /출금 가능 금액/);
+  assert.match(runtime, /회원 업무 배정/);
+  assert.doesNotMatch(runtime, /service_role|admin-phase5|putduk_admin_|withdrawal_requests|member-finance/);
+  assert.match(css, /\.uiux-admin-table/);
+  assert.match(css, /position:\s*sticky/);
+  assert.match(css, /@media \(max-width: 520px\)/);
+});
+
 test('member-facing finance copy follows Korean spacing without changing finance contracts', async () => {
   const runtime = await readRepo('dist', 'assets', 'uiux-final-2026.js');
   assert.match(runtime, /\['업무잔액', '업무 잔액'\]/);
@@ -162,6 +182,8 @@ test('static release verification requires the UIUX FINAL and Premium assets and
   assert.match(verify, /dist\/assets\/uiux-final-2026\.js/);
   assert.match(verify, /dist\/assets\/uiux-premium-2026\.css/);
   assert.match(verify, /dist\/assets\/uiux-premium-2026\.js/);
-  assert.match(verify, /--check[\s\S]*uiux-premium-2026\.js/);
-  assert.match(verify, /putduk-shell-v25/);
+  assert.match(verify, /dist\/admin\/uiux-admin-premium-2026\.css/);
+  assert.match(verify, /dist\/admin\/uiux-admin-premium-2026\.js/);
+  assert.match(verify, /--check[\s\S]*uiux-admin-premium-2026\.js/);
+  assert.match(verify, /putduk-shell-v26/);
 });
