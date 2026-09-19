@@ -14,14 +14,15 @@ test('member shell wires premium auth/legal assets and service worker caches the
   assert.match(memberHtml, /uiux-legal-2026\.css/);
   assert.match(memberHtml, /uiux-legal-2026\.js/);
   assert.match(memberHtml, /uiux-compliance-2026\.js/);
-  assert.match(sw, /putduk-member-v35/);
-  assert.match(sw, /uiux-auth-2026\.css\?v=20260919-uiux4/);
-  assert.match(sw, /uiux-auth-2026\.js\?v=20260919-uiux4/);
-  assert.match(sw, /uiux-legal-2026\.css\?v=20260919-uiux8/);
-  assert.match(sw, /uiux-legal-2026\.js\?v=20260919-uiux8/);
-  assert.match(sw, /uiux-compliance-2026\.js\?v=20260919-uiux8/);
-  assert.match(sw, /uiux-growth-2026\.css\?v=20260919-uiux3/);
-  assert.match(sw, /uiux-growth-2026\.js\?v=20260919-uiux3/);
+  assert.match(sw, /putduk-sw-off-v37/);
+  assert.doesNotMatch(sw, /cache\.addAll/);
+  assert.match(memberHtml, /uiux-auth-2026\.css\?v=20260919-uiux4/);
+  assert.match(memberHtml, /uiux-auth-2026\.js\?v=20260919-uiux4/);
+  assert.match(memberHtml, /uiux-legal-2026\.css\?v=20260919-uiux8/);
+  assert.match(memberHtml, /uiux-legal-2026\.js\?v=20260919-uiux8/);
+  assert.match(memberHtml, /uiux-compliance-2026\.js\?v=20260919-uiux8/);
+  assert.match(memberHtml, /uiux-growth-2026\.css\?v=20260919-uiux3/);
+  assert.match(memberHtml, /uiux-growth-2026\.js\?v=20260919-uiux3/);
 
   const authScriptIdx = perfDeferred.indexOf('uiux-auth-2026.js');
   const legalScriptIdx = perfDeferred.indexOf('uiux-legal-2026.js');

@@ -28,16 +28,11 @@ export async function onRequest(context) {
   }
 
   const response = await context.next();
-  const isDocument = url.pathname === '/'
-    || url.pathname.endsWith('/')
-    || url.pathname.endsWith('.html');
-  if (staticPath || !isDocument) return response;
-
-  const cookies = context.request.headers.get('Cookie') || '';
-  if (cookies.includes('putduk-cleared=v36')) return response;
+  if (staticPath) return response;
 
   const next = new Response(response.body, response);
-  next.headers.set('Clear-Site-Data', '"cache", "storage"');
-  next.headers.append('Set-Cookie', 'putduk-cleared=v36; Path=/; Max-Age=31536000; SameSite=Lax; Secure');
+  // Clear-Site-Data는 문서 로드 중 탭을 멈추고, 쿠키가 안 남으면 새로고침이 반복된다.
+  next.headers.delete('Clear-Site-Data');
+  next.headers.set('X-Putduk-Boot', 'v37');
   return next;
 }

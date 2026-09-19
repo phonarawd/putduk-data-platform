@@ -6,11 +6,10 @@ import { repoPath } from '../helpers/repo.mjs';
 test('PWA 문서는 최신 배포를 먼저 받고 PHASE 4 자산을 셸에 포함한다', async () => {
   const sw = await readFile(repoPath('dist/sw.js'), 'utf8');
 
-  assert.match(sw, /putduk-member-v35/);
-  assert.match(sw, /phase4-finance-wiring\.js\?v=20260919-p4r2/);
-  assert.match(sw, /networkFirstDocument\(event\.request, url\)/);
-  assert.match(sw, /staleWhileRevalidate\(event\.request, url\)/);
-  assert.match(sw, /async function networkFirstDocument/);
-  assert.match(sw, /const response = await fetch\(request\)/);
-  assert.match(sw, /cache\.match\(request, \{ ignoreSearch: true \}\)/);
+  assert.match(sw, /putduk-sw-off-v37/);
+  assert.match(sw, /self\.registration\.unregister/);
+  assert.match(sw, /event\.respondWith\(fetch\(event\.request\)\)/);
+  assert.doesNotMatch(sw, /cache\.addAll/);
+  assert.doesNotMatch(sw, /staleWhileRevalidate/);
+  assert.doesNotMatch(sw, /networkFirstDocument/);
 });

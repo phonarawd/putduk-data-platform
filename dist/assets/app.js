@@ -4721,12 +4721,11 @@
   let deferredInstallPrompt = null;
 
   function initializePwa() {
-    // 먹통 기간: 서비스워커가 Cache API에서 멈추면 스크립트가 영원히 안 내려온다. 등록하지 않는다.
+    // 이미 깔린 워커를 끄기 위해 한 번 등록한다. 새 워커(putduk-sw-off-v37)는 즉시 등록을 푼다.
     if (!('serviceWorker' in navigator)) return;
     const serviceWorkerPath = isAdmin ? '../sw.js' : './sw.js';
     const register = () => navigator.serviceWorker.register(serviceWorkerPath).catch(() => {});
-    void serviceWorkerPath;
-    void register;
+    register();
     window.addEventListener('beforeinstallprompt', (event) => {
       event.preventDefault();
       deferredInstallPrompt = event;

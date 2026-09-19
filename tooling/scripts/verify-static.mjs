@@ -124,21 +124,12 @@ if (!complianceJs.includes('주민등록번호 뒷자리') || !complianceJs.incl
   throw new Error('KYC 화면에 불필요한 고유식별정보 마스킹 안내가 포함되어야 합니다.');
 }
 
-if (!sw.includes('putduk-member-v35')
-  || !sw.includes('putduk-admin-v35')
-  || !sw.includes('perf-deferred.js?v=20260920-perf3')
-  || !sw.includes('uiux-premium-2026.css?v=20260919-uiux2')
-  || !sw.includes('uiux-premium-2026.js?v=20260919-uiux2')
-  || !sw.includes('uiux-growth-2026.css?v=20260919-uiux3')
-  || !sw.includes('uiux-growth-2026.js?v=20260919-uiux3')
-  || !sw.includes('uiux-auth-2026.css?v=20260919-uiux4')
-  || !sw.includes('uiux-auth-2026.js?v=20260919-uiux4')
-  || !sw.includes('uiux-legal-2026.css?v=20260919-uiux8')
-  || !sw.includes('uiux-legal-2026.js?v=20260919-uiux8')
-  || !sw.includes('uiux-compliance-2026.js?v=20260919-uiux8')
-  || !sw.includes('uiux-admin-premium-2026.css?v=20260919-uiux2')
-  || !sw.includes('uiux-admin-premium-2026.js?v=20260919-uiux2')) {
-  throw new Error('서비스워커가 FINAL/Premium/Growth/Auth/Legal UI 자산과 v32 캐시를 사용해야 합니다.');
+if (!sw.includes('putduk-sw-off-v37')
+  || sw.includes('cache.addAll')
+  || sw.includes('staleWhileRevalidate')
+  || !sw.includes('unregister')
+  || !sw.includes('fetch(event.request)')) {
+  throw new Error('서비스워커는 캐시 없이 네트워크만 통과한 뒤 등록을 풀어야 합니다.');
 }
 
 for (const forbidden of ['운영자 데모', '미리보기 화면', 'putduk-demo-state']) {
