@@ -34,8 +34,8 @@
     }
   }
 
-  function ensureMatchingTab(scope = document) {
-    const tabbar = scope.querySelector?.('.member-tabbar') || document.querySelector('.member-tabbar');
+  function ensureMatchingTab() {
+    const tabbar = document.querySelector('.member-tabbar');
     if (!tabbar) return;
 
     let matching = tabbar.querySelector('[data-nav="nodes"]');
@@ -95,7 +95,6 @@
     }
 
     if (scope.querySelectorAll) scope.querySelectorAll('[aria-label], [title]').forEach(normalizeAttributes);
-    ensureMatchingTab(scope);
   }
 
   const pending = new Set();
@@ -106,7 +105,7 @@
     const roots = Array.from(pending);
     pending.clear();
     roots.forEach(normalizeTree);
-    ensureMatchingTab(document);
+    ensureMatchingTab();
   }
 
   function queue(node) {
@@ -123,7 +122,7 @@
 
   function start() {
     normalizeTree(document);
-    ensureMatchingTab(document);
+    ensureMatchingTab();
     observer.observe(document.body || document.documentElement, {
       childList: true,
       subtree: true
