@@ -17,14 +17,30 @@ const tests = [
     assert.match(migration, /입금 증빙을 먼저 확인해 주세요/);
     assert.match(migration, /deposit-proof\/.*new\.user_id/);
   }],
+  ['증빙을 실제로 연 요청만 승인 가능', () => {
+    assert.match(source, /function proofChecked\(id\)/);
+    assert.match(source, /approved && !proofChecked\(id\)/);
+    assert.match(source, /입금 증빙을 먼저 열어 직접 확인한 뒤 승인해 주세요/);
+    assert.match(source, /approving && \(!hasProof \|\| !proofChecked\(id\)\)/);
+  }],
+  ['데스크톱과 모바일 모두 증빙 버튼을 같은 action-row에 삽입', () => {
+    assert.match(source, /function ensureProofButton\(actionRow, item\)/);
+    assert.match(source, /querySelectorAll\(`\[data-finance-action=\"review_deposit\"/);
+    assert.match(source, /ensureProofButton\(button\.closest\('\.action-row'\), item\)/);
+  }],
   ['KRW와 USDT 금액 표시를 구분', () => {
     assert.match(source, /currency === 'USDT'/);
-    assert.match(source, /USDT`/);
+    assert.match(source, /maximumFractionDigits: 8/);
     assert.match(source, /toLocaleString\('ko-KR'/);
   }],
   ['원금 포함 출금은 반려 경로가 없음', () => {
     assert.match(source, /원금 포함 출금은 반려할 수 없어요/);
-    assert.match(source, /if \(isPrincipal\(item\)\) \{[\s\S]*button\.remove\(\)/);
+    assert.match(source, /if \(isPrincipal\(item\)\) button\.remove\(\)/);
+  }],
+  ['모바일 출금에도 지급정보 확인 버튼 제공', () => {
+    assert.match(source, /function ensureMobileRevealButton\(item, card\)/);
+    assert.match(source, /button\.closest\('\.admin-mobile-card'\)/);
+    assert.match(source, /reveal\.dataset\.action = 'reveal-withdrawal-destination'/);
   }],
   ['지급정보 확인 뒤 실제 송금 완료만 확정', () => {
     assert.match(source, /지급정보를 먼저 확인하고 실제 송금을 완료한 뒤/);
@@ -36,6 +52,9 @@ const tests = [
     assert.match(source, /isBusy\('deposit'/);
     assert.match(source, /isBusy\('withdrawal'/);
     assert.match(source, /isBusy\('kyc'/);
+  }],
+  ['KYC 처리 후 버튼 문구를 정상 복원', () => {
+    assert.match(source, /button\.textContent = working \? '처리 중…' : \(button\.dataset\.action === 'kyc-approve' \? '승인' : '반려'\)/);
   }],
   ['KYC 서버는 처리 전 상태를 row lock 후 검증', () => {
     assert.match(migration, /for update;/i);
