@@ -13,7 +13,16 @@
     "putduk_assignment_rls_unify": ["20260920054000", "20260919203207"],
     "putduk_assignment_rls_recursion_fix": ["20260920054500", "20260919203452"],
     "putduk_member_payout_ciphertext_cleanup": ["20260920055000", "20260919203257"],
-    "putduk_money_ops_pin_idempotency": ["20260920070000", "20260919220312"]
+    "putduk_money_ops_pin_idempotency": ["20260920070000", "20260919220312"],
+    "putduk_web_push": ["20260920103000", "20260919232234"],
+    "putduk_landing_operated_content": ["20260920183000", "20260920092844"],
+    "putduk_landing_content_hardening": ["20260920190000", "20260920092925"],
+    "putduk_notification_member_archive": ["20260920191000", "20260920100946"],
+    "putduk_remove_principal_withdraw_penalties": ["20260920193500", "20260920102042"],
+    "putduk_trial_withdrawal_approval_guard": ["20260920201000", "20260920111521"],
+    "putduk_deposit_destination_contract": ["20260920202500", "20260920121557"],
+    "putduk_admin_finance_queue_contract": ["20260920214500", "20260920132233"],
+    "putduk_admin_assignment_duplicate_guard": ["20260920230000", "20260920135408"]
   },
   "remote_history_only": [
     { "version": "20260918073323", "name": "putduk_payout_destination_upsert_keep" },
