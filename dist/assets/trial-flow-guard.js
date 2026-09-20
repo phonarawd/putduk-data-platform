@@ -38,25 +38,45 @@
     }
   }
 
-  function loadMemberExperienceP4() {
-    if (!document.querySelector('link[data-p4-member-experience]')) {
-      const link = document.createElement('link');
-      link.rel = 'stylesheet';
-      link.href = './assets/member-experience-p4.css?v=20260921-p4member1';
-      link.dataset.p4MemberExperience = '1';
-      document.head.appendChild(link);
+  function ensureStyle(marker, href) {
+    if (document.querySelector(`link[${marker}]`)) return;
+    const link = document.createElement('link');
+    link.rel = 'stylesheet';
+    link.href = href;
+    link.setAttribute(marker, '1');
+    document.head.appendChild(link);
+  }
+
+  function ensureScript(marker, src, onload) {
+    const existing = document.querySelector(`script[${marker}]`);
+    if (existing) {
+      if (typeof onload === 'function') {
+        if (existing.dataset.loaded === '1') onload();
+        else existing.addEventListener('load', onload, { once: true });
+      }
+      return;
     }
-    if (!document.querySelector('script[data-p4-member-experience]')) {
-      const script = document.createElement('script');
-      script.src = './assets/member-experience-p4.js?v=20260921-p4member1';
-      script.defer = true;
-      script.dataset.p4MemberExperience = '1';
-      document.head.appendChild(script);
-    }
+    const script = document.createElement('script');
+    script.src = src;
+    script.async = false;
+    script.setAttribute(marker, '1');
+    script.addEventListener('load', () => {
+      script.dataset.loaded = '1';
+      if (typeof onload === 'function') onload();
+    }, { once: true });
+    document.head.appendChild(script);
+  }
+
+  function loadMemberExperience() {
+    ensureStyle('data-p4-member-experience', './assets/member-experience-p4.css?v=20260921-p4member1');
+    ensureStyle('data-stage7-member-runtime', './assets/member-catalog-runtime.css?v=20260921-stage7a');
+    ensureScript('data-p4-member-experience', './assets/member-experience-p4.js?v=20260921-p4member1', () => {
+      ensureScript('data-stage7-member-runtime', './assets/member-catalog-runtime.js?v=20260921-stage7a');
+    });
   }
 
   sanitize(app);
-  loadMemberExperienceP4();
+  loadMemberExperience();
 
   const observer = new MutationObserver((records) => {
     for (const record of records) {

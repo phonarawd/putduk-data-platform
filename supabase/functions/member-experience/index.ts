@@ -17,7 +17,7 @@ if (!supabaseUrl || !serviceRoleKey) throw new Error("Supabase service configura
 const admin = createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false, autoRefreshToken: false } });
 
 function corsHeaders(request: Request): HeadersInit {
-  const configured = (Deno.env.get("PUTDUK_ALLOWED_ORIGINS") || "*").split(",").map((v) => v.trim()).filter(Boolean);
+  const configured = (Deno.env.get("PUTDUK_ALLOWED_ORIGINS") || "*").split(",").map((value) => value.trim()).filter(Boolean);
   const origin = request.headers.get("origin") || "";
   const allow = configured.includes("*") ? "*" : configured.includes(origin) ? origin : configured[0] || "null";
   return {
@@ -55,25 +55,69 @@ function verifiedUserId(request: Request): string {
   }
 }
 
+function uuid(value: unknown): string {
+  const text = String(value || "").trim();
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(text)) {
+    throw new HttpError(400, "업무 대상을 확인해 주세요.");
+  }
+  return text;
+}
+
 Deno.serve(async (request) => {
   if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: corsHeaders(request) });
   if (request.method !== "POST") return json(request, { ok: false, error: "요청 형식을 확인해 주세요." }, 405);
+
   try {
     const userId = verifiedUserId(request);
     let payload: JsonRecord = {};
     try { payload = await request.json() as JsonRecord; } catch (_) {}
     const action = String(payload.action || "member_experience");
-    if (action !== "member_experience") throw new HttpError(400, "요청 형식을 확인해 주세요.");
 
-    const { data, error } = await admin.rpc("putduk_member_experience_snapshot", { p_user_id: userId });
-    if (error || !data || typeof data !== "object") {
-      console.error("member experience snapshot failed", error);
-      throw new HttpError(503, "업무 현황을 불러오지 못했습니다.");
+    if (action === "member_experience") {
+      const { data, error } = await admin.rpc("putduk_member_experience_snapshot", { p_user_id: userId });
+      if (error || !data || typeof data !== "object") {
+        console.error("member experience snapshot failed", error);
+        throw new HttpError(503, "업무 현황을 불러오지 못했습니다.");
+      }
+      return json(request, { ok: true, ...(data as JsonRecord) });
     }
-    return json(request, { ok: true, ...(data as JsonRecord) });
+
+    if (action === "work_contract") {
+      const taskRunId = uuid(payload.task_run_id);
+      const { data, error } = await admin.rpc("putduk_member_work_contract", {
+        p_user_id: userId,
+        p_task_run_id: taskRunId
+      });
+      if (error) {
+        console.error("member work contract failed", error);
+        throw new HttpError(409, "업무 화면을 불러오지 못했습니다.");
+      }
+      return json(request, { ok: true, contract_data: data || { available: false } });
+    }
+
+    if (action === "submit_work") {
+      const taskRunId = uuid(payload.task_run_id);
+      const submission = payload.submission;
+      if (!submission || typeof submission !== "object" || Array.isArray(submission)) {
+        throw new HttpError(400, "제출 내용을 확인해 주세요.");
+      }
+      const { data, error } = await admin.rpc("putduk_member_submit_work_v2", {
+        p_user_id: userId,
+        p_task_run_id: taskRunId,
+        p_submission: submission
+      });
+      if (error) {
+        console.error("generic member submit failed", error);
+        throw new HttpError(409, "업무를 제출하지 못했습니다.");
+      }
+      if (!data || typeof data !== "object") throw new HttpError(503, "업무 제출 결과를 확인하지 못했습니다.");
+      return json(request, data as JsonRecord);
+    }
+
+    throw new HttpError(400, "요청 형식을 확인해 주세요.");
   } catch (error) {
     if (error instanceof HttpError) return json(request, { ok: false, error: error.message }, error.status);
     console.error("member-experience error", error);
-    return json(request, { ok: false, error: "업무 현황을 불러오지 못했습니다." }, 500);
+    return json(request, { ok: false, error: "요청을 처리하지 못했습니다." }, 500);
   }
 });
