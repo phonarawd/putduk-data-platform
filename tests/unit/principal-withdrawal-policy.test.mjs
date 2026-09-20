@@ -35,11 +35,11 @@ test('레거시 패널티 함수는 회원 상태를 바꾸지 않는 호환 함
   assert.match(helperBlock, /'penalty_applied', false/);
 });
 
-test('회원 화면은 잘못된 원금 출금 강등 토스트를 즉시 제거한다', async () => {
+test('회원 화면은 잘못된 원금 출금 강등 토스트를 통합 정책 가드에서 제거한다', async () => {
   const indexHtml = await readRepo('dist', 'index.html');
-  const guard = await readRepo('dist', 'assets', 'withdrawal-policy-guard.js');
+  const guard = await readRepo('dist', 'assets', 'toast-policy-guard.js');
 
-  assert.match(indexHtml, /app\.js\?v=20260920-toast1[\s\S]*withdrawal-policy-guard\.js\?v=20260920-p0withdraw1/);
+  assert.match(indexHtml, /app\.js\?v=20260920-toast1[\s\S]*toast-policy-guard\.js\?v=20260920-toast2/);
   assert.match(guard, /등급과 라인이 내려가는 출금/);
   assert.match(guard, /MutationObserver/);
   assert.match(guard, /node\.remove\(\)/);
