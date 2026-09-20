@@ -541,3 +541,65 @@
   .uiux-auth-modal:not(.is-login) .modal-body { padding-bottom:calc(96px + env(safe-area-inset-bottom)); }
   .uiux-auth-modal:not(.is-login) .modal-actions { position:sticky; bottom:0; z-index:3; padding:12px 0 calc(12px + env(safe-area-inset-bottom)); background:var(--premium-surface); }
 }
+
+/* 2026-09-20 P-1A: one bounded scroll owner for auth surfaces. */
+.modal-backdrop:has(.uiux-auth-modal) {
+  overflow: hidden;
+}
+.uiux-auth-modal {
+  display: flex;
+  flex-direction: column;
+  max-height: min(92dvh, 900px);
+  overflow: hidden !important;
+}
+.uiux-auth-modal .modal-head,
+.uiux-auth-modal .auth-tabs {
+  flex: 0 0 auto;
+}
+.uiux-auth-modal .modal-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+}
+@media (orientation: landscape) and (max-height: 600px) and (max-width: 1024px) {
+  .modal-backdrop:has(.uiux-auth-modal) {
+    display: flex !important;
+    align-items: flex-start !important;
+    justify-content: center !important;
+    padding:
+      max(6px, env(safe-area-inset-top))
+      max(10px, env(safe-area-inset-right))
+      max(6px, env(safe-area-inset-bottom))
+      max(10px, env(safe-area-inset-left)) !important;
+  }
+  .uiux-auth-modal,
+  .uiux-auth-modal.is-login,
+  .uiux-auth-modal:not(.is-login) {
+    width: min(760px, 100%) !important;
+    min-height: 0 !important;
+    max-height: calc(var(--putduk-visual-viewport-height, 100dvh) - max(12px, env(safe-area-inset-top)) - max(12px, env(safe-area-inset-bottom))) !important;
+    border-radius: 18px !important;
+  }
+  .uiux-auth-modal.is-login { width: min(520px, 100%) !important; }
+  .uiux-auth-modal .modal-head { min-height: 0; padding: 10px 16px 8px; }
+  .uiux-auth-modal .modal-head h2 { font-size: 19px; }
+  .uiux-auth-modal .modal-head p { margin-top: 2px; line-height: 1.35; }
+  .uiux-auth-modal .auth-tabs { padding: 7px 16px 0; }
+  .uiux-auth-modal .auth-tabs button { min-height: 36px; }
+  .uiux-auth-modal .modal-body { padding: 10px 16px 14px; }
+  .uiux-auth-modal .form-grid { gap: 10px 12px; }
+  .uiux-auth-modal .field { gap: 4px; }
+  .uiux-auth-modal .field input,
+  .uiux-auth-modal .field select,
+  .uiux-auth-modal .field textarea { min-height: 42px; }
+  .uiux-auth-modal .modal-actions {
+    position: sticky;
+    bottom: 0;
+    z-index: 4;
+    padding: 10px 0 max(6px, env(safe-area-inset-bottom));
+    background: var(--premium-surface);
+  }
+}
