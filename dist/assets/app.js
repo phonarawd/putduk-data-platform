@@ -2907,6 +2907,7 @@
     const dashboardQuota = dailyQuotaParts();
     const quotaValue = dashboardQuota.value;
     const quotaSuffix = dashboardQuota.suffix;
+    const hasEarnings = state.history.some((item) => rewardUiKind(item) === 'posted');
     return `
       ${renderTrustStrip()}
       ${renderFomoBoard('dashboard')}
@@ -2926,13 +2927,13 @@
       ${inProgress ? `<div class="notice" style="margin-bottom:18px"><span style="color:var(--emerald)">${icon('activity',17)}</span><div style="flex:1"><strong>${esc(inProgress.title)}</strong> 근무를 이어가고 있어요.<br><span style="color:var(--muted)">화면을 닫아도 서버 기준으로 이어져요.</span></div><button class="small-button primary" data-action="open-run">근무 화면 열기</button></div>` : ''}
       ${waiting ? `<div class="notice" style="margin-bottom:18px"><span style="color:var(--gold)">${icon('clipboard-check',17)}</span><div style="flex:1"><strong>검수를 기다리고 있어요</strong><br><span style="color:var(--muted)">${esc(waiting.title)} · 새 출근은 검수가 끝난 뒤에 할 수 있어요.</span></div><button class="small-button primary" data-action="open-review-wait">검수 대기 보기</button></div>` : ''}
       <section class="dashboard-grid">
-        <div class="panel"><div class="panel-head"><div><div class="panel-title">최근 수당 흐름</div><div class="panel-subtitle">검수 완료된 수당만 표시해요</div></div><span class="status-badge">${icon('trending-up', 13)} 서버 기록</span></div><div class="chart-wrap"><canvas id="earningsChart" aria-label="최근 7일 수당 흐름"></canvas></div></div>
+        <div class="panel"><div class="panel-head"><div><div class="panel-title">최근 수당 흐름</div><div class="panel-subtitle">검수 완료된 수당만 표시해요</div></div>${hasEarnings ? `<span class="status-badge">${icon('trending-up', 13)} 서버 기록</span>` : ''}</div>${hasEarnings ? `<div class="chart-wrap"><canvas id="earningsChart" aria-label="최근 7일 수당 흐름"></canvas></div>` : `<div class="empty-state compact earnings-empty"><div class="empty-icon">${icon('wallet-cards', 22)}</div><strong>아직 수당 기록이 없어요.</strong><p>첫 업무가 승인되면 여기에 수당 흐름이 나타납니다.</p></div>`}</div>
         <div class="wallet-card"><div class="eyebrow" style="color:#a8f3d2">${icon('layout-grid', 14)} 내 지갑 세 칸</div>${renderWalletSlots()}<div class="wallet-cta"><button class="secondary-button" data-nav="wallet">지갑 보기</button><button class="gold-button" data-action="deposit-info">${icon('credit-card', 16)} 입금하기</button></div></div>
       </section>
       ${renderPartnerGallery()}
       ${renderNextLadderHero()}
       <div class="section-heading"><div><h2>오늘 추천 근무</h2><p>잠금 금액과 끝나면 받을 수당을 먼저 봐요.</p></div><button class="text-link" data-nav="nodes">라인 더 보기 ${icon('arrow-right', 14)}</button></div>
-      <section class="node-grid">${memberCatalogNodes().slice(0, 3).map(renderNodeCard).join('') || `<div class="empty-state compact" style="grid-column:1/-1"><div class="empty-icon">${icon('waypoints', 22)}</div><strong>오늘 공개된 라인이 아직 없어요.</strong><p>운영자가 배정한 라인이나 공개된 근무가 여기에 보여요.</p></div>`}</section>
+      <section class="node-grid">${memberCatalogNodes().slice(0, 3).map(renderNodeCard).join('') || `<div class="empty-state compact action-empty" style="grid-column:1/-1"><div class="empty-icon">${icon('waypoints', 22)}</div><strong>현재 참여 가능한 업무가 없습니다.</strong><p>새 업무가 열리면 이곳에 표시됩니다.</p><button class="secondary-button" type="button" data-nav="nodes">업무 매칭 확인</button></div>`}</section>
       <section class="dashboard-grid" style="margin-top:18px"><div class="panel"><div class="panel-head"><div><div class="panel-title">최근 근무</div><div class="panel-subtitle">제출·검수 상태가 여기에 쌓여요.</div></div><button class="text-link" data-nav="history">전체보기</button></div>${renderTimeline()}</div><div class="panel panel-pad"><div class="panel-title">처음 출근하는 분께</div><div class="notice" style="margin-top:14px"><span style="color:var(--gold)">${icon('lightbulb',17)}</span><div>한 화면에서 전표와 실물 번호 5건을 대조하고 제출하면 돼요. ${settleNote('span')}</div></div><button class="secondary-button" data-nav="support" style="width:100%;margin-top:13px">도움말 보기</button></div></section>
     `;
   }
@@ -2966,7 +2967,7 @@
   }
 
   function renderNodesPage() {
-    const grid = memberCatalogNodes().map(renderNodeCard).join('') || `<div class="empty-state compact" style="grid-column:1/-1"><div class="empty-icon">${icon('waypoints',22)}</div><strong>지금 공개된 업무가 없어요.</strong><p>운영자가 배정한 라인이나 공개된 근무가 여기에 나타나요.</p></div>`;
+    const grid = memberCatalogNodes().map(renderNodeCard).join('') || `<div class="empty-state compact action-empty" style="grid-column:1/-1"><div class="empty-icon">${icon('waypoints',22)}</div><strong>현재 참여 가능한 업무가 없습니다.</strong><p>새 업무가 공개되면 이 화면에 바로 표시됩니다.</p><button class="secondary-button" type="button" data-nav="nodes">새로 확인</button></div>`;
     const quotaLine = authState.session
       ? `<div class="notice" style="margin-bottom:14px"><span style="color:var(--emerald)">${icon('clock-3', 17)}</span><div>${esc(dailyQuotaSummaryText())}</div></div>`
       : '';
@@ -3781,7 +3782,58 @@
     return '';
   }
 
+  function renderPublicLanding() {
+    return `<div class="public-landing">
+      <header class="landing-header">
+        <a class="landing-brand" href="/" aria-label="퍼뜩 홈"><img src="./icons/putduk-premium.png" alt="" width="40" height="40" /><strong>퍼뜩</strong></a>
+        <div class="landing-header-actions"><button class="landing-link" type="button" data-action="open-login">로그인</button><button class="primary-button" type="button" data-action="open-signup">무료로 시작하기</button></div>
+      </header>
+      <main>
+        <section class="landing-hero" aria-labelledby="landing-title">
+          <p class="landing-competitors">잡코리아? 알바몬? 당근알바? 알바천국?</p>
+          <h1 id="landing-title">공고를 찾지 마세요.<br><span>오늘 할 일을 고르세요.</span></h1>
+          <p class="landing-lead">공고를 찾아다니고 지원 결과를 기다리는 대신,<br>퍼뜩에서는 지금 가능한 업무를 확인하고 선택할 수 있습니다.</p>
+          <div class="landing-hero-actions"><button class="primary-button" type="button" data-action="open-signup">퍼뜩 시작하기</button><button class="secondary-button" type="button" data-action="open-login">로그인</button></div>
+          <p class="landing-proofline">이력서 없이 · 면접 없이 · 출근 기다림 없이</p>
+        </section>
+        <section class="landing-compare" aria-labelledby="landing-compare-title">
+          <div class="landing-section-head"><p>퍼뜩의 차이</p><h2 id="landing-compare-title">찾고 기다리는 시간을<br>실제 업무 시간으로.</h2></div>
+          <div class="landing-compare-grid">
+            <article><span>기존 구직</span><strong>찾기 → 지원 → 기다림</strong><ol><li>일자리 검색</li><li>공고 비교</li><li>지원서 작성</li><li>연락·면접 대기</li></ol></article>
+            <article class="is-putduk"><span>퍼뜩</span><strong>확인 → 선택 → 시작</strong><ol><li>할 일 확인</li><li>업무 선택</li><li>업무 수행</li><li>제출·검수·수당 확인</li></ol></article>
+          </div>
+          <p class="landing-compare-note">구직 과정은 줄이고, 실제 업무는 더 빠르게.</p>
+        </section>
+        <section class="landing-benefits" aria-labelledby="landing-benefits-title">
+          <div class="landing-section-head"><p>말이 아니라 흐름으로</p><h2 id="landing-benefits-title">퍼뜩에서는 이렇게 일합니다.</h2></div>
+          <div class="landing-benefit-grid">
+            <article><strong>지원하지 않습니다.</strong><p>가능한 업무를 확인하고 선택합니다.</p></article>
+            <article><strong>면접을 기다리지 않습니다.</strong><p>업무 조건을 보고 준비되면 시작합니다.</p></article>
+            <article><strong>조건을 먼저 봅니다.</strong><p>시작 조건, 예상 수당, 소요 시간을 확인합니다.</p></article>
+            <article><strong>진행 기록이 남습니다.</strong><p>제출·검수·정산 상태를 한곳에서 확인합니다.</p></article>
+          </div>
+        </section>
+        <section class="landing-philosophy"><p>일하고 싶은데</p><h2>왜 먼저 ‘구직’부터 해야 하죠?</h2><span>퍼뜩은 사람을 채용공고 앞에 세우는 대신<br><strong>지금 할 수 있는 업무 앞에 연결합니다.</strong></span></section>
+        <section class="landing-work-preview" aria-labelledby="landing-preview-title">
+          <div class="landing-section-head"><p>업무 예시</p><h2 id="landing-preview-title">휴대폰으로 확인하고 제출하는 업무</h2></div>
+          <div class="landing-preview-grid">
+            <article><span>배송·물류</span><strong>송장번호 형식 확인</strong><p>번호 규칙과 누락 여부를 확인합니다.</p></article>
+            <article><span>상품정보</span><strong>상품 옵션 정리</strong><p>상품명·색상·규격을 기준에 맞게 정리합니다.</p></article>
+            <article><span>문서 검수</span><strong>영수증 금액 대조</strong><p>문서 이미지와 추출된 값을 비교합니다.</p></article>
+          </div>
+          <p class="landing-preview-note">실제 공개 업무와 참여 조건은 로그인 후 확인할 수 있습니다.</p>
+        </section>
+        <section class="landing-final-cta"><h2>오늘 할 일을 보러 갈까요?</h2><p>가입하고 지금 가능한 업무를 확인하세요.</p><button class="primary-button" type="button" data-action="open-signup">무료로 퍼뜩 시작하기</button><button class="landing-login-inline" type="button" data-action="open-login">이미 회원이신가요? <strong>로그인</strong></button></section>
+      </main>
+      <footer class="landing-footer"><span>퍼뜩</span><span>가능한 업무를 확인하고 선택하는 온라인 업무 플랫폼</span></footer>
+    </div>`;
+  }
+
+  function renderPublicLandingShell() {
+    return `<div class="public-landing-shell">${renderPublicLanding()}</div>`;
+  }
   function renderAppShell() {
+    if (!isAdmin && !authState.session) return renderPublicLandingShell();
     const page = isAdmin && !authState.adminAuthorized ? renderAdminGate() : isAdmin ? renderAdminPage() : renderMemberPage();
     const sidebar = isAdmin && !authState.adminAuthorized ? '' : renderSidebar();
     return `<div class="app-shell">${sidebar}<main class="main"><div>${renderTopbar()}${page}</div></main></div>${isAdmin ? '' : renderMemberTabbar()}`;
