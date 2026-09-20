@@ -306,18 +306,7 @@
         state.payload = null;
         return;
       }
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${session.access_token}`,
-          apikey: config.supabasePublishableKey,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ action: 'member_experience' })
-      });
-      const body = await response.json().catch(() => ({}));
-      if (!response.ok || body?.ok === false) throw new Error(String(body?.error || '회원 업무 현황을 불러오지 못했습니다.'));
-      state.payload = body;
+      state.payload = await runtime.getMemberExperience(endpoint, session.access_token);
       state.lastLoadedAt = Date.now();
       scheduleApply();
     } catch (error) {
@@ -329,7 +318,10 @@
 
   function refreshSoon() {
     clearTimeout(state.refreshTimer);
-    state.refreshTimer = setTimeout(requestExperience, REFRESH_DEBOUNCE_MS);
+    state.refreshTimer = setTimeout(() => {
+      runtime.clearMemberExperienceCache();
+      void requestExperience();
+    }, REFRESH_DEBOUNCE_MS);
   }
 
   app.addEventListener('click', (event) => {

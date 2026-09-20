@@ -176,8 +176,7 @@
     if (state.loadingSnapshot || !state.session) return;
     state.loadingSnapshot = true;
     try {
-      const data = await api('member_experience');
-      state.snapshot = data;
+      state.snapshot = await runtime.getMemberExperience(endpoint, state.session.access_token);
       renderCatalog();
     } catch (_) {
       // The Stage 6 surface remains as the safe fallback when this read fails.
