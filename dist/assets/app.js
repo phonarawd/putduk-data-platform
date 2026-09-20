@@ -758,7 +758,7 @@
       state.onboardingStep = null;
       return;
     }
-    if (trialApproved && !state.onboardingGeneralSeen) {
+    if (trialApproved && !state.onboardingGeneralSeen && !state.onboardingGrantSeen) {
       state.onboardingStep = 'general-work';
       return;
     }
@@ -5321,6 +5321,7 @@
     }
     if (action === 'ack-general-work') {
       state.onboardingGeneralSeen = true;
+      state.onboardingGrantSeen = true;
       state.onboardingStep = null;
       state.memberPage = 'nodes';
       saveState();
