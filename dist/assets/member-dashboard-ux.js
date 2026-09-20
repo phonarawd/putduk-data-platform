@@ -49,10 +49,13 @@
     const deposit = card.querySelector('.wallet-cta [data-action="deposit-info"]');
     if (!deposit) return;
 
+    const supportAmount = String(support?.querySelector('strong')?.textContent || '').trim();
+    const supportLoading = !supportAmount || supportAmount.includes('확인 필요');
     const supportAvailable = Boolean(support && !support.classList.contains('is-zero'));
-    deposit.hidden = supportAvailable;
-    deposit.setAttribute('aria-hidden', supportAvailable ? 'true' : 'false');
-    if (!supportAvailable && deposit.textContent.trim() !== '업무잔액 충전') deposit.textContent = '업무잔액 충전';
+    const suppressDeposit = supportLoading || supportAvailable;
+    deposit.hidden = suppressDeposit;
+    deposit.setAttribute('aria-hidden', suppressDeposit ? 'true' : 'false');
+    if (!suppressDeposit && deposit.textContent.trim() !== '업무잔액 충전') deposit.textContent = '업무잔액 충전';
   }
 
   function makeFallbackNextAction() {
