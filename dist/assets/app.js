@@ -89,6 +89,8 @@
     onboardingStep: null,
     onboardingPwaDone: false,
     onboardingGrantSeen: false,
+    onboardingExperienceStarted: false,
+    onboardingGeneralSeen: false,
     helpTab: 'work',
     adminFinanceTab: 'payouts',
     depositMethod: '',
@@ -724,21 +726,48 @@
     return window.navigator.standalone === true || window.matchMedia?.('(display-mode: standalone)').matches;
   }
 
+  function approvedTrialExists() {
+    return (state.history || []).some((item) => {
+      if (String(item.statusRaw || item.runStatus || '') !== 'approved') return false;
+      return Boolean(nodeById(item.nodeId)?.isTrial);
+    });
+  }
+
+  function activeTrialExists() {
+    const activeNodeId = state.run?.nodeId || state.reviewWait?.nodeId;
+    return Boolean(activeNodeId && nodeById(activeNodeId)?.isTrial);
+  }
+
   function queueOnboarding() {
     if (isAdmin || !authState.session) {
       state.onboardingStep = null;
       return;
     }
-    if (!state.onboardingPwaDone && !isStandalonePwa()) {
+    const trialApproved = approvedTrialExists();
+    const trialStarted = Boolean(
+      authState.profile?.trial_consumed_at
+      || state.onboardingExperienceStarted
+      || activeTrialExists()
+      || trialApproved
+    );
+    if (!trialStarted) {
+      state.onboardingStep = 'first-work';
+      return;
+    }
+    if (activeTrialExists() || state.reviewWait) {
+      state.onboardingStep = null;
+      return;
+    }
+    if (trialApproved && !state.onboardingGeneralSeen) {
+      state.onboardingStep = 'general-work';
+      return;
+    }
+    if (trialApproved && state.onboardingGeneralSeen && !state.onboardingPwaDone && !isStandalonePwa()) {
       if (state.onboardingStep !== 'pwa') state._playedMotionCue = null;
       state.onboardingStep = 'pwa';
       return;
     }
-    state.onboardingPwaDone = true;
-    if (!state.onboardingGrantSeen) {
-      state.onboardingStep = 'grant';
-      return;
-    }
+    if (isStandalonePwa()) state.onboardingPwaDone = true;
     state.onboardingStep = null;
   }
 
@@ -3590,11 +3619,20 @@
 
   function renderOnboarding() {
     if (isAdmin || !state.onboardingStep) return '';
+    if (state.onboardingStep === 'first-work') {
+      const trial = memberCatalogNodes().find((node) => node.isTrial && canAttendNode(node));
+      const reward = trial ? nodePay(trial) : 3000;
+      return `<div class="modal-backdrop" data-modal="onboard-first-work"><div class="modal grant-modal"><div class="modal-body"><p class="eyebrow">🎉 퍼뜩에 오신 걸 환영합니다</p><h2 class="modal-title-row">첫 업무는 퍼뜩이 지원해요.</h2><p class="page-copy">회원 부담 없이 실제 업무 흐름을 먼저 경험해 보세요. 제출하고 승인되면 완료 수당 ${money(reward)}이 출금 가능 금액에 반영됩니다.</p><div class="notice" style="margin-top:16px"><span style="color:var(--emerald)">✓</span><div>입금이나 보증금 설명은 첫 업무를 마친 뒤, 일반 업무가 필요할 때 안내합니다.</div></div><div class="modal-actions"><button class="primary-button" type="button" data-action="start-first-work" ${trial ? '' : 'disabled'}>${trial ? '첫 업무 시작' : '첫 업무 준비 중'}</button></div></div></div></div>`;
+    }
+    if (state.onboardingStep === 'general-work') {
+      const approved = (state.history || []).find((item) => String(item.statusRaw || item.runStatus || '') === 'approved' && nodeById(item.nodeId)?.isTrial);
+      const reward = Number(approved?.reward || state.wallet.available || 0);
+      return `<div class="modal-backdrop" data-modal="onboard-general-work"><div class="modal grant-modal"><div class="modal-body"><p class="eyebrow">✅ 첫 업무가 승인됐어요</p><h2 class="modal-title-row">완료 수당 <span style="color:var(--emerald)">+${money(reward)}</span></h2><p class="page-copy">이제 일반 업무를 둘러볼 수 있어요. 일반 업무의 업무 보증금은 진행 중에만 잠기고, 완료하면 업무 잔액으로 돌아옵니다. 수당은 출금 가능 금액에 따로 쌓입니다.</p><div class="modal-actions"><button class="primary-button" type="button" data-action="ack-general-work">일반 업무 보기</button></div></div></div></div>`;
+    }
     if (state.onboardingStep === 'pwa') {
       return `<div class="modal-backdrop" data-modal="onboard-pwa"><div class="modal"><div class="result-stage compact"><canvas id="onboardMotionCanvas" aria-hidden="true"></canvas></div><div class="modal-body"><h2 class="modal-title-row">${icon('smartphone', 20)} 홈 화면에 사원증 두기</h2><p class="page-copy">아이콘으로 바로 출근하고, 자리 남음 알림도 받기 쉬워요. PC·브라우저에서도 근무할 수 있어요. 설치는 선택이고 건너뛰어도 작업실에 들어가요.</p><div class="modal-actions"><button class="secondary-button" type="button" data-action="skip-pwa">건너뛰기</button><button class="primary-button" type="button" data-action="onboard-install">사원증 두기</button></div></div></div></div>`;
     }
-    const grant = Number(state.wallet.support || state.supportGrant || 10000);
-    return `<div class="modal-backdrop" data-modal="onboard-grant"><div class="modal grant-modal"><div class="modal-head"><div><h2 class="modal-title-row">${icon('gift', 20)} 지원금은 딱 한 번이에요</h2><p>같은 지원금은 다시 나오지 않아요.</p></div></div><div class="modal-body"><ul class="grant-copy"><li>✅ 업무 지원금 ${money(grant)}은 근무에 쓰여요</li><li>✅ 체험 수당 3천원은 USDT로만 출금가능해요</li></ul><div class="modal-actions"><button class="primary-button" type="button" data-action="ack-grant">확인했어요</button></div></div></div></div>`;
+    return '';
   }
 
   function renderMemberTabbar() {
@@ -5258,7 +5296,37 @@
       openDepositModal();
       return;
     }
-    if (action === 'close-result') { releaseNamedCanvas('resultMotionCanvas'); state.resultScene = null; if (state.reviewWait) state.reviewWait.overlayOpen = false; render(); return; }
+    if (action === 'close-result') {
+      const resultNode = nodeById(state.resultScene?.nodeId);
+      const approvedTrial = state.resultScene?.cut === 'approve' && resultNode?.isTrial;
+      releaseNamedCanvas('resultMotionCanvas');
+      state.resultScene = null;
+      if (state.reviewWait) state.reviewWait.overlayOpen = false;
+      if (approvedTrial) {
+        state.onboardingExperienceStarted = true;
+        state.onboardingStep = 'general-work';
+        saveState();
+      }
+      render();
+      return;
+    }
+    if (action === 'start-first-work') {
+      const trial = memberCatalogNodes().find((node) => node.isTrial && canAttendNode(node));
+      if (!trial) { showToast('첫 업무를 준비하고 있어요. 잠시 후 다시 확인해 주세요.', 'info'); return; }
+      state.onboardingExperienceStarted = true;
+      state.onboardingStep = null;
+      saveState();
+      startNode(trial.id);
+      return;
+    }
+    if (action === 'ack-general-work') {
+      state.onboardingGeneralSeen = true;
+      state.onboardingStep = null;
+      state.memberPage = 'nodes';
+      saveState();
+      render();
+      return;
+    }
     if (action === 'skip-pwa') { releaseNamedCanvas('onboardMotionCanvas'); state.onboardingPwaDone = true; queueOnboarding(); saveState(); render(); return; }
     if (action === 'onboard-install') { installApp(); return; }
     if (action === 'ack-grant') { state.onboardingGrantSeen = true; state.onboardingStep = null; saveState(); render(); showToast('🎁 지원금은 딱 한 번이에요. 근무에 써 주세요.', 'success'); return; }
