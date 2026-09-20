@@ -220,7 +220,17 @@
     });
   });
 
+
+  function syncVisualViewportHeight() {
+    const height = Math.round(window.visualViewport?.height || window.innerHeight || 0);
+    if (height > 0) root.style.setProperty('--putduk-visual-viewport-height', `${height}px`);
+  }
+
   function start() {
+    syncVisualViewportHeight();
+    window.addEventListener('resize', syncVisualViewportHeight, { passive: true });
+    window.addEventListener('orientationchange', syncVisualViewportHeight, { passive: true });
+    window.visualViewport?.addEventListener('resize', syncVisualViewportHeight, { passive: true });
     enhanceAuthModal();
     observer.observe(document.body || document.documentElement, { childList: true, subtree: true });
   }
