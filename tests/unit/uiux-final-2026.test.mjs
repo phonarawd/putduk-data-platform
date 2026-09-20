@@ -27,7 +27,7 @@ test('UIUX FINAL 2026 assets are wired into member/admin shells and service work
   assert.doesNotMatch(sw, /cache\.addAll/);
   assert.match(memberHtml, /uiux-final-2026\.css\?v=20260920-mobile1/);
   assert.match(memberHtml, /uiux-final-2026\.js\?v=20260919-uiux1/);
-  assert.match(memberHtml, /uiux-premium-2026\.css\?v=20260919-uiux2/);
+  assert.match(memberHtml, /uiux-premium-2026\.css\?v=20260920-landing1/);
   assert.match(memberHtml, /uiux-premium-2026\.js\?v=20260919-uiux2/);
   assert.match(adminHtml, /uiux-admin-premium-2026\.css\?v=20260919-uiux2/);
   assert.match(adminHtml, /uiux-admin-premium-2026\.js\?v=20260920-perf2/);
@@ -194,7 +194,7 @@ test('Korean typography, touch targets, six-tab mobile nav and reduced-motion sa
 
 test('member boot copy is phrased around work rather than internal line terminology', async () => {
   const memberHtml = await readRepo('dist', 'index.html');
-  assert.match(memberHtml, /오늘 참여할 수 있는 업무를 확인하고 있어요/);
+  assert.match(memberHtml, /로그인 상태를 안전하게 확인하고 있습니다/);
   assert.doesNotMatch(memberHtml, /오늘 라인 자리를 확인하고 있어요/);
 });
 

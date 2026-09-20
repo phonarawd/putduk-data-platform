@@ -531,3 +531,13 @@
     width: 100%;
   }
 }
+
+/* P-1A mobile auth surfaces */
+@media (max-width: 430px) {
+  .modal-backdrop:has(.uiux-auth-modal) { padding:0 !important; align-items:flex-end !important; }
+  .uiux-auth-modal.is-login { width:100% !important; max-width:none !important; max-height:calc(100dvh - 20px) !important; border-radius:24px 24px 0 0 !important; }
+  .uiux-auth-modal:not(.is-login) { width:100% !important; max-width:none !important; min-height:100dvh !important; max-height:100dvh !important; border-radius:0 !important; }
+  .uiux-auth-modal:not(.is-login) .modal-head { padding-top:calc(18px + env(safe-area-inset-top)); }
+  .uiux-auth-modal:not(.is-login) .modal-body { padding-bottom:calc(96px + env(safe-area-inset-bottom)); }
+  .uiux-auth-modal:not(.is-login) .modal-actions { position:sticky; bottom:0; z-index:3; padding:12px 0 calc(12px + env(safe-area-inset-bottom)); background:var(--premium-surface); }
+}
