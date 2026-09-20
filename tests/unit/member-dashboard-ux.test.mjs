@@ -25,11 +25,13 @@ test('진행 중·검수 대기 상태는 홈 첫 화면의 다음 행동으로 
   assert.match(js, /오늘 업무 보기/);
 });
 
-test('지원금이 남아 있으면 홈에서 입금을 우선 행동으로 밀지 않는다', async () => {
+test('지원금이 남아 있거나 아직 조회 중이면 홈에서 입금을 우선 행동으로 밀지 않는다', async () => {
   const js = await readRepo('dist', 'assets', 'member-dashboard-ux.js');
 
+  assert.match(js, /supportLoading = !supportAmount \|\| supportAmount\.includes\('확인 필요'\)/);
   assert.match(js, /supportAvailable = Boolean\(support && !support\.classList\.contains\('is-zero'\)\)/);
-  assert.match(js, /deposit\.hidden = supportAvailable/);
+  assert.match(js, /suppressDeposit = supportLoading \|\| supportAvailable/);
+  assert.match(js, /deposit\.hidden = suppressDeposit/);
   assert.match(js, /업무잔액 충전/);
 });
 
