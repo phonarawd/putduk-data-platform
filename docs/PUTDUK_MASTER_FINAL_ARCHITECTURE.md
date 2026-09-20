@@ -2093,3 +2093,138 @@ P-0/P-1/P-4에 다음을 추가한다.
 - AI의 주의 문구를 삭제·우회하기 위한 조작이 없다.
 - AI가 경고를 하더라도 사용자가 공식 조건과 근거를 직접 확인할 수 있다.
 
+
+
+---
+
+# 27. 모바일 가로모드·인증 스크롤 안정화 — 필수 보강 범위
+
+가로모드에서 회원 홈 메뉴가 겹치고, 페이지·로그인·회원가입 화면이 스크롤되지 않는 문제를 별도 출시 차단 결함으로 관리한다. 이 범위는 FOMO·봇 계산·이름 풀·자리 소진·관련 DB와 무관한 UI 레이아웃 및 입력 표면 보강이다.
+
+## 27.1 현재 결함 원인
+
+현재 모바일 레이아웃 전환은 주로 `max-width: 840px`, 인증 화면 보정은 `max-width: 430px` 기준이다.
+
+iPhone 가로모드처럼 화면 폭이 약 844px이고 높이가 약 390px인 환경에서는:
+
+- `max-width: 840px` 규칙이 적용되지 않아 데스크톱 사이드바가 남는다.
+- `mobile-topbar`와 회원 `member-tabbar`가 활성화되지 않는다.
+- 254px 사이드바와 좁은 본문이 동시에 렌더되어 카드·메뉴가 겹친다.
+- 가로모드용 auth sheet 규칙이 적용되지 않는다.
+- 회원가입 콘텐츠 높이가 낮은 `100dvh`를 초과한다.
+- `.modal`과 `.modal-body`의 중첩 overflow가 명확한 flex 스크롤 컨테이너가 아니다.
+- fixed backdrop, body overscroll, iOS Safari의 visual viewport가 충돌할 수 있다.
+- `maximum-scale=1.0`, `user-scalable=no`가 작은 화면의 입력 접근성을 악화시킨다.
+
+## 27.2 가로모드 레이아웃 계약
+
+다음 미디어 조건을 공통 모바일 레이어로 취급한다.
+
+```css
+@media (orientation: landscape) and (max-height: 600px) and (max-width: 1024px) {
+  /* mobile landscape layout */
+}
+```
+
+이 범위에서는:
+
+- 데스크톱 `.sidebar`를 숨기고 모바일 `.mobile-topbar`를 표시한다.
+- 회원 하단 `.member-tabbar`를 표시하되 가로 높이에 맞춰 축소한다.
+- 사이드바와 하단 메뉴를 동시에 활성화하지 않는다.
+- `.main`은 1열 또는 제한된 2열로 재배치하고 카드 최소 높이를 줄인다.
+- `overflow-x: clip` 또는 안전한 `hidden`으로 가로 페이지 넘침을 차단한다.
+- 하단 메뉴 높이만큼 본문 하단 여백을 동적으로 계산한다.
+- FOMO·회원증·지갑·업무 카드의 장식 높이를 줄이되 데이터와 동작은 변경하지 않는다.
+- `html[data-mode="admin"]`과 `html[data-mode="member"]`의 정책을 분리한다.
+
+모바일 판정은 너비만으로 하지 않는다. 세로모드, 가로모드, 320px 저폭, 844px 가로폭을 모두 별도 회귀 대상으로 둔다.
+
+## 27.3 인증 모달 스크롤 계약
+
+인증 모달은 헤더·본문·액션을 명확히 분리한 flex 구조여야 한다.
+
+```css
+.modal {
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100dvh - 24px);
+  overflow: hidden;
+}
+
+.modal-body {
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+}
+```
+
+가로모드에서는:
+
+- backdrop은 화면 상단 여백을 확보하고 모달 전체를 viewport 안에 둔다.
+- 로그인 모달은 짧은 sheet로 표시한다.
+- 회원가입 모달은 전체 높이를 사용하되 본문만 스크롤한다.
+- 헤더는 고정한다.
+- 회원가입 하단 제출 영역은 `position: sticky`로 유지한다.
+- 약관·안내문·오류 메시지는 본문 스크롤 안에서 접근 가능해야 한다.
+- 모달이 열렸을 때 body 스크롤을 잠그되, 모달 본문 스크롤은 반드시 허용한다.
+- 키보드 표시·회전 직후 `visualViewport.height`를 기준으로 모달 높이를 재계산한다.
+- `env(safe-area-inset-top)`, `env(safe-area-inset-bottom)`을 적용한다.
+
+## 27.4 뷰포트·접근성 원칙
+
+- `maximum-scale=1.0`, `user-scalable=no`를 제거하거나 접근성을 해치지 않는 설정으로 교체한다.
+- `100vh` 대신 `100dvh`를 우선하고 fallback을 제공한다.
+- 회전 이벤트에 의존하지 않고 `matchMedia('(orientation: landscape)')`와 `visualViewport.resize`를 함께 사용한다.
+- 글자 확대, 시스템 키보드, reduced-motion, 저사양 기기에서도 입력과 CTA가 가려지지 않아야 한다.
+- 가로모드에서 텍스트·버튼이 화면 밖으로 밀리지 않아야 한다.
+- 페이지 자체와 모달 내부 중 하나만 현재 스크롤 컨텍스트가 되도록 한다.
+
+## 27.5 구현 순서
+
+1. 공통 landscape media layer 추가
+2. member/admin 사이드바·상단바·하단 메뉴 분기 정리
+3. 가로모드 카드·grid·본문 여백 축소
+4. modal을 flex column + bounded body scroll 구조로 변경
+5. auth login/signup 가로모드별 높이·sticky CTA 적용
+6. visualViewport 기반 키보드·회전 대응
+7. viewport 확대 제한 재검토
+8. 모달 열림·닫힘·로그인 성공 후 scroll position 복원
+9. 변경 후 FOMO·봇 보호영역 diff 검사
+
+## 27.6 자동·실기기 검증 기준
+
+다음 조합을 모두 통과해야 모바일 출시 결함을 닫는다.
+
+| 환경 | 검증 항목 |
+|---|---|
+| iPhone 세로 | 랜딩·홈·로그인·회원가입·약관 스크롤 |
+| iPhone 가로 844px급 | 사이드바 미노출, 모바일 메뉴 정상, 카드 겹침 없음 |
+| Android 가로 800~900px | 본문 1열/제한 2열, 가로 넘침 없음 |
+| 320px 저폭 | 입력·CTA·약관 접근 가능 |
+| 키보드 표시 상태 | focused input과 제출 버튼 가시성 |
+| 회전 직후 | 레이아웃 재계산, 스크롤 위치 정상 |
+| reduced-motion | 모달·메뉴 전환 정적 처리 |
+| 관리자 가로모드 | 회원용 하단 메뉴가 나타나지 않고 admin layout 유지 |
+
+자동 검사:
+
+- `document.documentElement.scrollWidth <= window.innerWidth`
+- 열려 있는 auth modal의 본문 scrollHeight > clientHeight일 때 실제 scrollTop 변화 가능
+- landscape에서 sidebar와 member-tabbar 동시 표시 금지
+- auth modal이 viewport 하단을 넘지 않음
+- 회전 후 focused field와 CTA가 viewport 안에 있음
+- 모바일 스크롤 잠금이 modal body까지 잠그지 않음
+- FOMO 관련 문자열·설정·쿼리 diff 0
+
+## 27.7 완료 판정 추가
+
+전체 MASTER 완료 전 다음을 충족해야 한다.
+
+- 가로모드 회원 홈에서 메뉴·카드·FOMO가 겹치지 않는다.
+- 가로모드 모든 회원 페이지에서 세로·가로 스크롤이 정상이다.
+- 가로모드 로그인과 회원가입 화면에서 본문을 끝까지 읽고 제출할 수 있다.
+- 회전 직후 모달과 하단 CTA가 잘리지 않는다.
+- iOS Safari와 Android Chrome에서 동일한 입력·스크롤 계약이 유지된다.
+- FOMO·봇 로직 및 관련 DB는 이 보강으로 변경되지 않는다.
+
