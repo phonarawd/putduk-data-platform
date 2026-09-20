@@ -698,9 +698,38 @@ async function updateNode(userId: string, payload: JsonRecord) {
 async function updateNodeStatus(userId: string, payload: JsonRecord, status: "published" | "paused" | "archived" | "draft") {
   const nodeId = assertUuid(payload.node_id, "업무 카드");
   const before = await getNode(nodeId);
+
+  if (status === "published") {
+    if (before.supply_source !== "operator" || !before.partner_brand_id) {
+      throw new HttpError(400, "운영자 등록 업무와 협력사를 먼저 확인해 주세요.");
+    }
+    const brand = await admin
+      .from("partner_brands")
+      .select("id,published,verification_status,logo_usage_status,logo_asset_path")
+      .eq("id", before.partner_brand_id)
+      .maybeSingle();
+    if (brand.error) {
+      console.error("node publish brand read failed", brand.error);
+      throw new HttpError(503, "협력사 공개 상태를 확인하지 못했습니다.");
+    }
+    if (
+      !brand.data
+      || brand.data.published !== true
+      || brand.data.verification_status !== "approved"
+      || brand.data.logo_usage_status !== "approved"
+      || !String(brand.data.logo_asset_path || "").trim()
+    ) {
+      throw new HttpError(400, "승인되어 회원에게 공개된 협력사 업무만 공개할 수 있습니다.");
+    }
+  }
+
   const { data, error } = await admin
     .from("nodes")
-    .update({ catalog_status: status, enabled: status === "published" })
+    .update({
+      catalog_status: status,
+      enabled: status === "published",
+      published_by: status === "published" ? userId : null
+    })
     .eq("id", nodeId)
     .select("*")
     .single();

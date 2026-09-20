@@ -3,7 +3,14 @@
   if (document.documentElement.dataset.mode !== 'admin') return;
 
   const MOTION_KEY = 'putduk-admin-motion-v1';
-  const MEMBER_NOTE = '✅ 일이 끝나면 원금과 수당이 잔액에 같이 반영돼요';
+  const MEMBER_NOTE_GENERAL = '✅ 승인 시 원금은 근무 잔액에, 수당은 출금 가능에 반영돼요';
+  const MEMBER_NOTE_TRIAL = '✅ 체험 지원금은 업무에 사용되고, 승인 시 체험 수당만 출금 가능에 들어와요';
+
+  function settlementNote(spec) {
+    const trial = String(spec?.tier_band || '') === '체험'
+      || (Number(spec?.stake || 0) === 10000 && Number(spec?.stipend || 0) === 3000);
+    return trial ? MEMBER_NOTE_TRIAL : MEMBER_NOTE_GENERAL;
+  }
 
   function core() {
     return window.PUTDUK_ADMIN_CORE || null;
@@ -114,8 +121,8 @@
     return `<article class="work-preview-card" id="workCardPreview">
       <div class="work-preview-kicker">회원 화면에 이렇게 보여요${title ? ` · ${esc(title)}` : ''}</div>
       <div class="work-preview-stake">${icon('lock', 18)} 근무 보증 ${money(spec.stake)}</div>
-      <div class="work-preview-stipend">${icon('coins', 16)} 끝나면 수당 ${money(spec.stipend)}</div>
-      <p class="work-preview-note settle-note"><span>${MEMBER_NOTE}</span></p>
+      <div class="work-preview-stipend">${icon('coins', 16)} 승인 시 수당 ${money(spec.stipend)}</div>
+      <p class="work-preview-note settle-note"><span>${settlementNote(spec)}</span></p>
       ${photos ? `<div class="work-preview-quiz">${photos}</div>` : ''}
       ${choiceLine}
     </article>`;
@@ -131,7 +138,8 @@
       photos: [value('question_image_path') || value('photo_1')].filter(Boolean),
       choices: [value('choice_a_ko') || value('choice_1'), value('choice_b_ko') || value('choice_2')].filter(Boolean),
       answer: choice === 'b' ? 2 : choice === 'a' ? 1 : Number(value('answer') || 1),
-      slots: Number(value('daily_cap') || value('slots') || 0)
+      slots: Number(value('daily_cap') || value('slots') || 0),
+      tier_band: String(value('tier_band') || '소액')
     };
   }
 
