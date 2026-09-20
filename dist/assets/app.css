@@ -1734,3 +1734,53 @@ html[data-low-perf="1"] #startMotionCanvas,
 html[data-low-perf="1"] #resultMotionCanvas {
   display: none !important;
 }
+
+
+/* 2026-09-20 P-1A: short landscape phones use the mobile member shell. */
+@media (orientation: landscape) and (max-height: 600px) and (max-width: 1024px) {
+  html[data-mode="member"] .app-shell { display: block; min-height: 100dvh; }
+  html[data-mode="member"] .sidebar,
+  html[data-mode="member"] .sidebar-backdrop {
+    display: none !important;
+    pointer-events: none !important;
+    visibility: hidden !important;
+  }
+  html[data-mode="member"] .mobile-topbar {
+    display: flex !important;
+    min-height: 46px;
+    margin-bottom: 8px;
+  }
+  html[data-mode="member"] .mobile-topbar [data-menu="open"] { display: none !important; }
+  html[data-mode="member"] .topbar { display: none !important; }
+  html[data-mode="member"] .main {
+    width: 100%;
+    padding: 10px max(14px, env(safe-area-inset-left)) calc(58px + env(safe-area-inset-bottom)) max(14px, env(safe-area-inset-right));
+    overflow-x: clip;
+  }
+  html[data-mode="member"] .grid-hero,
+  html[data-mode="member"] .dashboard-grid,
+  html[data-mode="member"] .admin-layout { grid-template-columns: 1fr !important; }
+  html[data-mode="member"] .hero-card,
+  html[data-mode="member"] .id-card { min-height: 0; }
+  html[data-mode="member"] .member-tabbar {
+    display: grid !important;
+    grid-template-columns: repeat(6, minmax(0, 1fr)) !important;
+    min-height: calc(52px + env(safe-area-inset-bottom)) !important;
+    padding: 3px 6px calc(4px + env(safe-area-inset-bottom)) !important;
+  }
+  html[data-mode="member"] .member-tab {
+    min-height: 44px !important;
+    padding: 3px 2px !important;
+    gap: 1px !important;
+    font-size: 9.5px !important;
+  }
+  html[data-mode="member"] .member-tab-icon,
+  html[data-mode="member"] .member-tab-icon svg {
+    width: 18px !important;
+    height: 18px !important;
+  }
+  html[data-mode="member"]:has(.modal-backdrop) .member-tabbar {
+    visibility: hidden !important;
+    pointer-events: none !important;
+  }
+}
