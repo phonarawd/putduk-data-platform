@@ -14,6 +14,15 @@ test('회원 홈은 지원금·내 원금·승인 수당의 의미를 분리해 
   assert.match(js, /지원금은 업무 전용 · 업무잔액은 내 원금 · 출금가능은 승인된 수당/);
 });
 
+test('대시보드 고유 hero에서만 다음 행동 정책을 적용한다', async () => {
+  const js = await readRepo('dist', 'assets', 'member-dashboard-ux.js');
+
+  assert.match(js, /function dashboardHero\(\)/);
+  assert.match(js, /\.grid-hero \.hero-title/);
+  assert.match(js, /const hero = dashboardHero\(\)/);
+  assert.match(js, /configureNextAction\(hero\)/);
+});
+
 test('진행 중·검수 대기 상태는 홈 첫 화면의 다음 행동으로 승격한다', async () => {
   const js = await readRepo('dist', 'assets', 'member-dashboard-ux.js');
 
