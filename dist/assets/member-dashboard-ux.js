@@ -6,6 +6,10 @@
   const root = document.getElementById('app');
   if (!root) return;
 
+  function dashboardHero() {
+    return document.querySelector('.grid-hero .hero-title')?.closest('.grid-hero') || null;
+  }
+
   function walletSlot(label) {
     return Array.from(document.querySelectorAll('.wallet-card .wallet-slot')).find((slot) => {
       const lead = String(slot.querySelector('.ui-lead')?.textContent || '').replace(/\s+/g, ' ').trim();
@@ -89,8 +93,7 @@
     return notice;
   }
 
-  function configureNextAction() {
-    const hero = document.querySelector('.grid-hero');
+  function configureNextAction(hero) {
     if (!hero) return;
 
     const runButton = document.querySelector('[data-action="open-run"]');
@@ -116,8 +119,9 @@
   }
 
   function applyDashboardPolicy() {
-    if (!document.querySelector('.grid-hero')) return;
-    configureNextAction();
+    const hero = dashboardHero();
+    if (!hero) return;
+    configureNextAction(hero);
     configureWallet();
   }
 
