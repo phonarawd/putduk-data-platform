@@ -27,6 +27,39 @@
       .trim();
   }
 
+  function currentUserId() {
+    try {
+      const supabaseUrl = String(window.PUTDUK_CONFIG?.supabaseUrl || '');
+      if (!supabaseUrl) return '';
+      const projectRef = new URL(supabaseUrl).hostname.split('.')[0];
+      if (!projectRef) return '';
+      const raw = localStorage.getItem(`sb-${projectRef}-auth-token`);
+      if (!raw) return '';
+      const parsed = JSON.parse(raw);
+      return String(
+        parsed?.user?.id
+        || parsed?.currentSession?.user?.id
+        || parsed?.session?.user?.id
+        || ''
+      );
+    } catch (_) {
+      return '';
+    }
+  }
+
+  function hasPersistedActiveRun() {
+    const userId = currentUserId();
+    if (!userId) return false;
+    try {
+      const raw = localStorage.getItem(`putduk-state-v2:${userId}`);
+      if (!raw) return false;
+      const parsed = JSON.parse(raw);
+      return Boolean(parsed?.run && parsed.run.nodeId);
+    } catch (_) {
+      return false;
+    }
+  }
+
   function fundingSource(card) {
     const stored = card.dataset.putdukFundingSource;
     if (stored === 'support' || stored === 'work') return stored;
@@ -52,7 +85,9 @@
     else if (text === '검수 대기 중') state = 'review';
     else if (text === '대기 중') state = 'waiting';
     else if (text === '입금 안내' || text === '시작 조건 확인' || text === '입금 안내 보기') {
-      state = source === 'support' ? 'support-missing' : 'insufficient';
+      state = hasPersistedActiveRun()
+        ? 'active-run'
+        : source === 'support' ? 'support-missing' : 'insufficient';
     }
     if (!state) return '';
 
@@ -75,6 +110,7 @@
       ready: '시작 가능',
       insufficient: '업무 잔액 부족',
       'support-missing': '체험 지원금 없음',
+      'active-run': '업무 진행 중',
       review: '검수 대기',
       waiting: '대기 중'
     };
@@ -137,6 +173,9 @@
     } else if (state === 'support-missing') {
       button.disabled = true;
       setText(button, '체험 지원금 필요');
+    } else if (state === 'active-run') {
+      button.disabled = true;
+      setText(button, '진행 중 업무 먼저 완료');
     } else if (state === 'review') {
       button.disabled = true;
       setText(button, '검수 대기 중');
