@@ -19,7 +19,7 @@ const notes = [
   '',
   '- pnpm verify / test / test:e2e / test:a11y / security:scan 통과',
   '- 회원 dist enableWorkApi=true, enableFinanceApi=false. 운영자 dist는 둘 다 false',
-  '- GitHub Actions 성공',
+  '- GitHub Actions는 가용할 때만 보조 확인. CI quota로 외부 실행이 불가하면 pnpm quality:local 결과를 기준으로 기록',
   '- 비밀 키를 로그에 출력하지 않음',
   '',
   '이 스크립트는 GitHub Release를 만들지 않습니다. 게시하려면 운영자가 확인한 뒤 gh release create를 사용하세요.'
