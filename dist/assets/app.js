@@ -6,6 +6,7 @@
   const launchBlock = window.__PUTDUK_LAUNCH_BLOCK__ || null;
   const adminFunctionUrl = config.adminFunctionUrl || (config.supabaseUrl ? `${config.supabaseUrl}/functions/v1/admin-control` : '');
   const memberFinanceUrl = config.memberFinanceUrl || (config.supabaseUrl ? `${config.supabaseUrl}/functions/v1/member-finance` : '');
+  const memberExperienceUrl = config.memberExperienceUrl || (config.supabaseUrl ? `${config.supabaseUrl}/functions/v1/member-experience` : '');
   const storageKey = 'putduk-state-v2';
   const supabaseClient = !launchBlock && window.supabase && config.supabaseUrl && config.supabasePublishableKey
     ? window.supabase.createClient(config.supabaseUrl, config.supabasePublishableKey, {
@@ -27,12 +28,6 @@
     { id: 'satellite_network', label: '위성 회선' },
     { id: 'default', label: '기본 회선' }
   ];
-  const FOMO_FEED_SLOTS = 4;
-  const FOMO_NAME_COOLDOWN = FOMO_FEED_SLOTS * 4;
-  const FOMO_SURNAMES = ['김', '이', '박', '최', '정', '강', '조', '윤', '장', '임', '한', '오', '서', '신', '권', '황', '안', '송', '전', '홍', '유', '고', '문', '양', '손', '배', '백', '허', '남', '심'];
-  const FOMO_GIVEN = ['은', '호', '영', '진', '우', '서', '민', '아', '준', '현', '수', '지', '윤', '하', '린', '솔', '빈', '재', '성', '혜', '나', '율', '원', '기', '태', '석', '희', '정', '훈', '경'];
-  const FOMO_NAME_POOL = FOMO_SURNAMES.flatMap((sur) => FOMO_GIVEN.map((tail) => `${sur}○${tail}`));
-  const FOMO_ACTIONS = ['방금 출근했어요', '자리를 가져갔어요', '라인에 들어왔어요', '근무를 시작했어요'];
   const INSPECT_TOTAL = 5;
   const INSPECT_HUBS = [
     '인천공항 제2화물터미널 3라인',
@@ -63,8 +58,6 @@
     return;
   }
   let fomoTimer = null;
-  let fomoFeedCache = { bucket: -1, items: [] };
-  let fomoNameCooldown = [];
 
   const defaultState = {
     theme: 'light',
@@ -146,7 +139,7 @@
     adminFormBusy: false,
     adminMotion: { bot_enabled: true, crowd_min: 8, crowd_max: 24, burn_per_minute: 2 },
     adminMotionError: null,
-    crewPulse: { stored: 'default', live: true, crowd_min: 8, crowd_max: 24, burn_per_minute: 2 },
+    realActivity: { available: false, active_count: 0, started_15m: 0, events: [], measured_at: null },
     toast: null
   };
 
@@ -2502,199 +2495,86 @@
     };
   }
 
-  function defaultMotionSettings() {
-    return { bot_enabled: true, crowd_min: 8, crowd_max: 24, burn_per_minute: 2 };
-  }
+  let realActivityFetchedAt = 0;
 
-  function normalizeMotionSettings(value) {
+  function normalizeRealActivity(value) {
     const source = value && typeof value === 'object' ? value : {};
-    const minRaw = Number(source.crowd_min ?? 8);
-    const maxRaw = Number(source.crowd_max ?? 24);
-    const burnRaw = Number(source.burn_per_minute ?? source.burnPerMinute ?? 2);
-    const min = Number.isFinite(minRaw) ? Math.min(Math.max(0, Math.round(minRaw)), 10000) : 8;
-    const max = Number.isFinite(maxRaw) ? Math.min(Math.max(min, Math.round(maxRaw)), 10000) : Math.max(min, 24);
+    const events = Array.isArray(source.events) ? source.events.slice(0, 4).map((item) => ({
+      action: String(item?.action || '업무 활동이 기록됐어요'),
+      partner: String(item?.partner || '협력사'),
+      occurred_at: String(item?.occurred_at || '')
+    })) : [];
     return {
-      bot_enabled: source.bot_enabled !== false && source.bot_on !== false,
-      crowd_min: min,
-      crowd_max: max,
-      burn_per_minute: Number.isFinite(burnRaw) ? Math.min(Math.max(0, Math.round(burnRaw)), 100000) : 2
+      available: source.available === true,
+      active_count: Math.max(0, Number(source.active_count || 0)),
+      started_15m: Math.max(0, Number(source.started_15m || 0)),
+      events,
+      measured_at: String(source.measured_at || '')
     };
   }
 
-  let crewPulseFetchedAt = 0;
   async function hydrateCrewPulse({ force = false } = {}) {
-    if (isAdmin || !supabaseClient) return;
-    if (!force && crewPulseFetchedAt && Date.now() - crewPulseFetchedAt < 12000) return;
-    crewPulseFetchedAt = Date.now();
+    if (isAdmin || !supabaseClient || !memberExperienceUrl) return;
+    if (!force && realActivityFetchedAt && Date.now() - realActivityFetchedAt < 12000) return;
+    realActivityFetchedAt = Date.now();
     try {
-      const result = await supabaseClient
-        .from('crew_pulse')
-        .select('live,crowd_min,crowd_max,burn_per_minute')
-        .eq('id', 1)
-        .maybeSingle();
-      if (result.error || !result.data) return;
-      state.crewPulse = {
-        stored: 'api',
-        live: result.data.live !== false,
-        crowd_min: result.data.crowd_min,
-        crowd_max: result.data.crowd_max,
-        burn_per_minute: result.data.burn_per_minute
-      };
+      const session = authState.session || (await supabaseClient.auth.getSession()).data.session;
+      if (!session?.access_token) return;
+      const response = await fetch(memberExperienceUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
+          'apikey': config.supabasePublishableKey
+        },
+        body: JSON.stringify({ action: 'real_activity' })
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || data.ok === false) return;
+      state.realActivity = normalizeRealActivity(data.activity);
     } catch (_) {}
   }
 
-  function readMotionSettings() {
-    const pulse = state.crewPulse && state.crewPulse.stored === 'api' ? state.crewPulse : null;
-    if (!pulse) return defaultMotionSettings();
-    return normalizeMotionSettings({
-      bot_enabled: pulse.live !== false,
-      crowd_min: pulse.crowd_min,
-      crowd_max: pulse.crowd_max,
-      burn_per_minute: pulse.burn_per_minute
-    });
-  }
-
-  function fomoSeed(value) {
-    const text = String(value || '');
-    let hash = 0;
-    for (let i = 0; i < text.length; i += 1) hash = (hash * 33 + text.charCodeAt(i)) >>> 0;
-    return hash;
-  }
-
-  function fomoRng(seed) {
-    let t = seed >>> 0;
-    return function next() {
-      t = (Math.imul(t ^ (t >>> 15), t | 1) >>> 0);
-      t ^= t + (Math.imul(t ^ (t >>> 7), t | 61) >>> 0);
-      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-    };
-  }
-
-  function fomoShuffle(list, rng) {
-    const arr = list.slice();
-    for (let i = arr.length - 1; i > 0; i -= 1) {
-      const j = Math.floor(rng() * (i + 1));
-      const hold = arr[i];
-      arr[i] = arr[j];
-      arr[j] = hold;
-    }
-    return arr;
-  }
-
-  function fomoPartnerList() {
-    const partners = (companies.length ? companies : [{ name: 'DHL' }, { name: 'CJ대한통운' }, { name: 'FedEx' }, { name: 'UPS' }, { name: 'GXO' }])
-      .map((item) => String(item.name || item.display_name_ko || item.title || item.slug || '').trim())
-      .filter(Boolean);
-    return partners.length ? partners : ['DHL', 'CJ대한통운', 'FedEx', 'UPS', 'GXO'];
-  }
-
-  function pickFomoNames(count, rng) {
-    const recent = new Set(fomoNameCooldown);
-    const shuffled = fomoShuffle(FOMO_NAME_POOL, rng);
-    const picked = [];
-    const surnames = new Set();
-    const take = (allowRecent, allowSameSurname) => {
-      for (let i = 0; i < shuffled.length && picked.length < count; i += 1) {
-        const name = shuffled[i];
-        if (picked.includes(name)) continue;
-        if (!allowRecent && recent.has(name)) continue;
-        const surname = name.charAt(0);
-        if (!allowSameSurname && surnames.has(surname)) continue;
-        picked.push(name);
-        surnames.add(surname);
-      }
-    };
-    take(false, false);
-    if (picked.length < count) take(false, true);
-    if (picked.length < count) take(true, true);
-    fomoNameCooldown = fomoNameCooldown.concat(picked).slice(-FOMO_NAME_COOLDOWN);
-    return picked;
-  }
-
-  function pickFomoPartners(count, rng) {
-    const list = fomoPartnerList();
-    const shuffled = fomoShuffle(list, rng);
-    const out = [];
-    for (let i = 0; i < count; i += 1) {
-      const avoidPrev = out[i - 1];
-      const unused = shuffled.filter((name) => !out.includes(name));
-      const noAdj = shuffled.filter((name) => name !== avoidPrev);
-      const source = unused.length ? unused : (noAdj.length ? noAdj : shuffled);
-      out.push(source[0] || shuffled[i % shuffled.length] || 'DHL');
-    }
-    return out;
-  }
-
-  function buildFomoFeed(bucket, settings) {
-    const rng = fomoRng(fomoSeed(`${bucket}-${settings.crowd_max}-${settings.burn_per_minute}-${FOMO_NAME_POOL.length}`));
-    const names = pickFomoNames(FOMO_FEED_SLOTS, rng);
-    const partners = pickFomoPartners(FOMO_FEED_SLOTS, rng);
-    return Array.from({ length: FOMO_FEED_SLOTS }, (_, index) => {
-      const roll = fomoSeed(`${bucket}-${index}-${names[index]}-${partners[index]}`);
-      const action = FOMO_ACTIONS[Math.floor(rng() * FOMO_ACTIONS.length)] || '방금 출근했어요';
-      const ago = roll % 4 === 0 ? '방금' : `${(roll % 7) + 1}분 전`;
-      return { name: names[index] || FOMO_NAME_POOL[index], action, partner: partners[index] || 'DHL', ago };
-    });
-  }
-
-  function currentFomoFeed(settings) {
-    const bucket = Math.floor(Date.now() / 8000);
-    if (fomoFeedCache.bucket === bucket && fomoFeedCache.items.length === FOMO_FEED_SLOTS) {
-      return fomoFeedCache.items;
-    }
-    const items = buildFomoFeed(bucket, settings);
-    fomoFeedCache = { bucket, items };
-    return items;
-  }
-
   function fomoPulse() {
-    const settings = readMotionSettings();
-    if (!settings.bot_enabled) {
-      return { on: false, crowd: 0, burn: 0, feed: [], settings };
-    }
-    const span = Math.max(0, settings.crowd_max - settings.crowd_min);
-    const wave = 0.5 + 0.5 * Math.sin(Date.now() / 9000);
-    const crowd = Math.round(settings.crowd_min + span * wave);
-    return { on: true, crowd, burn: settings.burn_per_minute, feed: currentFomoFeed(settings), settings };
+    const activity = normalizeRealActivity(state.realActivity);
+    return { on: activity.available, crowd: activity.active_count, burn: activity.started_15m, feed: activity.events, measured_at: activity.measured_at };
   }
 
   function fomoSlotsLeft(node) {
-    const cap = Math.max(0, Number(node?.available || 0));
-    const pulse = fomoPulse();
-    if (!pulse.on || !cap) return cap;
-    const minutes = Math.floor((Date.now() / 60000) % 180);
-    const burned = Math.min(cap, (minutes * pulse.burn + (fomoSeed(node.id) % 7)) % (cap + 1));
-    return Math.max(0, cap - burned);
+    return Math.max(0, Number(node?.available || 0));
   }
 
   function renderFomoMetricValue(value) {
     return `<span class="fomo-metric-num">${Number(value || 0).toLocaleString('ko-KR')}</span>`;
   }
 
-  function renderFomoFeedItems(pulse) {
-    const items = (pulse.feed || []).slice(0, FOMO_FEED_SLOTS);
-    while (items.length < FOMO_FEED_SLOTS) {
-      items.push({ name: '\u00a0', action: '\u00a0', partner: '\u00a0', ago: '\u00a0' });
-    }
-    return items.map((item) => `<li><span class="fomo-feed-copy"><strong>${esc(item.name)}</strong> 님이 ${esc(item.partner)} 라인에서 ${esc(item.action)}</span><span class="fomo-feed-ago">${esc(item.ago)}</span></li>`).join('');
+  function activityAgo(value) {
+    const occurred = new Date(value).getTime();
+    if (!Number.isFinite(occurred)) return '';
+    const minutes = Math.max(0, Math.floor((Date.now() - occurred) / 60000));
+    if (minutes < 1) return '방금';
+    if (minutes < 60) return `${minutes}분 전`;
+    return `${Math.floor(minutes / 60)}시간 전`;
   }
 
-  function fomoKickerLabel(kind) {
-    return kind === 'nodes' ? '방금 라인' : '방금 들어온 크루';
+  function renderFomoFeedItems(pulse) {
+    const items = (pulse.feed || []).slice(0, 4);
+    if (!items.length) return '<li class="fomo-feed-empty">최근 30분 동안 공개할 실제 활동이 없습니다.</li>';
+    return items.map((item) => `<li><span class="fomo-feed-copy"><strong>익명 회원</strong> · ${esc(item.partner)} · ${esc(item.action)}</span><span class="fomo-feed-ago">${esc(activityAgo(item.occurred_at))}</span></li>`).join('');
   }
+
+  function fomoKickerLabel() { return '실제 최근 활동'; }
 
   function renderFomoBoard(kind) {
     const pulse = fomoPulse();
-    const title = kind === 'nodes' ? '지금 라인' : '지금 작업실';
-    if (!pulse.on) {
-      return `<section class="fomo-board is-off" aria-label="${title}"><p class="fomo-off-copy">${icon('users', 16)}<span>지금은 방금 들어온 크루 안내를 잠시 쉬고 있어요.</span></p></section>`;
-    }
+    const title = kind === 'nodes' ? '실제 업무 현황' : '실제 작업실 현황';
+    if (!pulse.on) return `<section class="fomo-board is-off" aria-label="${title}"><p class="fomo-off-copy">${icon('users', 16)}<span>실제 활동 현황을 불러오는 중입니다.</span></p></section>`;
     return `<section class="fomo-board" aria-label="${title}">
       <div class="fomo-metrics">
-        <div><div class="metric-label">지금 활동</div><div class="metric-value" id="fomoCrowd">${renderFomoMetricValue(pulse.crowd)}<small>명</small></div></div>
-        <div><div class="metric-label">자리 소진</div><div class="metric-value" id="fomoBurn">${renderFomoMetricValue(pulse.burn)}<small>칸/분</small></div></div>
+        <div><div class="metric-label">현재 진행 중</div><div class="metric-value" id="fomoCrowd">${renderFomoMetricValue(pulse.crowd)}<small>건</small></div></div>
+        <div><div class="metric-label">최근 15분 시작</div><div class="metric-value" id="fomoBurn">${renderFomoMetricValue(pulse.burn)}<small>건</small></div></div>
       </div>
-      <p class="fomo-kicker">${icon('radio', 14)}<span>${fomoKickerLabel(kind)}</span></p>
+      <p class="fomo-kicker">${icon('radio', 14)}<span>${fomoKickerLabel()}</span></p>
       <ul class="fomo-feed" id="fomoFeed">${renderFomoFeedItems(pulse)}</ul>
     </section>`;
   }
@@ -2707,7 +2587,7 @@
     if (!pulse.on) {
       if (!board.classList.contains('is-off')) {
         board.classList.add('is-off');
-        board.innerHTML = `<p class="fomo-off-copy">${icon('users', 16)}<span>지금은 방금 들어온 크루 안내를 잠시 쉬고 있어요.</span></p>`;
+        board.innerHTML = `<p class="fomo-off-copy">${icon('users', 16)}<span>실제 활동 현황을 불러오는 중입니다.</span></p>`;
         refreshIcons();
       }
       return;
@@ -2721,35 +2601,36 @@
     }
     const crowd = document.getElementById('fomoCrowd');
     if (crowd) {
-      const nextCrowd = `${renderFomoMetricValue(pulse.crowd)}<small>명</small>`;
+      const nextCrowd = `${renderFomoMetricValue(pulse.crowd)}<small>건</small>`;
       if (crowd.innerHTML !== nextCrowd) crowd.innerHTML = nextCrowd;
     }
     const burn = document.getElementById('fomoBurn');
     if (burn) {
-      const nextBurn = `${renderFomoMetricValue(pulse.burn)}<small>칸/분</small>`;
+      const nextBurn = `${renderFomoMetricValue(pulse.burn)}<small>건</small>`;
       if (burn.innerHTML !== nextBurn) burn.innerHTML = nextBurn;
     }
     const feed = document.getElementById('fomoFeed');
     if (feed) {
       const nextFeed = renderFomoFeedItems(pulse);
-      if (feed.getAttribute('data-fomo') !== nextFeed) {
+      if (feed.getAttribute('data-real-activity') !== nextFeed) {
         feed.innerHTML = nextFeed;
-        feed.setAttribute('data-fomo', nextFeed);
+        feed.setAttribute('data-real-activity', nextFeed);
       }
     }
     document.querySelectorAll('[data-fomo-slot]').forEach((el) => {
       const node = nodeById(el.getAttribute('data-fomo-slot'));
-      el.textContent = `${fomoSlotsLeft(node).toLocaleString('ko-KR')}자리 남음`;
+      el.textContent = `참여 가능 ${fomoSlotsLeft(node).toLocaleString('ko-KR')}건`;
     });
   }
 
   function bindFomoClock() {
     if (isAdmin || fomoClockBound) return;
     fomoClockBound = true;
+    void hydrateCrewPulse({ force: true }).then(() => patchFomoDom());
     fomoTimer = setInterval(() => {
       if (document.hidden) return;
       hydrateCrewPulse().then(() => patchFomoDom()).catch(() => patchFomoDom());
-    }, 4000);
+    }, 12000);
   }
 
 
@@ -2979,7 +2860,7 @@
       : `<div class="company-mark">${esc(company.mark)}</div>`;
     const cta = !enabled ? '대기 중' : state.reviewWait ? '검수 대기 중' : ready ? '출근하기' : '입금 안내';
     const slotsLeft = fomoSlotsLeft(node);
-    return `<article class="node-card compact-node" data-level="${esc(node.level || '')}" style="--node-color:${node.color};opacity:${enabled ? 1 : .55}"><div class="node-accent"></div><div class="node-top">${mark}</div><div class="node-company">${esc(company.name)}</div><div class="node-title">${esc(node.title)}</div>${cardMoneyLines(node).html}<div class="node-bottom"><div class="node-meta"><span>시간 ${esc(node.minutes)}</span><span data-fomo-slot="${esc(node.id)}">남은 자리 ${slotsLeft.toLocaleString('ko-KR')}</span></div><button class="small-button ${ready ? 'primary' : ''}" data-start-node="${node.id}" ${enabled && !state.reviewWait ? '' : 'disabled'}>${cta}</button></div></article>`;
+    return `<article class="node-card compact-node" data-level="${esc(node.level || '')}" style="--node-color:${node.color};opacity:${enabled ? 1 : .55}"><div class="node-accent"></div><div class="node-top">${mark}</div><div class="node-company">${esc(company.name)}</div><div class="node-title">${esc(node.title)}</div>${cardMoneyLines(node).html}<div class="node-bottom"><div class="node-meta"><span>시간 ${esc(node.minutes)}</span><span data-fomo-slot="${esc(node.id)}">참여 가능 ${slotsLeft.toLocaleString('ko-KR')}건</span></div><button class="small-button ${ready ? 'primary' : ''}" data-start-node="${node.id}" ${enabled && !state.reviewWait ? '' : 'disabled'}>${cta}</button></div></article>`;
   }
 
   function renderTimeline() {

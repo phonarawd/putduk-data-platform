@@ -63,6 +63,47 @@ function uuid(value: unknown): string {
   return text;
 }
 
+type ActivityRow = { status?: string; node_id?: string; started_at?: string; completed_at?: string; updated_at?: string };
+
+async function realActivitySnapshot(): Promise<JsonRecord> {
+  const now = Date.now();
+  const since30 = new Date(now - 30 * 60 * 1000).toISOString();
+  const since15 = new Date(now - 15 * 60 * 1000).toISOString();
+  const [activeResult, startedResult, recentResult] = await Promise.all([
+    admin.from("task_runs").select("id", { count: "exact", head: true }).in("status", ["in_progress", "checkpointed"]),
+    admin.from("task_runs").select("id", { count: "exact", head: true }).gte("started_at", since15),
+    admin.from("task_runs").select("status,node_id,started_at,completed_at,updated_at")
+      .in("status", ["in_progress", "checkpointed", "submitted", "review_pending", "under_review", "approved"])
+      .gte("updated_at", since30).order("updated_at", { ascending: false }).limit(4)
+  ]);
+  if (activeResult.error || startedResult.error || recentResult.error) {
+    console.error("real activity query failed", activeResult.error || startedResult.error || recentResult.error);
+    throw new HttpError(503, "실제 활동 현황을 불러오지 못했습니다.");
+  }
+  const rows = (recentResult.data || []) as ActivityRow[];
+  const nodeIds = [...new Set(rows.map((row) => String(row.node_id || "")).filter(Boolean))];
+  const partnerByNode = new Map<string, string>();
+  if (nodeIds.length) {
+    const { data: nodeRows, error: nodeError } = await admin.from("nodes").select("id,partner_brand_id").in("id", nodeIds);
+    if (nodeError) throw new HttpError(503, "실제 활동 현황을 불러오지 못했습니다.");
+    const brandIds = [...new Set((nodeRows || []).map((row) => String(row.partner_brand_id || "")).filter(Boolean))];
+    const brandById = new Map<string, string>();
+    if (brandIds.length) {
+      const { data: brandRows, error: brandError } = await admin.from("partner_brands").select("id,display_name_ko,published").in("id", brandIds).eq("published", true);
+      if (brandError) throw new HttpError(503, "실제 활동 현황을 불러오지 못했습니다.");
+      for (const row of brandRows || []) brandById.set(String(row.id), String(row.display_name_ko || "협력사"));
+    }
+    for (const row of nodeRows || []) partnerByNode.set(String(row.id), brandById.get(String(row.partner_brand_id || "")) || "협력사");
+  }
+  const events = rows.map((row) => {
+    const status = String(row.status || "");
+    const action = status === "approved" ? "업무 승인이 완료됐어요"
+      : ["submitted", "review_pending", "under_review"].includes(status) ? "업무를 제출했어요" : "업무를 시작했어요";
+    return { action, partner: partnerByNode.get(String(row.node_id || "")) || "협력사", occurred_at: row.completed_at || row.updated_at || row.started_at || null };
+  });
+  return { available: true, active_count: activeResult.count || 0, started_15m: startedResult.count || 0, events, measured_at: new Date(now).toISOString() };
+}
+
 Deno.serve(async (request) => {
   if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: corsHeaders(request) });
   if (request.method !== "POST") return json(request, { ok: false, error: "요청 형식을 확인해 주세요." }, 405);
@@ -80,6 +121,10 @@ Deno.serve(async (request) => {
         throw new HttpError(503, "업무 현황을 불러오지 못했습니다.");
       }
       return json(request, { ok: true, ...(data as JsonRecord) });
+    }
+
+    if (action === "real_activity") {
+      return json(request, { ok: true, activity: await realActivitySnapshot() });
     }
 
     if (action === "work_contract") {
