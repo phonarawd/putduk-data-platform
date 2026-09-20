@@ -78,12 +78,12 @@
   sanitize(app);
   loadMemberExperience();
 
-  const observer = new MutationObserver((records) => {
+  const runtime = window.PUTDUK_MEMBER_RUNTIME;
+  runtime?.observeMutations((records) => {
     for (const record of records) {
       for (const node of record.addedNodes) {
         if (node instanceof Element) sanitize(node);
       }
     }
   });
-  observer.observe(app, { childList: true, subtree: true });
 })();
