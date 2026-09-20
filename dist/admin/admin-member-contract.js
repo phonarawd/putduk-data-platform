@@ -12,6 +12,13 @@
   const PAGE_SIZE = 100;
   const MAX_ROWS = 10000;
   let requestSerial = 0;
+  let contractBusy = false;
+  let loadedSignature = '';
+
+  function querySignature() {
+    const state = core.getState() || {};
+    return `${String(state.adminMemberQuery || '').trim()}|${String(state.adminMemberFilter || 'all')}`;
+  }
 
   function normalize(row) {
     if (!row || typeof row !== 'object') return {};
@@ -53,10 +60,13 @@
   }
 
   async function loadAdminMembers({ silent = false } = {}) {
+    if (contractBusy) return;
+    contractBusy = true;
     const serial = ++requestSerial;
     const state = core.getState() || {};
     const query = String(state.adminMemberQuery || '').trim();
     const filter = String(state.adminMemberFilter || 'all');
+    const signature = `${query}|${filter}`;
 
     core.patchState({ adminMembersLoading: true });
     if (!silent && typeof core.render === 'function') core.render();
@@ -71,6 +81,7 @@
         adminMembersError: null,
         adminMembersContract: true
       });
+      loadedSignature = signature;
     } catch (error) {
       if (serial !== requestSerial) return;
       core.patchState({
@@ -79,8 +90,10 @@
         adminMembersError: friendly(error),
         adminMembersContract: true
       });
+      loadedSignature = signature;
     } finally {
       if (serial === requestSerial) {
+        contractBusy = false;
         core.patchState({ adminMembersLoading: false });
         if (typeof core.render === 'function') core.render();
       }
@@ -123,6 +136,10 @@
     root.querySelectorAll('.admin-mobile-card .small-button, .admin-card .filter-button, #memberSearchForm .small-button').forEach((button) => {
       button.style.minHeight = '44px';
     });
+
+    if (!contractBusy && core.getState()?.adminMembersLoading !== true && loadedSignature !== querySignature()) {
+      queueMicrotask(() => loadAdminMembers({ silent: true }));
+    }
   }
 
   core.loadAdminMembers = loadAdminMembers;
@@ -133,6 +150,27 @@
     enhanceMemberPage();
     return result;
   };
+
+  document.addEventListener('click', (event) => {
+    if (core.getState()?.adminPage !== 'members') return;
+    const target = event.target?.closest?.('[data-member-filter], [data-action="refresh-members"]');
+    if (!target) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    if (target.dataset.memberFilter) core.patchState({ adminMemberFilter: target.dataset.memberFilter });
+    loadedSignature = '';
+    void loadAdminMembers({ silent: false });
+  }, true);
+
+  document.addEventListener('submit', (event) => {
+    if (event.target?.id !== 'memberSearchForm') return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    const query = String(document.getElementById('memberSearchInput')?.value || '').trim();
+    core.patchState({ adminMemberQuery: query });
+    loadedSignature = '';
+    void loadAdminMembers({ silent: false });
+  }, true);
 
   enhanceMemberPage();
 })();
