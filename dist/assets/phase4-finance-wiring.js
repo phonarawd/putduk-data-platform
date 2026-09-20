@@ -21,16 +21,9 @@
   }
 
   function toast(text, kind = 'info') {
-    const stack = document.getElementById('toastStack');
-    if (!stack) return;
-    const node = document.createElement('div');
-    const tone = kind === 'success' ? 'success' : kind === 'error' ? 'error' : kind === 'warning' ? 'warning' : '';
-    node.className = `toast ${tone}`.trim();
-    node.setAttribute('role', kind === 'error' ? 'alert' : 'status');
-    node.textContent = text;
-    if (stack.children.length >= 3) stack.firstElementChild?.remove();
-    stack.appendChild(node);
-    window.setTimeout(() => node.remove(), 4200);
+    if (typeof window.__putdukShowToast === 'function') {
+      window.__putdukShowToast(text, kind);
+    }
   }
 
   async function edge(action, payload = {}) {

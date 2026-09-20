@@ -4225,8 +4225,9 @@
     const color = kind === 'success' ? 'var(--emerald)' : kind === 'error' ? 'var(--danger)' : 'var(--gold)';
     const actionHtml = action?.label ? `<button type="button" class="toast-action" data-toast-action="${esc(action.id || '')}">${esc(action.label)}</button>` : '';
     toast.innerHTML = `<span style="color:${color}">${icon(iconName, 17)}</span><span>${esc(text)}</span>${actionHtml}`;
-    if (stack.children.length >= 3) stack.firstElementChild?.remove();
-    stack.appendChild(toast);
+    toastTimers.forEach((timer) => window.clearTimeout(timer));
+    toastTimers.clear();
+    stack.replaceChildren(toast);
     refreshIcons();
     const timer = window.setTimeout(() => { toast.remove(); toastTimers.delete(timer); }, 4200);
     toastTimers.add(timer);
@@ -4392,7 +4393,6 @@
       state._startingWork = false;
       saveState();
       render();
-      showToast(isCatalogWork(node) ? '🟢 출근했어요. 상품명·가격·옵션·배송을 적어 주세요.' : '🟢 출근했어요. 전표와 실물 번호를 대조해 주세요.', 'success');
       runFrame = requestAnimationFrame(tickRun);
       void refreshWorkSideState();
       return;
@@ -4415,7 +4415,6 @@
     state._startingWork = false;
     saveState();
     render();
-    showToast('👀 근무 화면을 열었어요. 실제 제출·정산은 아직 잠겨 있을 수 있어요.', 'info');
     runFrame = requestAnimationFrame(tickRun);
   }
 
@@ -4919,7 +4918,6 @@
       deferredInstallPrompt = null;
       await prompt.prompt();
       const result = await prompt.userChoice;
-      if (result?.outcome === 'accepted') showToast('📲 설치를 시작했어요. 홈 화면에서 퍼뜩을 열어 보세요.', 'success');
       return;
     }
     const isIos = /iphone|ipad|ipod/i.test(navigator.userAgent);
@@ -4953,7 +4951,6 @@
     state = freshState(false);
     saveState();
     render();
-    showToast('안전하게 로그아웃했어요.', 'success');
   }
 
   async function checkpointWork() {
@@ -4972,7 +4969,6 @@
       await memberFinanceRequest('checkpoint_work', { task_run_id: state.run.dbId, checkpoint: payload });
       if (state.run) state.run.status = 'checkpointed';
       saveState();
-      showToast('💾 중간 저장했어요. 새로고침해도 이어서 적어요.', 'success');
     } catch (error) {
       saveState();
       showToast(String(error?.message || '').includes('저장') ? error.message : '중간 저장을 하지 못했어요. 잠시 후 다시 눌러 주세요.', 'info');
@@ -5018,7 +5014,6 @@
         state.run.choice = null;
         state.run.progress = bundle.current / bundle.total;
       }
-      showToast(`✅ [${bundle.current}/${bundle.total}건] 대조 완료! 다음 화물을 확인해 주세요.`, 'success');
     } else {
       bundle.current = bundle.total;
       state.player.choice = chosen;
@@ -5026,7 +5021,6 @@
         state.run.choice = chosen;
         state.run.progress = 1;
       }
-      showToast(`🎉 오늘 배정 물량 ${bundle.total}건 대조를 마쳤어요! [제출하기]를 눌러주세요.`, 'success');
     }
     saveState();
     render();
@@ -5115,8 +5109,7 @@
     state.modal = null;
     render();
     if (data.session) {
-      showToast('🎉 가입이 완료됐어요. 사원증을 확인해 보세요.', 'success');
-    } else if (data?.user && !data.user.email_confirmed_at) {
+      } else if (data?.user && !data.user.email_confirmed_at) {
       showToast('📨 인증 메일을 보냈어요. 메일함에서 확인해야 가입이 끝나요.', 'success');
     } else {
       showToast('📨 가입 요청을 보냈어요. 이메일 인증이 끝나면 로그인해 주세요.', 'success');
@@ -5145,7 +5138,6 @@
     render();
     settleMobileViewportAfterAuth();
     syncMemberPush(data.session, { prompt: true });
-    showToast('👋 다시 만나서 반가워요. 작업실을 준비했어요.', 'success');
   }
 
   function handleClick(event) {
@@ -5330,7 +5322,7 @@
     }
     if (action === 'skip-pwa') { releaseNamedCanvas('onboardMotionCanvas'); state.onboardingPwaDone = true; queueOnboarding(); saveState(); render(); return; }
     if (action === 'onboard-install') { installApp(); return; }
-    if (action === 'ack-grant') { state.onboardingGrantSeen = true; state.onboardingStep = null; saveState(); render(); showToast('🎁 지원금은 딱 한 번이에요. 근무에 써 주세요.', 'success'); return; }
+    if (action === 'ack-grant') { state.onboardingGrantSeen = true; state.onboardingStep = null; saveState(); render(); return; }
     if (action === 'open-kyc') { openModal('kyc'); return; }
     if (action === 'open-run') { if (state.run) { overlayDismissed = false; state.run.overlayOpen = true; render(); } return; }
     if (action === 'open-review-wait') {
@@ -5338,14 +5330,14 @@
       return;
     }
     if (action === 'close-run') {
-      if (state.run) { overlayDismissed = true; state.run.overlayOpen = false; saveState(); render(); showToast('👋 화면을 닫아도 근무는 서버 기준으로 이어져요.', 'info'); }
+      if (state.run) { overlayDismissed = true; state.run.overlayOpen = false; saveState(); render(); }
       return;
     }
     if (action === 'close-review-wait') {
-      if (state.reviewWait) { rememberReviewWaitDismissed(state.reviewWait); state.reviewWait.overlayOpen = false; saveState(); render(); showToast('👋 검수 대기는 서버에 남아 있어요. 새 출근은 아직 할 수 없어요.', 'info'); }
+      if (state.reviewWait) { rememberReviewWaitDismissed(state.reviewWait); state.reviewWait.overlayOpen = false; saveState(); render(); }
       return;
     }
-    if (action === 'copy-referral') { navigator.clipboard?.writeText(referralCode()); showToast(`추천 코드 ${referralCode()}을 복사했어요.`, 'success'); return; }
+    if (action === 'copy-referral') { navigator.clipboard?.writeText(referralCode()); return; }
     if (action === 'email-check') {
       const email = document.getElementById('signupEmail')?.value.trim() || '';
       showToast(email && email.includes('@') ? '형식은 괜찮아요. 이미 있는 이메일은 가입 버튼을 눌렀을 때 안내돼요.' : '이메일 주소를 올바르게 입력해 주세요.', 'info');
