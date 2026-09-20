@@ -30,3 +30,10 @@ test('generic submit은 review/settlement를 우회하지 않는다', async () =
   assert.doesNotMatch(submit, /putduk_grant_stipend/);
   assert.doesNotMatch(submit, /putduk_apply_bucket_delta/);
 });
+
+test('generic SECURITY DEFINER RPC는 브라우저 직접 실행 대신 service-role backend 전용이다', async () => {
+  const sql = await readFile(repoPath('supabase/migrations/20260921091500_putduk_generic_work_engine_rpc_security.sql'), 'utf8');
+  assert.match(sql, /from public, anon, authenticated/);
+  assert.match(sql, /grant execute on function public\.putduk_member_work_contract\(uuid, uuid\)[\s\S]*to service_role/);
+  assert.match(sql, /grant execute on function public\.putduk_member_submit_work_v2\(uuid, uuid, jsonb\)[\s\S]*to service_role/);
+});

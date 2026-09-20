@@ -86,7 +86,7 @@ putduk.work_contract/1.0
    └─ payload         # member-safe only
 ```
 
-`validation_payload`은 반환하지 않는다.
+`validation_payload`은 반환하지 않는다. 이 RPC는 `service_role` backend 전용이며 브라우저가 `/rest/v1/rpc`로 직접 실행하지 않는다. Stage 4의 member runtime 전환 시 verified Edge action을 통해 호출한다.
 
 ## Submission contract
 
@@ -94,7 +94,7 @@ putduk.work_contract/1.0
 public.putduk_member_submit_work_v2(user_id, task_run_id, submission)
 ```
 
-입력 버전은 `putduk.work_submission/1.0`이다.
+입력 버전은 `putduk.work_submission/1.0`이다. 이 RPC도 `service_role` backend 전용이고, member JWT는 verified Edge 경계에서 user id를 확정한 뒤 전달한다.
 
 ```json
 {
