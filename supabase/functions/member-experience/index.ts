@@ -73,7 +73,7 @@ async function realActivitySnapshot(): Promise<JsonRecord> {
     admin.from("task_runs").select("id", { count: "exact", head: true }).in("status", ["in_progress", "checkpointed"]),
     admin.from("task_runs").select("id", { count: "exact", head: true }).gte("started_at", since15),
     admin.from("task_runs").select("status,node_id,started_at,completed_at,updated_at")
-      .in("status", ["in_progress", "checkpointed", "submitted", "review_pending", "under_review", "approved"])
+      .in("status", ["in_progress", "checkpointed", "submitted", "review_pending", "approved"])
       .gte("updated_at", since30).order("updated_at", { ascending: false }).limit(4)
   ]);
   if (activeResult.error || startedResult.error || recentResult.error) {
@@ -98,7 +98,7 @@ async function realActivitySnapshot(): Promise<JsonRecord> {
   const events = rows.map((row) => {
     const status = String(row.status || "");
     const action = status === "approved" ? "업무 승인이 완료됐어요"
-      : ["submitted", "review_pending", "under_review"].includes(status) ? "업무를 제출했어요" : "업무를 시작했어요";
+      : ["submitted", "review_pending"].includes(status) ? "업무를 제출했어요" : "업무를 시작했어요";
     return { action, partner: partnerByNode.get(String(row.node_id || "")) || "협력사", occurred_at: row.completed_at || row.updated_at || row.started_at || null };
   });
   return { available: true, active_count: activeResult.count || 0, started_15m: startedResult.count || 0, events, measured_at: new Date(now).toISOString() };

@@ -8,6 +8,10 @@
   let client = null;
   let observer = null;
   let authSubscription = null;
+  let snapshotToken = '';
+  let snapshotValue = null;
+  let snapshotExpiresAt = 0;
+  let snapshotPromise = null;
   const mutationSubscribers = new Set();
   const authSubscribers = new Set();
 
@@ -43,10 +47,47 @@
     };
   }
 
+  function clearMemberExperienceCache() {
+    snapshotToken = '';
+    snapshotValue = null;
+    snapshotExpiresAt = 0;
+    snapshotPromise = null;
+  }
+
+  async function getMemberExperience(endpoint, accessToken, { force = false, maxAgeMs = 2000 } = {}) {
+    const token = String(accessToken || '');
+    if (!endpoint || !token) throw new Error('로그인이 필요합니다.');
+    const now = Date.now();
+    if (snapshotToken !== token) clearMemberExperienceCache();
+    snapshotToken = token;
+    if (!force && snapshotValue && snapshotExpiresAt > now) return snapshotValue;
+    if (!force && snapshotPromise) return snapshotPromise;
+    const request = fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+        'apikey': config.supabasePublishableKey
+      },
+      body: JSON.stringify({ action: 'member_experience' })
+    }).then(async (response) => {
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || data?.ok === false) throw new Error(String(data?.error || '회원 업무 현황을 불러오지 못했습니다.'));
+      snapshotValue = data;
+      snapshotExpiresAt = Date.now() + Math.max(0, Number(maxAgeMs || 0));
+      return data;
+    }).finally(() => {
+      if (snapshotPromise === request) snapshotPromise = null;
+    });
+    snapshotPromise = request;
+    return request;
+  }
+
   function ensureAuthSubscription() {
     const sharedClient = getClient();
     if (authSubscription || !sharedClient || !authSubscribers.size) return;
     const result = sharedClient.auth.onAuthStateChange((event, session) => {
+      clearMemberExperienceCache();
       for (const subscriber of [...authSubscribers]) {
         try { subscriber(event, session); } catch (error) { console.warn('[member-runtime] auth subscriber failed', error); }
       }
@@ -69,6 +110,8 @@
 
   window.PUTDUK_MEMBER_RUNTIME = Object.freeze({
     getClient,
+    getMemberExperience,
+    clearMemberExperienceCache,
     observeMutations,
     onAuthStateChange
   });

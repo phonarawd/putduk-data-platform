@@ -27,8 +27,17 @@ if (!js.includes('devicePixelRatio')) {
   throw new Error('성능 기준: Canvas DPR 조절 코드가 없습니다.');
 }
 
-if (!js.includes('crewPulseFetchedAt') || !js.includes('12000')) {
-  throw new Error('성능 기준: crew_pulse 폴링 완화가 없습니다.');
+if (!js.includes('realActivityFetchedAt') || !js.includes('12000')) {
+  throw new Error('성능 기준: 실제 활동 폴링 완화가 없습니다.');
+}
+
+const memberRuntime = await readFile(join(root, 'dist/assets/member-runtime-core.js'), 'utf8');
+const memberCatalog = await readFile(join(root, 'dist/assets/member-catalog-runtime.js'), 'utf8');
+if (!memberRuntime.includes('getMemberExperience') || !memberRuntime.includes('snapshotPromise') || !memberRuntime.includes('maxAgeMs = 2000')) {
+  throw new Error('성능 기준: 회원 snapshot 요청 병합 캐시가 없습니다.');
+}
+if (!memberCatalog.includes('const PAGE_SIZE = 12') || !memberCatalog.includes('rows.slice(0, state.visibleCount)')) {
+  throw new Error('성능 기준: 12개 증분 catalog 렌더링이 유지되어야 합니다.');
 }
 
 if (!js.includes('hydrateSession') || !js.includes('light: true')) {
