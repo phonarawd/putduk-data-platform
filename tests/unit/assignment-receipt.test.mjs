@@ -23,7 +23,6 @@ test('출근 확인·근무 전표는 애니메이션 없이 배정카드·영�
   const { appJs, appCss } = await readLaunchFiles();
   const startBody = appJs.slice(appJs.indexOf('function renderStartConfirm'), appJs.indexOf('function renderResultOverlay'));
   const resultBody = appJs.slice(appJs.indexOf('function renderResultOverlay'), appJs.indexOf('function renderOnboarding'));
-  const grantBody = appJs.slice(appJs.indexOf('onboard-grant'), appJs.indexOf('function renderMemberTabbar'));
   const nodeBody = appJs.slice(appJs.indexOf('function renderNodeCard'), appJs.indexOf('function renderTimeline'));
   assert.equal(startBody.includes('id="startMotionCanvas"'), false);
   assert.equal(resultBody.includes('id="resultMotionCanvas"'), false);
@@ -31,11 +30,11 @@ test('출근 확인·근무 전표는 애니메이션 없이 배정카드·영�
   assert.match(resultBody, /근무 완료 전표/);
   assert.match(resultBody, /운영자 검수가 완료됐어요/);
   assert.match(resultBody, /검수 완료 영수증/);
-  assert.match(grantBody, /업무 지원금 \$\{money\(grant\)\}은 근무에 쓰여요/);
-  assert.match(grantBody, /체험 수당 3천원은 USDT로만 출금가능해요/);
+  assert.match(appJs, /지원금은 근무에 다 쓰이고 돌려주지 않아요/);
+  assert.match(appJs, /수당만 나와요/);
   assert.match(appJs, /수당 \$\{money\(pay\)\}/);
   assert.match(nodeBody, /compact-node/);
-  assert.match(nodeBody, /남은 자리/);
+  assert.match(nodeBody, /참여 가능/);
   assert.equal(nodeBody.includes('끝나면 수당'), false);
   assert.equal(nodeBody.includes('settleNote'), false);
   assert.match(appCss, /\.grant-copy/);

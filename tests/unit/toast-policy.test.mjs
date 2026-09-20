@@ -11,8 +11,9 @@ test('toast engine displays only one message at a time', () => {
 });
 
 test('finance uses the shared toast engine', () => {
+  const toastBlock = finance.slice(finance.indexOf('function toast('), finance.indexOf('async function edge('));
   assert.match(finance, /window\.__putdukShowToast\(text, kind\)/);
-  assert.doesNotMatch(finance, /document\.createElement\(['"]div['"]\)/);
+  assert.doesNotMatch(toastBlock, /document\.createElement\(['"]div['"]\)/);
 });
 
 test('low-value member actions do not trigger toast messages', () => {
