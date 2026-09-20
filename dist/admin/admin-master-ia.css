@@ -1,0 +1,9 @@
+html[data-mode="admin"] .sidebar nav[aria-label="주요 메뉴"]{max-height:calc(100vh - 245px);overflow:auto;padding-right:4px;scrollbar-width:thin}
+html[data-mode="admin"] .sidebar .nav-item{min-height:38px}
+.master-wizard-steps{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;margin:0 0 16px}
+.master-wizard-steps span{padding:9px 8px;border:1px solid var(--line);border-radius:10px;font-size:11px;text-align:center;color:var(--muted);background:var(--card)}
+.master-wizard-steps span.active{color:var(--text);border-color:var(--gold);font-weight:800}
+@media(max-width:900px){.master-wizard-steps{grid-template-columns:1fr 1fr}.master-wizard-steps span:last-child{grid-column:1/-1}}
+.master-allocation-head,.master-allocation-row{display:grid;grid-template-columns:minmax(180px,2fr) repeat(3,minmax(90px,1fr)) 38px;gap:8px;align-items:center;margin:8px 0}
+.master-allocation-head{font-size:11px;color:var(--muted);font-weight:800}
+@media(max-width:760px){.master-allocation-head{display:none}.master-allocation-row{grid-template-columns:1fr 1fr}.master-allocation-row select{grid-column:1/-1}.master-allocation-row .icon-button{justify-self:end}}
