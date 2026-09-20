@@ -34,6 +34,29 @@
     /실제 근무 제출은 아직 준비|입출금 자동 반영은 아직 준비/
   ];
 
+  const WITHDRAWAL_COPY_REPLACEMENTS = [
+    [
+      '보증금까지 신청하면 대기 없이 바로 지급하고, 등급·라인은 내려가요.',
+      '보증금까지 신청하면 운영자 확인 후 지급 처리되며, 완료된 원금만큼 업무잔액이 줄어요. 회원 등급은 출금 자체로 변경되지 않아요.'
+    ],
+    [
+      '보증금까지 신청하면 대기 없이 바로 지급해요. 등급은 내려가고, 근무 잔액 0이면 그 라인은 바로 닫혀요.',
+      '보증금까지 신청하면 운영자 확인 후 지급 처리돼요. 완료된 원금만큼 업무잔액이 줄고, 회원 등급은 출금 자체로 변경되지 않아요.'
+    ],
+    [
+      '대기 기간 없이 바로 지급하고, 지위는 내려가요.',
+      '운영자가 확인한 뒤 지급 처리하고, 출금 자체로 회원 등급을 낮추지 않아요.'
+    ],
+    [
+      '근무 잔액이 0원이 되면 그 라인은 바로 닫혀요.',
+      '출금 완료 후 남은 업무잔액이 필요한 보증금보다 적으면 해당 업무는 새로 시작할 수 없어요.'
+    ],
+    [
+      '우선 집기·주간 근무 자리·전담 라인은 빠지고, 같은 고액 칸은 다시 입금해야 열려요.',
+      '기존 회원 등급·혜택·라인 상태는 원금 출금 자체로 변경하지 않아요.'
+    ]
+  ];
+
   const recentInline = new Map();
 
   function normalize(value) {
@@ -73,6 +96,14 @@
       [data-putduk-inline-feedback][data-tone="error"],[data-putduk-inline-feedback][data-tone="warning"]{border-color:color-mix(in srgb,var(--gold,#c18a2d) 42%,transparent);background:color-mix(in srgb,var(--gold,#c18a2d) 7%,var(--surface,#fff))}
       [data-putduk-inline-feedback][data-tone="success"]{border-color:color-mix(in srgb,var(--emerald,#0d9f76) 35%,transparent);background:color-mix(in srgb,var(--emerald,#0d9f76) 6%,var(--surface,#fff))}
     `;
+    document.head.appendChild(style);
+  }
+
+  function ensureWithdrawalPolicyStyle() {
+    if (document.getElementById('putdukWithdrawalPolicyStyle')) return;
+    const style = document.createElement('style');
+    style.id = 'putdukWithdrawalPolicyStyle';
+    style.textContent = '#demoteMotionCanvas{display:none!important}[data-modal="withdraw-principal"] .result-stage.compact{display:none!important}';
     document.head.appendChild(style);
   }
 
@@ -131,7 +162,59 @@
     root.querySelectorAll?.('.toast').forEach(applyPolicy);
   }
 
-  function install() {
+  function replaceWithdrawalTextNode(node) {
+    if (!node || node.nodeType !== Node.TEXT_NODE) return;
+    const original = String(node.nodeValue || '');
+    if (!original.trim()) return;
+
+    let next = original;
+    for (const [from, to] of WITHDRAWAL_COPY_REPLACEMENTS) {
+      if (next.includes(from)) next = next.replace(from, to);
+    }
+
+    const principalModal = node.parentElement?.closest?.('[data-modal="withdraw-principal"]');
+    if (principalModal) {
+      if (next.includes('사원증 등급이')) {
+        next = '원금 출금 자체로 회원 등급은 변경되지 않아요.';
+      }
+      next = next.replace(
+        /같은 날\s+(.+?)까지\s+즉시 지급해요\.\s*며칠 뒤에 돈을 묶지 않아요\./,
+        '운영자가 확인한 뒤 $1까지 지급 처리해요.'
+      );
+    }
+
+    if (next !== original) node.nodeValue = next;
+  }
+
+  function sanitizeWithdrawalPolicy(root) {
+    if (!root) return;
+    ensureWithdrawalPolicyStyle();
+
+    if (root.nodeType === Node.TEXT_NODE) {
+      replaceWithdrawalTextNode(root);
+      return;
+    }
+    if (!(root instanceof Element)) return;
+
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    let node = walker.nextNode();
+    while (node) {
+      replaceWithdrawalTextNode(node);
+      node = walker.nextNode();
+    }
+
+    const principalModal = root.matches?.('[data-modal="withdraw-principal"]')
+      ? root
+      : root.querySelector?.('[data-modal="withdraw-principal"]');
+    if (principalModal) {
+      const motionStage = principalModal.querySelector('#demoteMotionCanvas')?.closest('.result-stage');
+      if (motionStage) motionStage.remove();
+      const confirm = principalModal.querySelector('[data-action="confirm-principal"]');
+      if (confirm) confirm.textContent = '출금 정보 입력';
+    }
+  }
+
+  function installToastPolicy() {
     const stack = document.getElementById('toastStack');
     if (!stack) return false;
     scan(stack);
@@ -144,11 +227,28 @@
     return true;
   }
 
-  if (!install()) {
+  function installWithdrawalPolicy() {
+    const app = document.getElementById('app');
+    if (!app) return false;
+    sanitizeWithdrawalPolicy(app);
+    const observer = new MutationObserver((records) => {
+      for (const record of records) {
+        for (const node of record.addedNodes) sanitizeWithdrawalPolicy(node);
+      }
+    });
+    observer.observe(app, { childList: true, subtree: true });
+    return true;
+  }
+
+  function retryInstall(install) {
+    if (install()) return;
     let attempts = 0;
     const timer = window.setInterval(() => {
       attempts += 1;
       if (install() || attempts >= 40) window.clearInterval(timer);
     }, 250);
   }
+
+  retryInstall(installToastPolicy);
+  retryInstall(installWithdrawalPolicy);
 })();
