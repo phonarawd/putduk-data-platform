@@ -4,15 +4,15 @@ import { readFile } from 'node:fs/promises';
 
 const trustHtml = await readFile(new URL('../../dist/trust.html', import.meta.url), 'utf8');
 const trustJs = await readFile(new URL('../../dist/assets/trust.js', import.meta.url), 'utf8');
-const redirects = await readFile(new URL('../../dist/_redirects', import.meta.url), 'utf8');
 const sitemap = await readFile(new URL('../../dist/sitemap.xml', import.meta.url), 'utf8');
 const index = await readFile(new URL('../../dist/index.html', import.meta.url), 'utf8');
 
 const publicPaths = ['/about','/how-it-works','/trial-work','/fees-and-settlement','/faq','/company','/terms','/privacy','/refund-and-dispute'];
 
-test('all public trust paths are routed and indexed', () => {
+test('all public trust paths are static and indexed', async () => {
   for (const path of publicPaths) {
-    assert.match(redirects, new RegExp('^' + path.replaceAll('/', '\\/') + ' \\/trust\\.html 200$', 'm'));
+    const routeHtml = await readFile(new URL(`../../dist${path}/index.html`, import.meta.url), 'utf8');
+    assert.match(routeHtml, /assets\/trust\.js/);
     assert.ok(sitemap.includes(`<loc>https://app.hiptk.app${path}</loc>`));
   }
 });
