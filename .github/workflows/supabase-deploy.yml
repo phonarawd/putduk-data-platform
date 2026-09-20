@@ -1,16 +1,10 @@
 name: Supabase 운영 배포
 
-# 운영 Supabase(gaugwamwceqdnqdqrxqg) 관련 코드가 main에 바뀔 때만 자동 배포한다.
-# 수동 재실행 경로도 유지한다. 프로젝트 ref가 다르면 preflight에서 즉시 중단한다.
+# GitHub Actions는 운영 필수 배포 경로가 아니라 수동 보조 경로로만 유지한다.
+# 기본 운영 반영은 작업 branch 검증 → Supabase MCP/CLI 적용 → integrity/security 확인 → main 기록 순서다.
+# 프로젝트 ref가 다르면 preflight에서 즉시 중단한다.
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - main
-    paths:
-      - "supabase/**"
-      - "tooling/supabase/**"
-      - ".github/workflows/supabase-deploy.yml"
 
 permissions:
   contents: read
