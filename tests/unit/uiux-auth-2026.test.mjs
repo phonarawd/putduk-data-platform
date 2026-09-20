@@ -147,3 +147,28 @@ test('auth/legal overlays do not change finance, payout or work contracts', asyn
     assert.doesNotMatch(runtime, /member-finance|admin-phase5|submit_deposit|withdrawal_requests|nodeStake\(|nodePay\(/);
   }
 });
+
+
+test('landscape member shell and auth surfaces keep one usable scroll owner', async () => {
+  const [memberHtml, appCss, authCss, authRuntime] = await Promise.all([
+    readRepo('dist', 'index.html'),
+    readRepo('dist', 'assets', 'app.css'),
+    readRepo('dist', 'assets', 'uiux-auth-2026.css'),
+    readRepo('dist', 'assets', 'uiux-auth-2026.js')
+  ]);
+
+  assert.doesNotMatch(memberHtml, /user-scalable=no/);
+  assert.doesNotMatch(memberHtml, /maximum-scale=1\.0/);
+  assert.match(memberHtml, /app\.css\?v=20260920-landscape1/);
+  assert.match(memberHtml, /uiux-auth-2026\.css\?v=20260920-landscape1/);
+  assert.match(memberHtml, /uiux-auth-2026\.js\?v=20260920-landscape1/);
+  assert.match(appCss, /orientation:\s*landscape/);
+  assert.match(appCss, /max-height:\s*600px/);
+  assert.match(appCss, /html\[data-mode="member"\] \.sidebar[\s\S]*display:\s*none !important/);
+  assert.match(appCss, /html\[data-mode="member"\] \.member-tabbar[\s\S]*display:\s*grid !important/);
+  assert.match(authCss, /\.uiux-auth-modal[\s\S]*display:\s*flex[\s\S]*flex-direction:\s*column/);
+  assert.match(authCss, /\.uiux-auth-modal \.modal-body[\s\S]*min-height:\s*0[\s\S]*overflow-y:\s*auto/);
+  assert.match(authCss, /-webkit-overflow-scrolling:\s*touch/);
+  assert.match(authRuntime, /function syncVisualViewportHeight/);
+  assert.match(authRuntime, /window\.visualViewport\?\.addEventListener\('resize'/);
+});
