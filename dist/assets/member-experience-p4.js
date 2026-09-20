@@ -8,9 +8,9 @@
   const endpoint = config.memberExperienceUrl || (config.supabaseUrl ? `${config.supabaseUrl}/functions/v1/member-experience` : '');
   if (!app || !endpoint || !window.supabase || !config.supabaseUrl || !config.supabasePublishableKey) return;
 
-  const client = window.supabase.createClient(config.supabaseUrl, config.supabasePublishableKey, {
-    auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false }
-  });
+  const runtime = window.PUTDUK_MEMBER_RUNTIME;
+  const client = runtime?.getClient();
+  if (!runtime || !client) return;
 
   const POLL_MS = 30_000;
   const REFRESH_DEBOUNCE_MS = 700;
@@ -365,12 +365,11 @@
     }
   }, true);
 
-  const observer = new MutationObserver((records) => {
+  const stopMutationObserver = runtime.observeMutations((records) => {
     if (records.some((record) => record.addedNodes.length || record.removedNodes.length)) scheduleApply();
   });
-  observer.observe(app, { childList: true, subtree: true });
 
-  client.auth.onAuthStateChange((_event, session) => {
+  const stopAuthObserver = runtime.onAuthStateChange((_event, session) => {
     state.session = session;
     state.payload = null;
     state.previousWallet = null;
@@ -388,6 +387,7 @@
     state.destroyed = true;
     clearInterval(interval);
     clearTimeout(state.refreshTimer);
-    observer.disconnect();
+    stopMutationObserver();
+    stopAuthObserver();
   }, { once: true });
 })();
