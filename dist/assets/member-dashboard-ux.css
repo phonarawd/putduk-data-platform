@@ -1,0 +1,74 @@
+html[data-mode="member"] .dashboard-next-action {
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:14px;
+  margin:0 0 18px;
+  padding:14px 16px;
+  border:1px solid color-mix(in srgb, var(--emerald) 24%, var(--line));
+  background:color-mix(in srgb, var(--emerald) 7%, var(--surface));
+}
+
+html[data-mode="member"] .dashboard-next-action .dashboard-next-copy {
+  min-width:0;
+  display:grid;
+  gap:3px;
+}
+
+html[data-mode="member"] .dashboard-next-action .dashboard-next-copy strong {
+  color:var(--text);
+  font-size:14px;
+}
+
+html[data-mode="member"] .dashboard-next-action .dashboard-next-copy span {
+  color:var(--muted);
+  font-size:12px;
+  line-height:1.5;
+}
+
+html[data-mode="member"] .dashboard-next-action > .small-button {
+  flex:0 0 auto;
+}
+
+html[data-mode="member"] .wallet-meaning {
+  margin:10px 0 0;
+  color:#c5ded2;
+  font-size:11px;
+  line-height:1.5;
+}
+
+html[data-mode="member"] .wallet-card .wallet-slot small {
+  line-height:1.35;
+}
+
+html[data-mode="member"] .wallet-card .wallet-cta {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:8px;
+}
+
+html[data-mode="member"] .wallet-card .wallet-cta > button:only-child {
+  grid-column:1 / -1;
+  width:100%;
+}
+
+html[data-mode="member"] .wallet-card [data-action="deposit-info"][hidden] {
+  display:none !important;
+}
+
+@media (max-width: 700px) {
+  html[data-mode="member"] .dashboard-next-action {
+    align-items:stretch;
+    flex-direction:column;
+    gap:10px;
+  }
+
+  html[data-mode="member"] .dashboard-next-action > .small-button {
+    width:100%;
+    min-height:44px;
+  }
+
+  html[data-mode="member"] .wallet-card .wallet-cta {
+    grid-template-columns:1fr;
+  }
+}
