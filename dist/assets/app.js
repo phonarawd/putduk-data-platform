@@ -2741,6 +2741,7 @@
       { id: 'reviews', label: '업무 검수', icon: 'clipboard-check', count: state.adminReviewPendingCount || undefined },
       { id: 'finance', label: '입출금 처리', icon: 'wallet-cards', count: state.adminFinanceContract ? financeCount : undefined },
       { id: 'motion', label: '연출', icon: 'clapperboard' },
+      { id: 'landing-content', label: '랜딩 현황·후기', icon: 'message-square-text' },
       { id: 'notifications', label: '공지·알림', icon: 'bell' },
       { id: 'settings', label: '운영 설정', icon: 'sliders-horizontal' }
     ] : [

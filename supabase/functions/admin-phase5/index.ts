@@ -329,6 +329,109 @@ async function revealWithdrawalDestination(userId: string, payload: JsonRecord) 
   };
 }
 
+
+const LANDING_ROLES = ["super_admin"];
+
+function integer(value: unknown, label: string, min = 0, max = Number.MAX_SAFE_INTEGER) {
+  const parsed = Number(value);
+  if (!Number.isSafeInteger(parsed) || parsed < min || parsed > max) {
+    throw new HttpError(400, `${label} 값을 확인해 주세요.`);
+  }
+  return parsed;
+}
+
+function optionalDate(value: unknown, label: string) {
+  const raw = String(value || "").trim();
+  if (!raw) return null;
+  const date = new Date(raw);
+  if (Number.isNaN(date.getTime())) throw new HttpError(400, `${label} 시간을 확인해 주세요.`);
+  return date.toISOString();
+}
+
+async function listLandingContent(userId: string) {
+  await requireAnyRole(userId, LANDING_ROLES);
+  const [metricsResult, reviewsResult, consentsResult] = await Promise.all([
+    admin.from("landing_metric_settings").select("*").order("sort_order", { ascending: true }).order("updated_at", { ascending: false }),
+    admin.from("landing_reviews").select("*").order("sort_order", { ascending: true }).order("updated_at", { ascending: false }),
+    admin.from("landing_review_consents").select("id,user_id,work_submission_id,consent_version,consented_at,revoked_at,evidence_note").is("revoked_at", null).order("consented_at", { ascending: false }).limit(200)
+  ]);
+  if (metricsResult.error || reviewsResult.error || consentsResult.error) {
+    console.error("landing content list failed", metricsResult.error || reviewsResult.error || consentsResult.error);
+    throw new HttpError(503, "랜딩 현황과 후기를 불러오지 못했습니다.");
+  }
+  return { metrics: metricsResult.data || [], reviews: reviewsResult.data || [], consents: consentsResult.data || [] };
+}
+
+async function saveLandingMetric(userId: string, payload: JsonRecord) {
+  await requireAnyRole(userId, LANDING_ROLES);
+  const id = payload.id ? uuid(payload.id, "현황") : null;
+  const metricKey = text(payload.metric_key, "현황 식별값", 64) as string;
+  if (!/^[a-z0-9_]{2,64}$/.test(metricKey)) throw new HttpError(400, "현황 식별값은 영문 소문자, 숫자, 밑줄만 사용할 수 있습니다.");
+  const valueType = String(payload.value_type || "");
+  if (!["actual_automatic", "operator_confirmed", "goal"].includes(valueType)) throw new HttpError(400, "숫자의 근거 유형을 선택해 주세요.");
+  const row = {
+    metric_key: metricKey,
+    label_ko: text(payload.label_ko, "표시 이름", 60) as string,
+    metric_value: integer(payload.metric_value, "표시 숫자"),
+    value_type: valueType,
+    source_note: text(payload.source_note, "확인 근거", 500) as string,
+    measured_at: optionalDate(payload.measured_at, "확인 기준") || new Date().toISOString(),
+    is_public: payload.is_public === true,
+    sort_order: integer(payload.sort_order ?? 0, "표시 순서", 0, 10000),
+    updated_by: userId
+  };
+  const query = id
+    ? admin.from("landing_metric_settings").update(row).eq("id", id).select().single()
+    : admin.from("landing_metric_settings").insert(row).select().single();
+  const { data, error } = await query;
+  if (error || !data) throw new HttpError(400, String(error?.message || "랜딩 현황을 저장하지 못했습니다."));
+  return { metric: data };
+}
+
+async function saveLandingReview(userId: string, payload: JsonRecord) {
+  await requireAnyRole(userId, LANDING_ROLES);
+  const id = payload.id ? uuid(payload.id, "후기") : null;
+  const reviewType = String(payload.review_type || "usage_example");
+  if (!["verified_member", "usage_example"].includes(reviewType)) throw new HttpError(400, "후기 유형을 확인해 주세요.");
+  const consentId = payload.consent_id ? uuid(payload.consent_id, "동의 기록") : null;
+  if (reviewType === "verified_member" && !consentId) throw new HttpError(400, "실제 회원 후기는 유효한 동의 기록을 선택해야 합니다.");
+  const publicStartsAt = optionalDate(payload.public_starts_at, "공개 시작");
+  const publicEndsAt = optionalDate(payload.public_ends_at, "공개 종료");
+  if (publicStartsAt && publicEndsAt && Date.parse(publicEndsAt) <= Date.parse(publicStartsAt)) {
+    throw new HttpError(400, "공개 종료는 시작 이후여야 합니다.");
+  }
+  const row = {
+    author_display: text(payload.author_display, "표시 이름", 40) as string,
+    body_ko: text(payload.body_ko, "후기 내용", 500) as string,
+    completed_work_label: text(payload.completed_work_label, "완료 업무", 120, false),
+    review_type: reviewType,
+    is_work_verified: reviewType === "verified_member",
+    consent_id: reviewType === "verified_member" ? consentId : null,
+    is_public: payload.is_public === true,
+    sort_order: integer(payload.sort_order ?? 0, "표시 순서", 0, 10000),
+    public_starts_at: publicStartsAt,
+    public_ends_at: publicEndsAt,
+    updated_by: userId
+  };
+  const query = id
+    ? admin.from("landing_reviews").update(row).eq("id", id).select().single()
+    : admin.from("landing_reviews").insert(row).select().single();
+  const { data, error } = await query;
+  if (error || !data) throw new HttpError(400, String(error?.message || "랜딩 후기를 저장하지 못했습니다."));
+  return { review: data };
+}
+
+async function setLandingVisibility(userId: string, payload: JsonRecord) {
+  await requireAnyRole(userId, LANDING_ROLES);
+  const id = uuid(payload.id, "콘텐츠");
+  const kind = String(payload.kind || "");
+  const table = kind === "metric" ? "landing_metric_settings" : kind === "review" ? "landing_reviews" : "";
+  if (!table) throw new HttpError(400, "콘텐츠 종류를 확인해 주세요.");
+  const { data, error } = await admin.from(table).update({ is_public: payload.is_public === true, updated_by: userId }).eq("id", id).select().single();
+  if (error || !data) throw new HttpError(400, String(error?.message || "공개 상태를 저장하지 못했습니다."));
+  return { item: data };
+}
+
 async function proxyOldAdmin(request: Request, payload: JsonRecord) {
   const authorization = request.headers.get("authorization") || "";
   const apikey = request.headers.get("apikey") || serviceRoleKey;
@@ -356,6 +459,11 @@ Deno.serve(async (request: Request) => {
     const user = userFromVerifiedJwt(request);
     const payload = await parseRequest(request);
     const action = String(payload.action || "catalog");
+
+    if (action === "list_landing_content") return jsonResponse(request, { ok: true, ...(await listLandingContent(user.id)) });
+    if (action === "save_landing_metric") return jsonResponse(request, { ok: true, ...(await saveLandingMetric(user.id, payload)) });
+    if (action === "save_landing_review") return jsonResponse(request, { ok: true, ...(await saveLandingReview(user.id, payload)) });
+    if (action === "set_landing_visibility") return jsonResponse(request, { ok: true, ...(await setLandingVisibility(user.id, payload)) });
 
     if (action === "finance" || action === "list_finance") {
       const result = await financeWithPhase5(request, user.id, payload);
