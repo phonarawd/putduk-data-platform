@@ -16,8 +16,8 @@ test('member shell wires premium auth/legal assets and service worker caches the
   assert.match(memberHtml, /uiux-compliance-2026\.js/);
   assert.match(sw, /putduk-sw-push-v1/);
   assert.doesNotMatch(sw, /cache\.addAll/);
-  assert.match(memberHtml, /uiux-auth-2026\.css\?v=20260920-landing1/);
-  assert.match(memberHtml, /uiux-auth-2026\.js\?v=20260919-uiux4/);
+  assert.match(memberHtml, /uiux-auth-2026\.css\?v=20260920-landscape1/);
+  assert.match(memberHtml, /uiux-auth-2026\.js\?v=20260920-landscape1/);
   assert.match(memberHtml, /uiux-legal-2026\.css\?v=20260919-uiux8/);
   assert.match(memberHtml, /uiux-legal-2026\.js\?v=20260919-uiux8/);
   assert.match(memberHtml, /uiux-compliance-2026\.js\?v=20260919-uiux8/);
