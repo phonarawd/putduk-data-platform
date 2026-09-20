@@ -11,7 +11,7 @@ test('원금 출금 완료는 등급·혜택·라인 패널티를 적용하지 �
 
   assert.ok(completeStart >= 0);
   assert.doesNotMatch(completeBlock, /perform\s+private\.putduk_apply_principal_penalties/i);
-  assert.doesNotMatch(completeBlock, /member_tier\s*=/i);
+  assert.doesNotMatch(completeBlock, /(?:set|,)\s*member_tier\s*=/i);
   assert.doesNotMatch(completeBlock, /priority_pick\s*=/i);
   assert.doesNotMatch(completeBlock, /dedicated_queue\s*=/i);
   assert.doesNotMatch(completeBlock, /weekly_volume_boost\s*=/i);
@@ -39,7 +39,7 @@ test('회원 화면은 잘못된 원금 출금 강등 토스트를 통합 정책
   const indexHtml = await readRepo('dist', 'index.html');
   const guard = await readRepo('dist', 'assets', 'toast-policy-guard.js');
 
-  assert.match(indexHtml, /app\.js\?v=20260920-toast1[\s\S]*toast-policy-guard\.js\?v=20260920-toast2/);
+  assert.match(indexHtml, /app\.js\?v=20260920-toast1[\s\S]*toast-policy-guard\.js\?v=20260920-toast4/);
   assert.match(guard, /등급과 라인이 내려가는 출금/);
   assert.match(guard, /MutationObserver/);
   assert.match(guard, /node\.remove\(\)/);

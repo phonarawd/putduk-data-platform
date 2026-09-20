@@ -27,7 +27,7 @@ test('출근·검수·제출 버튼은 서버 응답 전에 바로 바쁘게 바
 
   assert.match(startBlock, /setWorkActionBusy\(true, '출근하는 중…'\)/);
   assert.match(startBlock, /void refreshWorkSideState\(\)/);
-  assert.match(startBlock, /render\(\);\s*showToast\(isCatalogWork\(node\)/);
+  assert.match(startBlock, /render\(\);\s*runFrame = requestAnimationFrame\(tickRun\);\s*void refreshWorkSideState\(\)/);
   assert.doesNotMatch(startBlock, /await refreshMemberWallet\(\)/);
   assert.doesNotMatch(startBlock, /await memberFinanceRequest\('daily_task_quota'\)/);
 

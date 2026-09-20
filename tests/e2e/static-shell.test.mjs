@@ -27,7 +27,7 @@ test('정적 셸 경로가 회원·운영자·PWA 파일을 제공한다', async
   assert.equal(admin.status, 200);
   assert.match(admin.text, /data-mode="admin"/);
   assert.match(admin.text, /퍼뜩/);
-  assert.match(admin.text, /adminFunctionUrl:\s*'https:\/\/gaugwamwceqdnqdqrxqg\.supabase\.co\/functions\/v1\/admin-phase5'/);
+  assert.match(admin.text, /adminFunctionUrl:\s*'https:\/\/gaugwamwceqdnqdqrxqg\.supabase\.co\/functions\/v1\/admin-master'/);
   assert.match(admin.text, /phase3-admin-wiring\.js/);
   assert.match(admin.text, /withdrawal-safety\.js/);
 

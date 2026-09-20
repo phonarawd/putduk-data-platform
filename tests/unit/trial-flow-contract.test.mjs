@@ -38,7 +38,8 @@ test('체험 제출 결과는 원금 반환으로 오해하지 않도록 수당�
   assert.match(guard, /지원금 잠금/);
   assert.match(guard, /체험 지원금은 이미 사용됐어요\. 승인되면 수당만 출금가능에 반영돼요/);
   assert.match(guard, /\[data-modal="result-scene"\]/);
-  assert.match(guard, /new MutationObserver/);
+  assert.match(guard, /runtime\?\.observeMutations/);
+  assert.doesNotMatch(guard, /new MutationObserver/);
 });
 
 test('체험 흐름 가드는 FOMO·봇 보호 설정을 수정하지 않는다', async () => {
