@@ -38,7 +38,25 @@
     }
   }
 
+  function loadMemberExperienceP4() {
+    if (!document.querySelector('link[data-p4-member-experience]')) {
+      const link = document.createElement('link');
+      link.rel = 'stylesheet';
+      link.href = './assets/member-experience-p4.css?v=20260921-p4member1';
+      link.dataset.p4MemberExperience = '1';
+      document.head.appendChild(link);
+    }
+    if (!document.querySelector('script[data-p4-member-experience]')) {
+      const script = document.createElement('script');
+      script.src = './assets/member-experience-p4.js?v=20260921-p4member1';
+      script.defer = true;
+      script.dataset.p4MemberExperience = '1';
+      document.head.appendChild(script);
+    }
+  }
+
   sanitize(app);
+  loadMemberExperienceP4();
 
   const observer = new MutationObserver((records) => {
     for (const record of records) {
