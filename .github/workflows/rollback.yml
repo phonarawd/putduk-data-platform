@@ -15,6 +15,9 @@ concurrency:
   group: putduk-supabase-production
   cancel-in-progress: false
 
+env:
+  PUTDUK_EXPECTED_PROJECT_REF: gaugwamwceqdnqdqrxqg
+
 jobs:
   rollback:
     name: 지정 커밋 Edge Function 재배포
@@ -22,11 +25,41 @@ jobs:
     env:
       SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
       SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+      ROLLBACK_SHA: ${{ inputs.git_sha }}
     steps:
+      - name: 입력·운영 프로젝트 사전 검사
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ ! "$ROLLBACK_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::git_sha must be a full 40-character lowercase commit SHA"
+            exit 1
+          fi
+          if [[ -z "${SUPABASE_ACCESS_TOKEN:-}" || -z "${SUPABASE_PROJECT_REF:-}" ]]; then
+            echo "::error::Supabase rollback secrets are missing"
+            exit 1
+          fi
+          if [[ "$SUPABASE_PROJECT_REF" != "$PUTDUK_EXPECTED_PROJECT_REF" ]]; then
+            echo "::error::SUPABASE_PROJECT_REF does not match the expected production project"
+            exit 1
+          fi
+          echo "Rollback preflight: PASS"
+
       - name: 저장소 가져오기
         uses: actions/checkout@v4
         with:
           ref: ${{ inputs.git_sha }}
+          fetch-depth: 0
+
+      - name: 체크아웃 커밋 검증
+        shell: bash
+        run: |
+          set -euo pipefail
+          ACTUAL_SHA="$(git rev-parse HEAD)"
+          if [[ "$ACTUAL_SHA" != "$ROLLBACK_SHA" ]]; then
+            echo "::error::checked out commit does not match git_sha"
+            exit 1
+          fi
 
       - name: Supabase CLI 준비
         uses: supabase/setup-cli@v1
@@ -34,9 +67,16 @@ jobs:
           version: 2.113.0
 
       - name: Edge Function 재배포
+        shell: bash
         run: |
-          supabase functions deploy admin-control --project-ref "$SUPABASE_PROJECT_REF"
-          supabase functions deploy member-finance --project-ref "$SUPABASE_PROJECT_REF"
+          set -euo pipefail
+          for function_name in admin-control admin-phase5 member-finance member-push push-dispatch; do
+            if [[ -d "supabase/functions/$function_name" ]]; then
+              supabase functions deploy "$function_name" --project-ref "$SUPABASE_PROJECT_REF"
+            else
+              echo "::notice::$function_name is not present at $ROLLBACK_SHA; skipping"
+            fi
+          done
 
       - name: 안내
         run: echo "데이터베이스 롤백은 자동 수행하지 않습니다. DB는 forward-fix migration을 별도로 적용합니다."
