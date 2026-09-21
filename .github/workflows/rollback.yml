@@ -70,7 +70,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          for function_name in admin-control admin-phase5 member-finance member-push push-dispatch; do
+          for function_name in admin-control admin-phase5 admin-master admin-work-asset member-finance member-push member-task-detail member-experience push-dispatch; do
             if [[ -d "supabase/functions/$function_name" ]]; then
               supabase functions deploy "$function_name" --project-ref "$SUPABASE_PROJECT_REF"
             else
