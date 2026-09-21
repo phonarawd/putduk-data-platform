@@ -33,6 +33,8 @@ test('Supabase Auth verifier는 Management API를 GET-only로 읽고 URL config�
   assert.match(auth, /config\?\.uri_allow_list/);
   assert.match(auth, /PUTDUK_AUTH_REDIRECT_URLS/);
   assert.match(auth, /member and ops origins must differ/);
-  assert.match(auth, /global\/host wildcard/);
+  assert.match(auth, /global wildcard/);
+  assert.match(auth, /host wildcard/);
+  assert.match(auth, /Auth redirect unexpected/);
   assert.doesNotMatch(auth, /console\.log\([^\n]*token/);
 });
