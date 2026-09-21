@@ -13,6 +13,7 @@ if (!config.ci?.collect?.url?.length) {
 const memberHtml = await readFile(join(root, 'dist/index.html'), 'utf8');
 const css = await readFile(join(root, 'dist/assets/app.css'), 'utf8');
 const js = await readFile(join(root, 'dist/assets/app.js'), 'utf8');
+const fomoBot = await readFile(join(root, 'dist/assets/fomo-bot-runtime.js'), 'utf8');
 const perfDeferred = await readFile(join(root, 'dist/assets/perf-deferred.js'), 'utf8');
 
 if (!css.includes('prefers-reduced-motion')) {
@@ -27,8 +28,11 @@ if (!js.includes('devicePixelRatio')) {
   throw new Error('성능 기준: Canvas DPR 조절 코드가 없습니다.');
 }
 
-if (!js.includes('realActivityFetchedAt') || !js.includes('12000')) {
-  throw new Error('성능 기준: 실제 활동 폴링 완화가 없습니다.');
+if (js.includes('realActivityFetchedAt') || js.includes("action: 'real_activity'")) {
+  throw new Error('성능 기준: 회원 app.js에 real_activity FOMO 폴링이 남아 있습니다.');
+}
+if (!fomoBot.includes("from('crew_pulse')") || !fomoBot.includes('4000')) {
+  throw new Error('성능 기준: FOMO bot runtime crew_pulse 폴링 완화가 없습니다.');
 }
 
 const memberRuntime = await readFile(join(root, 'dist/assets/member-runtime-core.js'), 'utf8');

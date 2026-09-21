@@ -5,6 +5,7 @@ const core = fs.readFileSync(new URL('../../dist/assets/member-runtime-core.js',
 const p4 = fs.readFileSync(new URL('../../dist/assets/member-experience-p4.js', import.meta.url), 'utf8');
 const catalog = fs.readFileSync(new URL('../../dist/assets/member-catalog-runtime.js', import.meta.url), 'utf8');
 const app = fs.readFileSync(new URL('../../dist/assets/app.js', import.meta.url), 'utf8');
+const fomoBot = fs.readFileSync(new URL('../../dist/assets/fomo-bot-runtime.js', import.meta.url), 'utf8');
 const css = fs.readFileSync(new URL('../../dist/assets/member-catalog-runtime.css', import.meta.url), 'utf8');
 const stage4 = fs.readFileSync(new URL('../../supabase/migrations/20260921104500_putduk_120_work_catalog_seed.sql', import.meta.url), 'utf8');
 const edge = fs.readFileSync(new URL('../../supabase/functions/member-experience/index.ts', import.meta.url), 'utf8');
@@ -30,8 +31,10 @@ test('observer, client, auth, polling and realtime counts stay bounded', () => {
   assert.equal((core.match(/createClient\(/g) || []).length, 1);
   assert.equal((core.match(/\.auth\.onAuthStateChange/g) || []).length, 1);
   assert.match(p4, /const POLL_MS = 30_000/);
-  assert.match(app, /realActivityFetchedAt/);
-  assert.match(app, /}, 12000\)/);
+  assert.doesNotMatch(app, /realActivityFetchedAt/);
+  assert.doesNotMatch(app, /action: 'real_activity'/);
+  assert.match(fomoBot, /from\('crew_pulse'\)/);
+  assert.match(fomoBot, /4000/);
   assert.equal((app.match(/\.channel\(/g) || []).length, 1);
 });
 test('generic fallback, mobile sizing and privacy boundaries remain intact', () => {

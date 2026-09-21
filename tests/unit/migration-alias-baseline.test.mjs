@@ -14,45 +14,40 @@ const expectedAliases = {
   putduk_120_work_catalog_seed: ['20260921104500', '20260920174201'],
   putduk_admin_master_21: ['20260921120000', '20260920183928'],
   putduk_admin_master_fk_indexes: ['20260921120500', '20260920184116'],
-  putduk_member_experience_snapshot: ['20260921133000', '20260920190731']
+  putduk_member_experience_snapshot: ['20260921133000', '20260920190731'],
+  phase1_kst_day_boundary: ['20260921102905', '20260921162946']
 };
 
 const phase1File = '20260921102905_phase1_kst_day_boundary.sql';
 
-test('v0.2.0 이전 Production 적용 migration은 alias로 흡수하고 Phase 1은 신규로 남긴다', async () => {
+test('v0.2.0 Production 적용 migration은 alias로 흡수하고 Phase 1도 Production MCP 버전과 대응한다', async () => {
   const aliases = JSON.parse(await readRepo('tooling/supabase/migration-aliases.json'));
 
   for (const [name, versions] of Object.entries(expectedAliases)) {
     assert.deepEqual(aliases.name_equivalent?.[name], versions, name);
   }
 
-  assert.equal(aliases.name_equivalent?.phase1_kst_day_boundary, undefined);
   assert.equal(
     (aliases.remote_history_only || []).some((row) => row.name === 'phase1_kst_day_boundary'),
     false
   );
 });
 
-test('Sep21 local migration 집합에서 Phase 1만 alias 없는 신규 migration이다', async () => {
+test('Sep21 local migration 집합은 alias로 Production MCP 버전과 대응된다', async () => {
   const aliases = JSON.parse(await readRepo('tooling/supabase/migration-aliases.json'));
   const files = (await readdir(repoPath('supabase', 'migrations')))
     .filter((file) => /^20260921\d+_.+\.sql$/.test(file))
     .sort();
 
-  const expectedFiles = [
-    ...Object.entries(expectedAliases).map(([name, versions]) => `${versions[0]}_${name}.sql`),
-    phase1File
-  ].sort();
+  const expectedFiles = Object.entries(expectedAliases)
+    .map(([name, versions]) => `${versions[0]}_${name}.sql`)
+    .sort();
 
   assert.deepEqual(files, expectedFiles);
 
   for (const file of files) {
     const [, version, name] = file.match(/^(\d+)_(.+)\.sql$/) || [];
     assert.ok(version && name, file);
-    if (file === phase1File) {
-      assert.equal(aliases.name_equivalent?.[name], undefined);
-      continue;
-    }
     assert.ok(aliases.name_equivalent?.[name]?.includes(version), file);
   }
 });

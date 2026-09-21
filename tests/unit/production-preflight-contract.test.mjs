@@ -42,5 +42,5 @@ test('Production release 순서는 migration 검증/적용/재검증 뒤 Edge와
   assert.match(doc, /20260921102905/);
   assert.match(doc, /member-task-detail/);
   assert.match(doc, /admin-work-asset/);
-  assert.match(doc, /Production money\/task mutation은 하지 않는다/);
+  assert.match(doc, /[Pp]roduction money\/task mutation은 하지 않는다/);
 });

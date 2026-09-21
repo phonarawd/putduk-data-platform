@@ -59,13 +59,16 @@ test('출시 화면에 내부 데모 표현이 없다', async () => {
 
 test('회원 FOMO 화면에 봇·가짜·연출 티가 없다', async () => {
   const { memberHtml, appJs } = await readLaunchFiles();
+  const fomoRuntime = await readRepo('dist', 'assets', 'fomo-bot-runtime.js');
   assert.equal(memberHtml.includes('봇 연출'), false);
   assert.equal(appJs.includes('방금 피드 · 봇 연출'), false);
   assert.equal(appJs.includes('🤖 방금 피드'), false);
   assert.equal(appJs.includes('지금은 봇 연출을 꺼 두었어요'), false);
-  assert.match(appJs, /실제 최근 활동/);
-  assert.match(appJs, /최근 30분 동안 공개할 실제 활동이 없습니다/);
-  assert.match(appJs, /\(pulse\.feed \|\| \[\]\)\.slice\(0, 4\)/);
+  assert.equal(appJs.includes('실제 최근 활동'), false);
+  assert.equal(appJs.includes("action: 'real_activity'"), false);
+  assert.match(memberHtml, /fomo-bot-runtime\.js/);
+  assert.match(fomoRuntime, /방금 들어온 크루/);
+  assert.doesNotMatch(fomoRuntime, /실제 최근 활동|실제 업무 현황|최근 30분 동안 공개할 실제 활동이 없습니다/);
 });
 
 test('연출 슬라이더는 서버에 저장되고 회원은 집계만 읽는다', async () => {
@@ -81,10 +84,11 @@ test('연출 슬라이더는 서버에 저장되고 회원은 집계만 읽는�
   assert.match(adminOps, /stored: "api"/);
   assert.match(adminJs, /연출 값을 서버에 저장하지 못했어요/);
   assert.equal(adminJs.includes('이 브라우저에 연출 값을 저장했어요'), false);
-  assert.match(appJs, /action: 'real_activity'/);
-  assert.match(appJs, /hydrateCrewPulse/);
-  assert.match(appJs, /active_count/);
-  assert.match(appJs, /started_15m/);
+  const fomoRuntime = await readRepo('dist', 'assets', 'fomo-bot-runtime.js');
+  assert.doesNotMatch(appJs, /action: 'real_activity'/);
+  assert.doesNotMatch(appJs, /hydrateCrewPulse/);
+  assert.match(fomoRuntime, /from\('crew_pulse'\)/);
+  assert.match(appJs, /renderFomoBoardPlaceholder/);
   assert.equal(appJs.includes("localStorage.getItem(MOTION_STORE_KEY)"), false);
   assert.equal(appJs.includes('putduk-admin-motion-v1'), false);
   assert.equal(appJs.includes('봇 연출'), false);

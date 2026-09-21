@@ -67,6 +67,5 @@
 
 - 사용되지 않는 `renderAuthModal()` 구형 렌더 함수
 - 노출 버튼이 없는 `faq` action 핸들러
-- 서버 export 구현 전까지 남아 있는 `export-history` action 핸들러
 
-이번 P0에서는 대형 `app.js` 재작성 위험을 피하고 출시 UI 표면만 차단한다. 후속 구조 정리 단계에서 dead code를 제거한다.
+`export-history` 버튼·핸들러와 회원번호/추천코드/첫 업무 상태 문구는 `dist/assets/app.js` 소스에서 직접 정리했다. `launch-readiness-guard.js`는 방어용으로 유지한다.

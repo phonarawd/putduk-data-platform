@@ -6,7 +6,6 @@
   const launchBlock = window.__PUTDUK_LAUNCH_BLOCK__ || null;
   const adminFunctionUrl = config.adminFunctionUrl || (config.supabaseUrl ? `${config.supabaseUrl}/functions/v1/admin-control` : '');
   const memberFinanceUrl = config.memberFinanceUrl || (config.supabaseUrl ? `${config.supabaseUrl}/functions/v1/member-finance` : '');
-  const memberExperienceUrl = config.memberExperienceUrl || (config.supabaseUrl ? `${config.supabaseUrl}/functions/v1/member-experience` : '');
   const storageKey = 'putduk-state-v2';
   const supabaseClient = !launchBlock && window.supabase && config.supabaseUrl && config.supabasePublishableKey
     ? window.supabase.createClient(config.supabaseUrl, config.supabasePublishableKey, {
@@ -57,8 +56,6 @@
     else paintBlock();
     return;
   }
-  let fomoTimer = null;
-
   const defaultState = {
     theme: 'light',
     memberPage: 'dashboard',
@@ -139,7 +136,6 @@
     adminFormBusy: false,
     adminMotion: { bot_enabled: true, crowd_min: 8, crowd_max: 24, burn_per_minute: 2 },
     adminMotionError: null,
-    realActivity: { available: false, active_count: 0, started_15m: 0, events: [], measured_at: null },
     toast: null
   };
 
@@ -151,7 +147,6 @@
   let chartLoading = null;
   let syncTimer = null;
   let kstResetTimer = null;
-  let fomoClockBound = false;
   let noticesHydrated = false;
   let memberLiveChannel = null;
   let memberLiveUserId = null;
@@ -254,11 +249,11 @@
   }
 
   function publicId() {
-    return authState.profile?.public_id || (authState.session ? '회원번호 준비 중' : '가입 후 발급');
+    return authState.profile?.public_id || (authState.session ? '회원번호 확인 중' : '가입 후 발급');
   }
 
   function referralCode() {
-    return authState.profile?.referral_code || (authState.session ? '코드 준비 중' : '로그인 후 확인');
+    return authState.profile?.referral_code || (authState.session ? '추천 코드 확인 중' : '로그인 후 확인');
   }
 
   function financeEnabled() {
@@ -1559,7 +1554,6 @@
       authState.profile = null;
       activeStorageKey = storageKey;
       state = loadState(storageKey);
-      if (!isAdmin) await hydrateCrewPulse({ force: true });
       return;
     }
     const sameUser = activeStorageKey === `${storageKey}:${session.user.id}`;
@@ -1596,8 +1590,7 @@
           .eq('user_id', session.user.id)
           .order('created_at', { ascending: false })
           .limit(50),
-        light && nodes.length ? Promise.resolve() : hydratePublishedCatalog(),
-        hydrateCrewPulse({ force: !light })
+        light && nodes.length ? Promise.resolve() : hydratePublishedCatalog()
       ]);
       if (profileResult.error) throw profileResult.error;
       authState.profile = profileResult.data || null;
@@ -2501,144 +2494,14 @@
     };
   }
 
-  let realActivityFetchedAt = 0;
-
-  function normalizeRealActivity(value) {
-    const source = value && typeof value === 'object' ? value : {};
-    const events = Array.isArray(source.events) ? source.events.slice(0, 4).map((item) => ({
-      action: String(item?.action || '업무 활동이 기록됐어요'),
-      partner: String(item?.partner || '협력사'),
-      occurred_at: String(item?.occurred_at || '')
-    })) : [];
-    return {
-      available: source.available === true,
-      active_count: Math.max(0, Number(source.active_count || 0)),
-      started_15m: Math.max(0, Number(source.started_15m || 0)),
-      events,
-      measured_at: String(source.measured_at || '')
-    };
-  }
-
-  async function hydrateCrewPulse({ force = false } = {}) {
-    if (isAdmin || !supabaseClient || !memberExperienceUrl) return;
-    if (!force && realActivityFetchedAt && Date.now() - realActivityFetchedAt < 12000) return;
-    realActivityFetchedAt = Date.now();
-    try {
-      const session = authState.session || (await supabaseClient.auth.getSession()).data.session;
-      if (!session?.access_token) return;
-      const response = await fetch(memberExperienceUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session.access_token}`,
-          'apikey': config.supabasePublishableKey
-        },
-        body: JSON.stringify({ action: 'real_activity' })
-      });
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok || data.ok === false) return;
-      state.realActivity = normalizeRealActivity(data.activity);
-    } catch (_) {}
-  }
-
-  function fomoPulse() {
-    const activity = normalizeRealActivity(state.realActivity);
-    return { on: activity.available, crowd: activity.active_count, burn: activity.started_15m, feed: activity.events, measured_at: activity.measured_at };
-  }
-
   function fomoSlotsLeft(node) {
     return Math.max(0, Number(node?.available || 0));
   }
 
-  function renderFomoMetricValue(value) {
-    return `<span class="fomo-metric-num">${Number(value || 0).toLocaleString('ko-KR')}</span>`;
+  function renderFomoBoardPlaceholder(kind) {
+    const title = kind === 'nodes' ? '지금 라인' : '지금 작업실';
+    return `<section class="fomo-board is-off" aria-label="${title}"><p class="fomo-off-copy">${icon('users', 16)}<span>방금 들어온 크루 안내를 불러오고 있어요.</span></p></section>`;
   }
-
-  function activityAgo(value) {
-    const occurred = new Date(value).getTime();
-    if (!Number.isFinite(occurred)) return '';
-    const minutes = Math.max(0, Math.floor((Date.now() - occurred) / 60000));
-    if (minutes < 1) return '방금';
-    if (minutes < 60) return `${minutes}분 전`;
-    return `${Math.floor(minutes / 60)}시간 전`;
-  }
-
-  function renderFomoFeedItems(pulse) {
-    const items = (pulse.feed || []).slice(0, 4);
-    if (!items.length) return '<li class="fomo-feed-empty">최근 30분 동안 공개할 실제 활동이 없습니다.</li>';
-    return items.map((item) => `<li><span class="fomo-feed-copy"><strong>익명 회원</strong> · ${esc(item.partner)} · ${esc(item.action)}</span><span class="fomo-feed-ago">${esc(activityAgo(item.occurred_at))}</span></li>`).join('');
-  }
-
-  function fomoKickerLabel() { return '실제 최근 활동'; }
-
-  function renderFomoBoard(kind) {
-    const pulse = fomoPulse();
-    const title = kind === 'nodes' ? '실제 업무 현황' : '실제 작업실 현황';
-    if (!pulse.on) return `<section class="fomo-board is-off" aria-label="${title}"><p class="fomo-off-copy">${icon('users', 16)}<span>실제 활동 현황을 불러오는 중입니다.</span></p></section>`;
-    return `<section class="fomo-board" aria-label="${title}">
-      <div class="fomo-metrics">
-        <div><div class="metric-label">현재 진행 중</div><div class="metric-value" id="fomoCrowd">${renderFomoMetricValue(pulse.crowd)}<small>건</small></div></div>
-        <div><div class="metric-label">최근 15분 시작</div><div class="metric-value" id="fomoBurn">${renderFomoMetricValue(pulse.burn)}<small>건</small></div></div>
-      </div>
-      <p class="fomo-kicker">${icon('radio', 14)}<span>${fomoKickerLabel()}</span></p>
-      <ul class="fomo-feed" id="fomoFeed">${renderFomoFeedItems(pulse)}</ul>
-    </section>`;
-  }
-
-  function patchFomoDom() {
-    if (isAdmin) return;
-    const pulse = fomoPulse();
-    const board = document.querySelector('.fomo-board');
-    if (!board) return;
-    if (!pulse.on) {
-      if (!board.classList.contains('is-off')) {
-        board.classList.add('is-off');
-        board.innerHTML = `<p class="fomo-off-copy">${icon('users', 16)}<span>실제 활동 현황을 불러오는 중입니다.</span></p>`;
-        refreshIcons();
-      }
-      return;
-    }
-    if (board.classList.contains('is-off')) {
-      const wrap = document.createElement('div');
-      wrap.innerHTML = renderFomoBoard(state.memberPage === 'nodes' ? 'nodes' : 'dashboard');
-      if (wrap.firstElementChild) board.replaceWith(wrap.firstElementChild);
-      refreshIcons();
-      return;
-    }
-    const crowd = document.getElementById('fomoCrowd');
-    if (crowd) {
-      const nextCrowd = `${renderFomoMetricValue(pulse.crowd)}<small>건</small>`;
-      if (crowd.innerHTML !== nextCrowd) crowd.innerHTML = nextCrowd;
-    }
-    const burn = document.getElementById('fomoBurn');
-    if (burn) {
-      const nextBurn = `${renderFomoMetricValue(pulse.burn)}<small>건</small>`;
-      if (burn.innerHTML !== nextBurn) burn.innerHTML = nextBurn;
-    }
-    const feed = document.getElementById('fomoFeed');
-    if (feed) {
-      const nextFeed = renderFomoFeedItems(pulse);
-      if (feed.getAttribute('data-real-activity') !== nextFeed) {
-        feed.innerHTML = nextFeed;
-        feed.setAttribute('data-real-activity', nextFeed);
-      }
-    }
-    document.querySelectorAll('[data-fomo-slot]').forEach((el) => {
-      const node = nodeById(el.getAttribute('data-fomo-slot'));
-      el.textContent = `참여 가능 ${fomoSlotsLeft(node).toLocaleString('ko-KR')}건`;
-    });
-  }
-
-  function bindFomoClock() {
-    if (isAdmin || fomoClockBound) return;
-    fomoClockBound = true;
-    void hydrateCrewPulse({ force: true }).then(() => patchFomoDom());
-    fomoTimer = setInterval(() => {
-      if (document.hidden) return;
-      hydrateCrewPulse().then(() => patchFomoDom()).catch(() => patchFomoDom());
-    }, 12000);
-  }
-
 
   function pendingFinanceCount() {
     const pending = (row) => ['submitted', 'checking', 'pending', 'queued'].includes(String(row?.status || ''));
@@ -2827,7 +2690,7 @@
     const hasEarnings = state.history.some((item) => rewardUiKind(item) === 'posted');
     return `
       ${renderTrustStrip()}
-      ${renderFomoBoard('dashboard')}
+      ${renderFomoBoardPlaceholder('dashboard')}
       <section class="grid-hero">
         <div class="hero-card">
           <div class="eyebrow"><span class="pulse-dot"></span> ${heroLine}</div>
@@ -2866,7 +2729,7 @@
       : `<div class="company-mark">${esc(company.mark)}</div>`;
     const cta = !enabled ? '대기 중' : state.reviewWait ? '검수 대기 중' : ready ? '출근하기' : '입금 안내';
     const slotsLeft = fomoSlotsLeft(node);
-    return `<article class="node-card compact-node" data-level="${esc(node.level || '')}" style="--node-color:${node.color};opacity:${enabled ? 1 : .55}"><div class="node-accent"></div><div class="node-top">${mark}</div><div class="node-company">${esc(company.name)}</div><div class="node-title">${esc(node.title)}</div>${cardMoneyLines(node).html}<div class="node-bottom"><div class="node-meta"><span>시간 ${esc(node.minutes)}</span><span data-fomo-slot="${esc(node.id)}">참여 가능 ${slotsLeft.toLocaleString('ko-KR')}건</span></div><button class="small-button ${ready ? 'primary' : ''}" data-start-node="${node.id}" ${enabled && !state.reviewWait ? '' : 'disabled'}>${cta}</button></div></article>`;
+    return `<article class="node-card compact-node" data-level="${esc(node.level || '')}" style="--node-color:${node.color};opacity:${enabled ? 1 : .55}"><div class="node-accent"></div><div class="node-top">${mark}</div><div class="node-company">${esc(company.name)}</div><div class="node-title">${esc(node.title)}</div>${cardMoneyLines(node).html}<div class="node-bottom"><div class="node-meta"><span>시간 ${esc(node.minutes)}</span><span data-fomo-slot="${esc(node.id)}">${slotsLeft.toLocaleString('ko-KR')}자리 남음</span></div><button class="small-button ${ready ? 'primary' : ''}" data-start-node="${node.id}" ${enabled && !state.reviewWait ? '' : 'disabled'}>${cta}</button></div></article>`;
   }
 
   function renderTimeline() {
@@ -2916,7 +2779,7 @@
       ? `<div class="record-list">${cards}</div><div class="record-table-wrap"><table class="record-table"><thead><tr><th>근무</th><th>상태</th><th>보상</th><th>일시</th></tr></thead><tbody>${rows}</tbody></table></div>`
       : empty;
     const available = formatLedgerAmount(state.wallet.available);
-    return `<div class="section-heading" style="margin-top:0"><div><h1 class="page-title">내 근무 내역</h1><p class="page-copy">예상 보상과 확정 보상, 출금 가능 금액을 나눠 봐요.</p></div><button class="secondary-button" data-action="export-history">${icon('download',16)} 내역 내려받기</button></div><div class="stat-grid" style="max-width:680px;margin-bottom:18px"><div class="mini-stat"><div class="metric-label">누적 완료</div><div class="num">${completed}건</div><div class="change">검수 완료만 집계</div></div><div class="mini-stat"><div class="metric-label">출금 가능</div><div class="num">${available}</div><div class="change">원장에 오른 수당만</div></div></div><div class="panel"><div class="panel-pad record-panel">${body}</div></div>`;
+    return `<div class="section-heading" style="margin-top:0"><div><h1 class="page-title">내 근무 내역</h1><p class="page-copy">예상 보상과 확정 보상, 출금 가능 금액을 나눠 봐요.</p></div></div><div class="stat-grid" style="max-width:680px;margin-bottom:18px"><div class="mini-stat"><div class="metric-label">누적 완료</div><div class="num">${completed}건</div><div class="change">검수 완료만 집계</div></div><div class="mini-stat"><div class="metric-label">출금 가능</div><div class="num">${available}</div><div class="change">원장에 오른 수당만</div></div></div><div class="panel"><div class="panel-pad record-panel">${body}</div></div>`;
   }
 
   function walletRows() {
@@ -3509,7 +3372,7 @@
     if (state.onboardingStep === 'first-work') {
       const trial = memberCatalogNodes().find((node) => node.isTrial && canAttendNode(node));
       const reward = trial ? nodePay(trial) : 3000;
-      return `<div class="modal-backdrop" data-modal="onboard-first-work"><div class="modal grant-modal"><div class="modal-body"><p class="eyebrow">🎉 퍼뜩에 오신 걸 환영합니다</p><h2 class="modal-title-row">첫 업무는 퍼뜩이 지원해요.</h2><p class="page-copy">회원 부담 없이 실제 업무 흐름을 먼저 경험해 보세요. 제출하고 승인되면 완료 수당 ${money(reward)}이 출금 가능 금액에 반영됩니다.</p><div class="notice" style="margin-top:16px"><span style="color:var(--emerald)">✓</span><div>입금이나 보증금 설명은 첫 업무를 마친 뒤, 일반 업무가 필요할 때 안내합니다.</div></div><div class="modal-actions"><button class="primary-button" type="button" data-action="start-first-work" ${trial ? '' : 'disabled'}>${trial ? '첫 업무 시작' : '첫 업무 준비 중'}</button></div></div></div></div>`;
+      return `<div class="modal-backdrop" data-modal="onboard-first-work"><div class="modal grant-modal"><div class="modal-body"><p class="eyebrow">🎉 퍼뜩에 오신 걸 환영합니다</p><h2 class="modal-title-row">첫 업무는 퍼뜩이 지원해요.</h2><p class="page-copy">회원 부담 없이 실제 업무 흐름을 먼저 경험해 보세요. 제출하고 승인되면 완료 수당 ${money(reward)}이 출금 가능 금액에 반영됩니다.</p><div class="notice" style="margin-top:16px"><span style="color:var(--emerald)">✓</span><div>입금이나 보증금 설명은 첫 업무를 마친 뒤, 일반 업무가 필요할 때 안내합니다.</div></div><div class="modal-actions"><button class="primary-button" type="button" data-action="start-first-work" ${trial ? '' : 'disabled'}>${trial ? '첫 업무 시작' : '현재 가능한 첫 업무 없음'}</button></div></div></div></div>`;
     }
     if (state.onboardingStep === 'general-work') {
       const approved = (state.history || []).find((item) => String(item.statusRaw || item.runStatus || '') === 'approved' && nodeById(item.nodeId)?.isTrial);
@@ -3962,8 +3825,6 @@
       if (state.player && state.run?.overlayOpen) drawMotionCanvas();
     }
     if (!isLiveWorkOverlay()) {
-      bindFomoClock();
-      patchFomoDom();
       if (replayMotion || rebindOverlayUi) {
         bindDepositJumpUi();
         bindKycFilePickers();
@@ -5281,7 +5142,6 @@
       showToast(email && email.includes('@') ? '형식은 괜찮아요. 이미 있는 이메일은 가입 버튼을 눌렀을 때 안내돼요.' : '이메일 주소를 올바르게 입력해 주세요.', 'info');
       return;
     }
-    if (action === 'export-history') { showToast('작업내역 내려받기는 서버 내보내기 계약이 열린 뒤에 제공돼요.', 'info'); return; }
     if (action === 'faq') { showToast('업무가 진행 중인 경우 서버 기록을 기준으로 이어집니다.', 'info'); return; }
     if (action === 'member-detail') { openMemberDetail(target.dataset.memberId); return; }
     if (action === 'member-credit' || action === 'member-debit') {

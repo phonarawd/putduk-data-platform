@@ -48,4 +48,5 @@ v0.2.0 최종 출시에는 아래 문서를 사용한다.
 
 도메인 gate가 PASS하더라도 `docs/v0.2.0-production-preflight.md`의 migration/Edge/live 조건이 남아 있으면 최종 release는 PASS가 아니다.
 
-현재 판정은 **BLOCKED — PRE-PRODUCTION GATES REMAIN**이다.
+현재 판정은 **PHASE 1 APPLIED — LIVE E2E / FINAL LAUNCH GATES REMAIN**이다.
+과거 Stage 12 시점의 `BLOCKED — PRE-PRODUCTION GATES REMAIN` 문구는 이력 보존용으로만 남긴다.
