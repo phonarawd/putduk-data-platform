@@ -5,7 +5,17 @@ import { join } from "node:path";
 
 export const EXPECTED_PROJECT_REF = "gaugwamwceqdnqdqrxqg";
 export const EXPECTED_REPO = "phonarawd/putduk-data-platform";
-export const EDGE_FUNCTIONS = ["admin-control", "admin-phase5", "admin-master", "member-finance", "member-push", "push-dispatch"];
+export const EDGE_FUNCTIONS = [
+  "admin-control",
+  "admin-phase5",
+  "admin-master",
+  "admin-work-asset",
+  "member-finance",
+  "member-push",
+  "member-task-detail",
+  "member-experience",
+  "push-dispatch"
+];
 
 const ENV_FILES = [".env", ".env.local", ".env.production.local", ".env.cursor.local"];
 
