@@ -372,6 +372,11 @@
   document.addEventListener('visibilitychange', () => {
     if (!document.hidden && Date.now() - state.lastLoadedAt > 10_000) requestExperience();
   });
+  window.addEventListener('putduk:kst-day-changed', () => {
+    state.payload = null;
+    state.lastLoadedAt = 0;
+    requestExperience();
+  });
 
   requestExperience();
   const interval = setInterval(() => { if (!document.hidden) requestExperience(); }, POLL_MS);
