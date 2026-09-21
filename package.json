@@ -25,6 +25,8 @@
     "healthcheck": "node scripts/automation/health-check.mjs",
     "quality:local": "pnpm verify && pnpm typecheck && pnpm test && pnpm test:e2e && pnpm test:a11y && pnpm security:scan && pnpm test:performance && pnpm healthcheck",
     "handoff:audit": "node scripts/automation/handoff-audit.mjs",
+    "domain:audit": "node tooling/cloudflare/domain-cutover-audit.mjs",
+    "release:domain": "node tooling/cloudflare/domain-cutover-audit.mjs --require-target",
     "release:deploy": "node scripts/automation/release.mjs",
     "release:notes": "node scripts/automation/create-release.mjs",
     "ops:check-env": "node tooling/supabase/check-env.mjs",
