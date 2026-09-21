@@ -6,8 +6,16 @@ import { loadEnvFiles } from "../supabase/lib/load-env.mjs";
 loadEnvFiles();
 const root = process.cwd();
 const sha = process.env.GITHUB_SHA || process.env.PUTDUK_DEPLOY_SHA || "";
-const memberUrl = String(process.env.MEMBER_URL || process.env.MEMBER_DOMAIN || "https://app.hiptk.app").replace(/\/$/, "");
-const opsUrl = String(process.env.OPS_URL || process.env.OPS_DOMAIN || "https://ops.hiptk.app").replace(/\/$/, "");
+const memberInput = String(process.env.MEMBER_URL || process.env.MEMBER_DOMAIN || "").trim();
+const opsInput = String(process.env.OPS_URL || process.env.OPS_DOMAIN || "").trim();
+if (!memberInput || !opsInput) {
+  console.error("Cloudflare verify: FAIL (explicit production domains are required)");
+  if (!memberInput) console.error("MEMBER_URL/MEMBER_DOMAIN: MISSING");
+  if (!opsInput) console.error("OPS_URL/OPS_DOMAIN: MISSING");
+  process.exit(1);
+}
+const memberUrl = memberInput.replace(/\/$/, "");
+const opsUrl = opsInput.replace(/\/$/, "");
 const pagesUrl = String(process.env.PAGES_PROJECT_URL || process.env.PAGES_URL || "https://putduk-git-preview.pages.dev").replace(/\/$/, "");
 const member = memberUrl.startsWith("http") ? memberUrl : `https://${memberUrl}`;
 const ops = opsUrl.startsWith("http") ? opsUrl : `https://${opsUrl}`;

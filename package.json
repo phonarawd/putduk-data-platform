@@ -16,7 +16,8 @@
     "test": "node tooling/scripts/run-node-tests.mjs tests/unit/**/*.test.mjs && node tooling/scripts/putduk-backend-guards.test.mjs",
     "test:backend": "node tooling/scripts/putduk-backend-guards.test.mjs",
     "test:e2e": "node tooling/scripts/run-node-tests.mjs tests/e2e/**/*.test.mjs",
-    "test:e2e:playwright": "pnpm dlx playwright test",
+    "test:e2e:playwright": "pnpm exec playwright test",
+    "test:e2e:release": "pnpm exec playwright test tests/e2e/release-auth.spec.ts tests/e2e/release-live.spec.ts",
     "test:a11y": "node tooling/scripts/run-node-tests.mjs tests/a11y/**/*.test.mjs",
     "test:performance": "node tooling/scripts/run-performance.mjs",
     "optimize:brand-logos": "node tooling/scripts/optimize-brand-logos.mjs",
@@ -24,10 +25,13 @@
     "healthcheck": "node scripts/automation/health-check.mjs",
     "quality:local": "pnpm verify && pnpm typecheck && pnpm test && pnpm test:e2e && pnpm test:a11y && pnpm security:scan && pnpm test:performance && pnpm healthcheck",
     "handoff:audit": "node scripts/automation/handoff-audit.mjs",
+    "domain:audit": "node tooling/cloudflare/domain-cutover-audit.mjs",
+    "release:domain": "node tooling/cloudflare/domain-cutover-audit.mjs --require-target",
     "release:deploy": "node scripts/automation/release.mjs",
     "release:notes": "node scripts/automation/create-release.mjs",
     "ops:check-env": "node tooling/supabase/check-env.mjs",
     "ops:check-auth": "node tooling/supabase/check-auth.mjs",
+    "ops:verify-auth-config": "node tooling/supabase/verify-auth-config.mjs",
     "ops:bootstrap": "node tooling/supabase/bootstrap.mjs",
     "ops:sync-secrets": "node tooling/supabase/sync-secrets.mjs",
     "ops:verify-migrations": "node tooling/supabase/verify-migrations.mjs",
@@ -37,6 +41,7 @@
     "cf:verify": "node tooling/cloudflare/verify-deployment.mjs"
   },
   "devDependencies": {
+    "@playwright/test": "1.63.0",
     "turbo": "2.10.13"
   }
 }

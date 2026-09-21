@@ -24,6 +24,7 @@ async function run(name, command, args, options = {}) {
 
 const node = process.execPath;
 
+await run('도메인 cutover gate', node, ['tooling/cloudflare/domain-cutover-audit.mjs', '--require-target']);
 await run('정적 검증', node, ['tooling/scripts/verify-static.mjs']);
 await run('타입·문법', node, ['tooling/scripts/typecheck.mjs']);
 await run('단위 테스트', node, ['tooling/scripts/run-node-tests.mjs', 'tests/unit/**/*.test.mjs']);

@@ -42,3 +42,9 @@ jobs:
 
       - name: 전체 품질검증
         run: pnpm quality:local
+
+      - name: Playwright Chromium 준비
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: 출시 인증 mock E2E
+        run: pnpm exec playwright test tests/e2e/release-auth.spec.ts

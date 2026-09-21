@@ -1,0 +1,14 @@
+.phase3-withdraw-guide{margin:0 0 18px;padding:16px;border:1px solid var(--line,#dfe7e3);border-radius:16px;background:var(--surface,#fff);color:var(--text,#19352c)}
+.phase3-withdraw-guide-head{display:flex;align-items:baseline;justify-content:space-between;gap:16px;margin-bottom:12px}
+.phase3-withdraw-guide-head h3{margin:0;font-size:15px;letter-spacing:-.02em}
+.phase3-withdraw-guide-head p{margin:0;color:var(--muted,#6d817a);font-size:12px}
+.phase3-withdraw-guide-list{display:grid;gap:8px}
+.phase3-withdraw-guide-row{display:grid;grid-template-columns:84px minmax(0,1fr);gap:12px;align-items:start;padding:10px 12px;border-radius:12px;background:color-mix(in srgb,var(--emerald,#0d9f76) 5%,var(--surface,#fff))}
+.phase3-withdraw-guide-row strong{font-size:13px;white-space:nowrap}
+.phase3-withdraw-guide-row span{font-size:13px;line-height:1.55;color:var(--muted,#536d64)}
+.phase3-withdraw-modal-guide{display:grid!important;gap:4px!important;padding:13px 14px!important}
+.phase3-withdraw-modal-guide strong{font-size:14px}
+.phase3-withdraw-modal-guide span,.phase3-withdraw-modal-guide small{display:block;line-height:1.5}
+.phase3-withdraw-modal-guide small{color:var(--muted,#6d817a)}
+.ledger-tabs[role="tablist"] [role="tab"]{touch-action:manipulation}
+@media (max-width:640px){.phase3-withdraw-guide-head{display:block}.phase3-withdraw-guide-head p{margin-top:4px}.phase3-withdraw-guide-row{grid-template-columns:1fr;gap:4px}}

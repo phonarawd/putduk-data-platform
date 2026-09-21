@@ -22,7 +22,18 @@
     "putduk_trial_withdrawal_approval_guard": ["20260920201000", "20260920111521"],
     "putduk_deposit_destination_contract": ["20260920202500", "20260920121557"],
     "putduk_admin_finance_queue_contract": ["20260920214500", "20260920132233"],
-    "putduk_admin_assignment_duplicate_guard": ["20260920230000", "20260920135408"]
+    "putduk_admin_assignment_duplicate_guard": ["20260920230000", "20260920135408"],
+    "putduk_p0_fk_indexes": ["20260921013000", "20260920163207"],
+    "putduk_generic_work_engine": ["20260921090000", "20260920171138"],
+    "putduk_generic_work_engine_rpc_security": ["20260921091500", "20260920171505"],
+    "putduk_work_catalog_fingerprint": ["20260921103000", "20260920173805"],
+    "putduk_work_catalog_metadata_helpers": ["20260921103500", "20260920173839"],
+    "putduk_work_catalog_fixture_helper": ["20260921104000", "20260920173943"],
+    "putduk_work_catalog_internal_source": ["20260921104200", "20260920174003"],
+    "putduk_120_work_catalog_seed": ["20260921104500", "20260920174201"],
+    "putduk_admin_master_21": ["20260921120000", "20260920183928"],
+    "putduk_admin_master_fk_indexes": ["20260921120500", "20260920184116"],
+    "putduk_member_experience_snapshot": ["20260921133000", "20260920190731"]
   },
   "remote_history_only": [
     { "version": "20260918073323", "name": "putduk_payout_destination_upsert_keep" },

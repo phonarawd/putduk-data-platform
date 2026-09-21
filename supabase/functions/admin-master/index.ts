@@ -19,11 +19,21 @@ class HttpError extends Error {
 }
 
 function corsHeaders(req: Request) {
-  const origin = req.headers.get('origin') || '*';
+  const configured = (Deno.env.get('PUTDUK_ALLOWED_ORIGINS') || '*')
+    .split(',')
+    .map((value) => value.trim())
+    .filter(Boolean);
+  const origin = req.headers.get('origin') || '';
+  const allowOrigin = configured.includes('*')
+    ? '*'
+    : configured.includes(origin)
+      ? origin
+      : configured[0] || 'null';
   return {
-    'Access-Control-Allow-Origin': origin,
+    'Access-Control-Allow-Origin': allowOrigin,
     'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Access-Control-Max-Age': '86400',
     'Vary': 'Origin'
   };
 }
@@ -217,7 +227,6 @@ async function saveFunding(userId: string, payload: JsonRecord) {
     saved = await admin.schema('private').from('partner_funding_pools').insert({ ...patch, created_by: userId }).select('*').single();
   }
   if (saved.error || !saved.data) throw new HttpError(400, String(saved.error?.message || '지급예산을 저장하지 못했습니다.'));
-
   const allocations = Array.isArray(payload.allocations) ? payload.allocations : [];
   for (const item of allocations) {
     const nodeId = uuid(item.node_id, '업무');
