@@ -4729,6 +4729,7 @@
     if (kstResetTimer) { window.clearTimeout(kstResetTimer); kstResetTimer = null; }
     authState.session = null;
     authState.profile = null;
+    authState.loading = false;
     authState.adminAuthorized = !isAdmin;
     authState.adminRoles = [];
     authState.adminLoading = false;
@@ -4740,7 +4741,15 @@
     saveState();
     document.body?.classList.remove('sidebar-open', 'modal-open', 'overlay-open');
     if (navigate && !isAdmin && window.location.pathname !== '/') window.history.replaceState(null, '', '/');
-    render();
+    const app = document.getElementById('app');
+    if (app) {
+      // 오버레이 keep/patch 경로가 로그인 칩을 남기지 않게 셸을 강제로 다시 그린다.
+      releaseAllMotionCanvases();
+      app.innerHTML = `${renderAppShell()}<div class="toast-stack" id="toastStack" aria-live="polite" aria-relevant="additions" role="status"></div>`;
+      finishPaint({ replayMotion: false, rebindOverlayUi: false });
+    } else {
+      render();
+    }
     window.scrollTo(0, 0);
   }
 
