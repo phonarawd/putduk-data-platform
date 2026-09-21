@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readRepo } from '../helpers/repo.mjs';
+import { readdir } from 'node:fs/promises';
+import { readRepo, repoPath } from '../helpers/repo.mjs';
 
 const expectedAliases = {
   putduk_p0_fk_indexes: ['20260921013000', '20260920163207'],
@@ -16,6 +17,8 @@ const expectedAliases = {
   putduk_member_experience_snapshot: ['20260921133000', '20260920190731']
 };
 
+const phase1File = '20260921102905_phase1_kst_day_boundary.sql';
+
 test('v0.2.0 이전 Production 적용 migration은 alias로 흡수하고 Phase 1은 신규로 남긴다', async () => {
   const aliases = JSON.parse(await readRepo('tooling/supabase/migration-aliases.json'));
 
@@ -28,6 +31,30 @@ test('v0.2.0 이전 Production 적용 migration은 alias로 흡수하고 Phase 1
     (aliases.remote_history_only || []).some((row) => row.name === 'phase1_kst_day_boundary'),
     false
   );
+});
+
+test('Sep21 local migration 집합에서 Phase 1만 alias 없는 신규 migration이다', async () => {
+  const aliases = JSON.parse(await readRepo('tooling/supabase/migration-aliases.json'));
+  const files = (await readdir(repoPath('supabase', 'migrations')))
+    .filter((file) => /^20260921\d+_.+\.sql$/.test(file))
+    .sort();
+
+  const expectedFiles = [
+    ...Object.entries(expectedAliases).map(([name, versions]) => `${versions[0]}_${name}.sql`),
+    phase1File
+  ].sort();
+
+  assert.deepEqual(files, expectedFiles);
+
+  for (const file of files) {
+    const [, version, name] = file.match(/^(\d+)_(.+)\.sql$/) || [];
+    assert.ok(version && name, file);
+    if (file === phase1File) {
+      assert.equal(aliases.name_equivalent?.[name], undefined);
+      continue;
+    }
+    assert.ok(aliases.name_equivalent?.[name]?.includes(version), file);
+  }
 });
 
 test('migration verifier는 same-name version aliases를 drift가 아닌 equivalent로 처리한다', async () => {
