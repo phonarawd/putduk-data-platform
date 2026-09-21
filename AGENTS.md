@@ -10,14 +10,16 @@
 - **현재 `main`의 렉 없이 정상 진입되는 상태가 유일한 Production 기준이다.**
 - 향후 commit이 생기더라도 반드시 이 복구 기준 이후의 최신 `main`을 우선한다.
 
-## FOMO / 봇 활동 보존 규칙
+## FOMO / 봇 활동 및 어드민 연출 제어 보존 규칙
 
 - 근무 화면의 FOMO/봇 활동은 제품 의도다.
 - 가상 이름 회전, `방금 출근했어요`, `자리를 가져갔어요`, `라인에 들어왔어요`, `근무를 시작했어요`, 활동 인원 변동, 자리 소진, 남은 자리 표시는 사용자의 명시적 제거 지시 없이는 유지한다.
 - AI가 임의로 FOMO/봇 활동을 실제 사용자 활동 API나 `realActivity` UI로 교체하지 않는다.
+- **어드민의 `연출` 메뉴와 FOMO/봇 활동 제어 UI도 제품 기능으로 보호한다. 삭제·숨김·축소·대체하지 않는다.**
+- 어드민 연출 설정의 `bot_enabled`, `crowd_min`, `crowd_max`, `burn_per_minute` 및 해당 조회/저장 흐름(`get_motion_settings`, `save_motion_settings`)은 명시적 제거 지시 없이는 유지한다.
 - commit `ac10e9e89809fde860a0bed38ea725c877850150`의 `replace synthetic FOMO with real activity` 방향은 폐기된 제품 결정이다.
 - `docs/stage9-real-activity.md` 및 `tests/unit/real-activity.test.mjs`의 제거 방향을 재도입하지 않는다.
-- FOMO/봇 요소의 제거·축소·실제활동 대체는 사용자가 명시적으로 요청한 경우에만 진행한다.
+- FOMO/봇 요소 및 어드민 연출 제어의 제거·축소·실제활동 대체는 사용자가 명시적으로 요청한 경우에만 진행한다.
 
 ## 절대 참고 금지된 롤백 이력
 
@@ -42,6 +44,7 @@
 4. `main`의 현재 파일을 과거 PR diff보다 항상 우선한다.
 5. Cloudflare 배포 성공 표기만으로 정상 판정하지 않는다. 실제 공식 도메인 브라우저 진입과 화면 렌더링을 확인한다.
 6. 현재 정상 상태를 깨는 변경이 발생하면 새 최적화를 중단하고 즉시 정상 `main`으로 복구한다.
+7. **기존 공식 도메인(`app.hiptk.app`, `ops.hiptk.app`)과 메일 DNS(MX/SPF/DKIM/DMARC)는 임의 변경하지 않는다.**
 
 ## 충돌 시 우선순위
 
