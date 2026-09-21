@@ -85,8 +85,11 @@ jobs:
           supabase functions deploy admin-control --project-ref "$SUPABASE_PROJECT_REF"
           supabase functions deploy admin-phase5 --project-ref "$SUPABASE_PROJECT_REF"
           supabase functions deploy admin-master --project-ref "$SUPABASE_PROJECT_REF"
+          supabase functions deploy admin-work-asset --project-ref "$SUPABASE_PROJECT_REF"
           supabase functions deploy member-finance --project-ref "$SUPABASE_PROJECT_REF"
           supabase functions deploy member-push --project-ref "$SUPABASE_PROJECT_REF"
+          supabase functions deploy member-task-detail --project-ref "$SUPABASE_PROJECT_REF"
+          supabase functions deploy member-experience --project-ref "$SUPABASE_PROJECT_REF"
           supabase functions deploy push-dispatch --project-ref "$SUPABASE_PROJECT_REF"
 
       - name: Edge 인증 스모크
