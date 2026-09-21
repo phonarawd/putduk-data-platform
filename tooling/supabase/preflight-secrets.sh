@@ -36,7 +36,7 @@ if [ -n "${PUTDUK_ALLOWED_ORIGINS:-}" ]; then
       fail=1
       break
     fi
-    if [[ ! "$origin" =~ ^https://[^/]+$ ]]; then
+    if [[ ! "$origin" =~ ^https://[^/?#]+$ ]]; then
       echo "::error::PUTDUK_ALLOWED_ORIGINS must contain only origin-only HTTPS URLs"
       fail=1
       break
