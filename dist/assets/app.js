@@ -150,6 +150,7 @@
   let chartInstance = null;
   let chartLoading = null;
   let syncTimer = null;
+  let kstResetTimer = null;
   let fomoClockBound = false;
   let noticesHydrated = false;
   let memberLiveChannel = null;
@@ -1725,6 +1726,7 @@
 
       void memberFinanceRequest('daily_task_quota').then((quotaResult) => {
         state.dailyTaskQuota = quotaResult.quota || null;
+      scheduleKstQuotaReset(state.dailyTaskQuota?.resets_at);
       }).catch(() => {});
       void refreshMemberNotices({ toastNew: !light }).catch(() => {});
       syncMemberPush(session, { prompt: false });
@@ -2341,6 +2343,10 @@
         if (authState.adminAuthorized) queueAdminPageData({ silent: true });
       }
       supabaseClient.auth.onAuthStateChange((event, session) => {
+        if (event === 'SIGNED_OUT') {
+          applySignedOutState({ navigate: !isAdmin });
+          return;
+        }
         if (event === 'TOKEN_REFRESHED') {
           authState.session = session || authState.session;
           return;
@@ -3759,6 +3765,26 @@
     return `<div class="app-shell">${sidebar}<main class="main"><div>${renderTopbar()}${page}</div></main></div>${isAdmin ? '' : renderMemberTabbar()}`;
   }
 
+  function nextKstMidnightMs(now = Date.now()) {
+    const shifted = new Date(now + 9 * 60 * 60 * 1000);
+    return Date.UTC(shifted.getUTCFullYear(), shifted.getUTCMonth(), shifted.getUTCDate() + 1) - 9 * 60 * 60 * 1000;
+  }
+
+  function scheduleKstQuotaReset(serverResetAt) {
+    if (kstResetTimer) window.clearTimeout(kstResetTimer);
+    const parsed = Date.parse(String(serverResetAt || ''));
+    const resetAt = Number.isFinite(parsed) && parsed > Date.now() ? parsed : nextKstMidnightMs();
+    const delay = Math.max(250, Math.min(resetAt - Date.now() + 250, 2_147_000_000));
+    kstResetTimer = window.setTimeout(async () => {
+      kstResetTimer = null;
+      if (authState.session) {
+        try { await hydrateSession(authState.session, { light: true }); if (!state.modal) render(); } catch (_) {}
+      }
+      window.dispatchEvent(new CustomEvent('putduk:kst-day-changed', { detail: { resetAt } }));
+      scheduleKstQuotaReset();
+    }, delay);
+  }
+
   function memberQuotaText(quota) {
     if (!quota) return '확인 중';
     if (quota.unlimited) return '무제한';
@@ -4212,6 +4238,7 @@
     try {
       const quotaResult = await memberFinanceRequest('daily_task_quota');
       state.dailyTaskQuota = quotaResult.quota || null;
+      scheduleKstQuotaReset(state.dailyTaskQuota?.resets_at);
     } catch (_) {}
     if (!isLiveWorkOverlay() && !state.startNodeId) render();
   }
@@ -4810,6 +4837,26 @@
     if (!isStandalone) showToast('📥 브라우저 메뉴에서 “앱 설치” 또는 “홈 화면에 추가”를 선택해 주세요.', 'info');
   }
 
+  function applySignedOutState({ navigate = false } = {}) {
+    const previousStorageKey = activeStorageKey;
+    if (kstResetTimer) { window.clearTimeout(kstResetTimer); kstResetTimer = null; }
+    authState.session = null;
+    authState.profile = null;
+    authState.adminAuthorized = !isAdmin;
+    authState.adminRoles = [];
+    authState.adminLoading = false;
+    companies = [];
+    nodes = [];
+    try { if (previousStorageKey) window.localStorage.removeItem(previousStorageKey); } catch (_) {}
+    activeStorageKey = storageKey;
+    state = freshState(false);
+    saveState();
+    document.body?.classList.remove('sidebar-open', 'modal-open', 'overlay-open');
+    if (navigate && !isAdmin && window.location.pathname !== '/') window.history.replaceState(null, '', '/');
+    render();
+    window.scrollTo(0, 0);
+  }
+
   async function signOut() {
     await lockDepositReveal({ silent: true });
     noticesHydrated = false;
@@ -4821,17 +4868,7 @@
       const { error } = await supabaseClient.auth.signOut();
       if (error) { showToast('로그아웃을 완료하지 못했어요. 잠시 후 다시 시도해 주세요.', 'info'); return; }
     }
-    authState.session = null;
-    authState.profile = null;
-    authState.adminAuthorized = !isAdmin;
-    authState.adminRoles = [];
-    authState.adminLoading = false;
-    companies = [];
-    nodes = [];
-    activeStorageKey = storageKey;
-    state = freshState(false);
-    saveState();
-    render();
+    applySignedOutState({ navigate: true });
   }
 
   async function checkpointWork() {
@@ -4997,6 +5034,18 @@
     }
   }
 
+  function loginErrorMessage(error) {
+    const code = String(error?.code || '').toLowerCase();
+    const message = String(error?.message || '').toLowerCase();
+    const status = Number(error?.status || 0);
+    if (code === 'email_not_confirmed' || message.includes('email not confirmed')) return '이메일 인증이 완료되지 않았어요. 받은 메일의 인증 링크를 확인해 주세요.';
+    if (code === 'user_banned' || message.includes('banned')) return '이 계정은 현재 이용이 제한되어 있어요. 고객센터에 문의해 주세요.';
+    if (code === 'over_request_rate_limit' || code === 'over_email_send_rate_limit' || status === 429) return '로그인 요청이 잠시 제한됐어요. 잠시 후 다시 시도해 주세요.';
+    if (code === 'invalid_credentials' || status === 400) return '이메일 또는 비밀번호가 올바르지 않아요. 다시 확인하거나 비밀번호를 재설정해 주세요.';
+    if (message.includes('fetch') || message.includes('network') || status >= 500) return '인증 서버에 연결하지 못했어요. 인터넷 연결을 확인한 뒤 다시 시도해 주세요.';
+    return '로그인을 완료하지 못했어요. 잠시 후 다시 시도해 주세요.';
+  }
+
   async function submitLogin(event) {
     event.preventDefault();
     const form = event.target;
@@ -5004,15 +5053,23 @@
     if (!supabaseClient) { showToast('인증 서버가 준비되지 않아 로그인할 수 없어요.', 'info'); return; }
     const email = document.getElementById('loginEmail')?.value.trim().toLowerCase() || '';
     const password = document.getElementById('loginPassword')?.value || '';
-    const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
-    if (error) { showToast('로그인 정보를 확인해 주세요. 이메일 인증이 필요할 수도 있어요.', 'info'); return; }
-    await hydrateSession(data.session);
+    let data;
+    try {
+      const result = await supabaseClient.auth.signInWithPassword({ email, password });
+      if (result.error) { showToast(loginErrorMessage(result.error), 'info'); return; }
+      data = result.data;
+      if (!data?.session) { showToast('로그인 세션을 만들지 못했어요. 이메일 인증 상태를 확인해 주세요.', 'info'); return; }
+      await hydrateSession(data.session);
+    } catch (error) {
+      showToast(loginErrorMessage(error), 'info');
+      return;
+    }
     state.modal = null;
     if (isAdmin) {
       await hydrateAdminAuthorization();
       render();
       if (authState.adminAuthorized) queueAdminPageData({ silent: true });
-      showToast(authState.adminAuthorized ? '👋 운영 화면을 열었어요.' : '운영자 권한을 확인해 주세요.', authState.adminAuthorized ? 'success' : 'info');
+      showToast(authState.adminAuthorized ? '운영 화면을 열었어요.' : '운영자 권한을 확인해 주세요.', authState.adminAuthorized ? 'success' : 'info');
       return;
     }
     queueOnboarding();
