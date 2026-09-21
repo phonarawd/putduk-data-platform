@@ -2325,6 +2325,7 @@
       if (error) throw error;
       authState.loading = false;
       if (data.session) {
+        signedOutLock = false;
         authState.session = data.session;
         switchToUserState(data.session.user.id);
       }
@@ -2341,10 +2342,7 @@
           applySignedOutState({ navigate: !isAdmin });
           return;
         }
-        if (event === 'SIGNED_IN' && session) {
-          signedOutLock = false;
-        }
-        if (signedOutLock && event !== 'SIGNED_IN') {
+        if (signedOutLock) {
           return;
         }
         if (event === 'TOKEN_REFRESHED') {
@@ -2368,7 +2366,7 @@
           return;
         }
         window.setTimeout(async () => {
-          if (signedOutLock && event !== 'SIGNED_IN') return;
+          if (signedOutLock) return;
           let liveSession = session || null;
           try {
             const current = await supabaseClient.auth.getSession();
@@ -2376,13 +2374,13 @@
           } catch (_) {
             liveSession = null;
           }
+          if (signedOutLock) return;
           if (!liveSession) {
             if (authState.session || document.querySelector('[data-action="logout"]')) {
               applySignedOutState({ navigate: !isAdmin });
             }
             return;
           }
-          signedOutLock = false;
           await hydrateSession(liveSession);
           if (authState.session) recordOwnSession();
           if (isAdmin) {
@@ -4959,6 +4957,7 @@
       if (result.error) { showToast(loginErrorMessage(result.error), 'info'); return; }
       data = result.data;
       if (!data?.session) { showToast('로그인 세션을 만들지 못했어요. 이메일 인증 상태를 확인해 주세요.', 'info'); return; }
+      signedOutLock = false;
       await hydrateSession(data.session);
     } catch (error) {
       showToast(loginErrorMessage(error), 'info');

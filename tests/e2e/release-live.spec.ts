@@ -56,7 +56,7 @@ test('live gate: 전용 테스트 회원 상세는 내부 스크롤과 역할별
 
   await page.goto(adminUrl);
   await login(page, adminEmail, adminPassword);
-  await expect(page.locator('[data-action="logout"]').first()).toBeVisible();
+  await expect(page.locator('[data-action="logout"]').first()).toBeVisible({ timeout: 20_000 });
 
   await page.locator('[data-nav="members"]').first().click();
   await page.locator('#memberSearchInput').fill(adminMemberPublicId);

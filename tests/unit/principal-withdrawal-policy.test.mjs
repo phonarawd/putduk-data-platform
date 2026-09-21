@@ -39,7 +39,7 @@ test('회원 화면은 잘못된 원금 출금 강등 토스트를 통합 정책
   const indexHtml = await readRepo('dist', 'index.html');
   const guard = await readRepo('dist', 'assets', 'toast-policy-guard.js');
 
-  assert.match(indexHtml, /app\.js\?v=20260922-live4[\s\S]*toast-policy-guard\.js\?v=20260920-toast4/);
+  assert.match(indexHtml, /app\.js\?v=20260922-live5[\s\S]*toast-policy-guard\.js\?v=20260920-toast4/);
   assert.match(guard, /등급과 라인이 내려가는 출금/);
   assert.match(guard, /MutationObserver/);
   assert.match(guard, /node\.remove\(\)/);
