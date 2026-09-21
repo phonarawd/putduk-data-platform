@@ -7,6 +7,11 @@ on:
         description: 되돌릴 커밋 SHA
         required: true
         type: string
+      delete_absent_functions:
+        description: 대상 SHA에 없는 관리 Edge Function을 Production에서 삭제
+        required: true
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -26,6 +31,7 @@ jobs:
       SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
       SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
       ROLLBACK_SHA: ${{ inputs.git_sha }}
+      DELETE_ABSENT_FUNCTIONS: ${{ inputs.delete_absent_functions }}
     steps:
       - name: 입력·운영 프로젝트 사전 검사
         shell: bash
@@ -45,17 +51,28 @@ jobs:
           fi
           echo "Rollback preflight: PASS"
 
-      - name: 저장소 가져오기
+      - name: 현재 rollback 도구 가져오기
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Node.js 준비
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+
+      - name: 롤백 대상 커밋 별도 checkout
         uses: actions/checkout@v4
         with:
           ref: ${{ inputs.git_sha }}
           fetch-depth: 0
+          path: rollback-target
 
       - name: 체크아웃 커밋 검증
         shell: bash
         run: |
           set -euo pipefail
-          ACTUAL_SHA="$(git rev-parse HEAD)"
+          ACTUAL_SHA="$(git -C rollback-target rev-parse HEAD)"
           if [[ "$ACTUAL_SHA" != "$ROLLBACK_SHA" ]]; then
             echo "::error::checked out commit does not match git_sha"
             exit 1
@@ -66,17 +83,28 @@ jobs:
         with:
           version: 2.113.0
 
-      - name: Edge Function 재배포
+      - name: Edge rollback 계획 검사
         shell: bash
         run: |
           set -euo pipefail
-          for function_name in admin-control admin-phase5 admin-master admin-work-asset member-finance member-push member-task-detail member-experience push-dispatch; do
-            if [[ -d "supabase/functions/$function_name" ]]; then
-              supabase functions deploy "$function_name" --project-ref "$SUPABASE_PROJECT_REF"
-            else
-              echo "::notice::$function_name is not present at $ROLLBACK_SHA; skipping"
-            fi
-          done
+          args=(--target-root rollback-target)
+          if [[ "$DELETE_ABSENT_FUNCTIONS" == "true" ]]; then
+            args+=(--delete-absent)
+          fi
+          node tooling/supabase/rollback-edge.mjs "${args[@]}"
+
+      - name: Edge Function 롤백 적용·재검증
+        shell: bash
+        run: |
+          set -euo pipefail
+          args=(--target-root rollback-target --apply)
+          if [[ "$DELETE_ABSENT_FUNCTIONS" == "true" ]]; then
+            args+=(--delete-absent)
+          fi
+          node tooling/supabase/rollback-edge.mjs "${args[@]}"
 
       - name: 안내
-        run: echo "데이터베이스 롤백은 자동 수행하지 않습니다. DB는 forward-fix migration을 별도로 적용합니다."
+        run: |
+          echo "Edge rollback은 대상 SHA의 관리 함수 존재/부재 상태까지 맞춥니다."
+          echo "데이터베이스 롤백은 자동 수행하지 않습니다. DB는 forward-fix migration을 별도로 적용합니다."
+          echo "Auth config와 Supabase secrets는 이 Edge rollback이 되돌리지 않습니다. 별도 snapshot/검증 절차를 따르세요."
