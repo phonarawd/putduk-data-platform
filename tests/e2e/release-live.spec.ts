@@ -32,7 +32,7 @@ test('live gate: 전용 회원 계정 로그인 → 로그아웃 후 사용자 �
   expect(memberKeysAfter).toEqual([]);
 });
 
-test('live gate: 전용 테스트 회원 상세은 내부 스크롤과 역할별 PII 안내를 유지한다', async ({ page }) => {
+test('live gate: 전용 테스트 회원 상세는 내부 스크롤과 역할별 PII 안내를 유지한다', async ({ page }) => {
   test.skip(!adminEmail || !adminPassword, 'PUTDUK_ADMIN_EMAIL / PUTDUK_ADMIN_PASSWORD가 있을 때만 실행합니다.');
   test.skip(!adminMemberPublicId, 'PUTDUK_E2E_MEMBER_PUBLIC_ID로 전용 테스트 회원을 지정했을 때만 실행합니다.');
 
@@ -46,6 +46,7 @@ test('live gate: 전용 테스트 회원 상세은 내부 스크롤과 역할별
 
   const testMemberRow = page.locator('tr', { hasText: adminMemberPublicId }).first();
   await expect(testMemberRow).toBeVisible();
+  await expect(testMemberRow.getByText(adminMemberPublicId, { exact: true })).toBeVisible();
   const detailButton = testMemberRow.locator('[data-action="member-detail"]');
   await expect(detailButton).toBeVisible();
   await detailButton.click();
