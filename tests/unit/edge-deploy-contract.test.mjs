@@ -35,11 +35,13 @@ test('운영 Edge deploy/verify/rollback 계약이 모든 함수 디렉터리를
 });
 
 test('운영 Edge 9개는 PUTDUK_ALLOWED_ORIGINS allow-list 계약을 공유하고 Origin 반사형 CORS를 금지한다', async () => {
-  const [checkEnv, syncSecrets, verifyEdge, sharedHttp] = await Promise.all([
+  const [checkEnv, syncSecrets, verifyEdge, sharedHttp, preflight, deploy] = await Promise.all([
     readRepo('tooling/supabase/check-env.mjs'),
     readRepo('tooling/supabase/sync-secrets.mjs'),
     readRepo('tooling/supabase/verify-edge.mjs'),
-    readRepo('supabase/functions/_shared/http.ts')
+    readRepo('supabase/functions/_shared/http.ts'),
+    readRepo('tooling/supabase/preflight-secrets.sh'),
+    readRepo('.github/workflows/supabase-deploy.yml')
   ]);
 
   assert.match(checkEnv, /PUTDUK_ALLOWED_ORIGINS/);
@@ -47,6 +49,12 @@ test('운영 Edge 9개는 PUTDUK_ALLOWED_ORIGINS allow-list 계약을 공유하�
   assert.match(verifyEdge, /PUTDUK_ALLOWED_ORIGINS/);
   assert.match(verifyEdge, /cors_allowed/);
   assert.match(verifyEdge, /cors_denied_reflection/);
+  assert.match(preflight, /check PUTDUK_ALLOWED_ORIGINS/);
+  assert.match(preflight, /wildcard is forbidden for production/);
+  assert.match(preflight, /origin-only HTTPS URLs/);
+  assert.match(deploy, /PUTDUK_ALLOWED_ORIGINS: \$\{\{ secrets\.PUTDUK_ALLOWED_ORIGINS \}\}/);
+  assert.match(deploy, /PUTDUK_ALLOWED_ORIGINS=%s/);
+  assert.match(deploy, /Edge 인증·CORS 스모크/);
   assert.match(sharedHttp, /PUTDUK_ALLOWED_ORIGINS/);
   assert.doesNotMatch(sharedHttp, /headers\.get\(["']origin["']\)\s*\|\|\s*["']\*["']/);
 
