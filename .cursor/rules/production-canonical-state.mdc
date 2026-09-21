@@ -1,5 +1,5 @@
 ---
-description: 정상 Production SSOT. 롤백된 PR #60/#61과 해당 성능·Cloudflare 실험 재사용 금지
+description: 정상 Production SSOT. 롤백된 성능 실험 재사용 금지, 근무 FOMO/봇 요소 임의 제거 금지
 alwaysApply: true
 ---
 
@@ -9,6 +9,14 @@ alwaysApply: true
 - 복구 기준 commit은 `8d2f914d445348a3fa6c6aa1ed943a0f4a1ae06b`이며, 이후 최신 `main`을 따른다.
 - 회원 공식 도메인은 `https://app.hiptk.app`, 운영 공식 도메인은 `https://ops.hiptk.app`이다.
 - 현재 공식 도메인에서 렉 없이 정상 진입되는 화면이 올바른 상태다.
+
+## FOMO / 봇 활동 보존
+
+- 근무 화면의 FOMO/봇 활동은 제품 의도다.
+- 가상 이름, 출근/자리/라인/근무시작 피드, 활동 인원 변동, 자리 소진, 남은 자리 표시는 사용자 명시 지시 없이 제거하지 않는다.
+- `realActivity` 또는 실제 활동 API로 임의 교체하지 않는다.
+- commit `ac10e9e89809fde860a0bed38ea725c877850150`의 synthetic FOMO 제거 방향은 폐기된 결정이다.
+- FOMO/봇 요소를 제거·축소·대체하려면 반드시 사용자의 명시 요청이 필요하다.
 
 ## 폐기된 이력 — 재사용 금지
 
