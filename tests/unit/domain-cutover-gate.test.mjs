@@ -42,7 +42,9 @@ test('v0.2.0 release는 명시적 member/ops domain 없이는 fail-closed한다'
   assert.match(doc, /admin-work-asset/);
 
   assert.match(stage12, /SUPERSEDED/);
+  assert.match(stage12, /v0\.2\.0-production-preflight\.md/);
   assert.match(stage12, /v0\.2\.0-domain-cutover\.md/);
-  assert.match(stage12, /PENDING \/ BLOCKED UNTIL DOMAIN MAPPING IS EXPLICIT/);
+  assert.match(stage12, /BLOCKED — PRE-PRODUCTION GATES REMAIN/);
+  assert.match(stage12, /20260921102905_phase1_kst_day_boundary\.sql/);
   assert.doesNotMatch(stage12, /현재 Stage 12 PR 생성 조건은 충족한다/);
 });
