@@ -16,10 +16,13 @@ verify_jwt = true
 [functions.member-finance]
 verify_jwt = true
 
+[functions.member-push]
+verify_jwt = true
+
 [functions.member-task-detail]
 verify_jwt = true
 
-[functions.member-push]
+[functions.member-experience]
 verify_jwt = true
 
 [functions.push-dispatch]
