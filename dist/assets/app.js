@@ -153,6 +153,7 @@
   const toastRecent = new Map();
   const toastTimers = new Set();
   let overlayDismissed = false;
+  let signedOutLock = false;
 
   function freshState(userState = false) {
     const next = JSON.parse(JSON.stringify(defaultState));
@@ -2340,12 +2341,23 @@
           applySignedOutState({ navigate: !isAdmin });
           return;
         }
+        if (event === 'SIGNED_IN' && session) {
+          signedOutLock = false;
+        }
+        if (signedOutLock && event !== 'SIGNED_IN') {
+          return;
+        }
         if (event === 'TOKEN_REFRESHED') {
-          authState.session = session || authState.session;
+          if (!session) return;
+          authState.session = session;
           return;
         }
         if (event === 'INITIAL_SESSION') {
-          authState.session = session || authState.session;
+          if (!session) {
+            authState.session = null;
+            return;
+          }
+          authState.session = session;
           if (isAdmin && authState.session && !authState.adminAuthorized && !authState.adminLoading) {
             window.setTimeout(async () => {
               await hydrateAdminAuthorization();
@@ -2356,7 +2368,7 @@
           return;
         }
         window.setTimeout(async () => {
-          // 다중 GoTrueClient가 남긴 낡은 session 객체로 로그아웃 UI가 되살아나지 않게 storage 기준을 다시 본다.
+          if (signedOutLock && event !== 'SIGNED_IN') return;
           let liveSession = session || null;
           try {
             const current = await supabaseClient.auth.getSession();
@@ -2370,6 +2382,7 @@
             }
             return;
           }
+          signedOutLock = false;
           await hydrateSession(liveSession);
           if (authState.session) recordOwnSession();
           if (isAdmin) {
@@ -4713,6 +4726,7 @@
   }
 
   function applySignedOutState({ navigate = false } = {}) {
+    signedOutLock = true;
     const previousStorageKey = activeStorageKey;
     if (kstResetTimer) { window.clearTimeout(kstResetTimer); kstResetTimer = null; }
     authState.session = null;
@@ -4733,6 +4747,7 @@
   }
 
   async function signOut() {
+    signedOutLock = true;
     await lockDepositReveal({ silent: true });
     noticesHydrated = false;
     stopMemberLive();
@@ -4746,7 +4761,11 @@
     }
     if (supabaseClient) {
       const { error } = await supabaseClient.auth.signOut({ scope: 'local' });
-      if (error) { showToast('로그아웃을 완료하지 못했어요. 잠시 후 다시 시도해 주세요.', 'info'); return; }
+      if (error) {
+        signedOutLock = false;
+        showToast('로그아웃을 완료하지 못했어요. 잠시 후 다시 시도해 주세요.', 'info');
+        return;
+      }
     }
     applySignedOutState({ navigate: true });
   }
