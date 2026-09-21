@@ -39,8 +39,8 @@
     const job = new Promise((resolve, reject) => {
       const script = document.createElement('script');
       script.src = src;
-      script.defer = true;
-      script.onload = () => { loadedJs.add(src); resolve(); };
+      script.async = true;
+      script.onload = () => { loadedJs.add(src); pendingJs.delete(src); resolve(); };
       script.onerror = () => { pendingJs.delete(src); reject(new Error(`js:${src}`)); };
       document.body.appendChild(script);
     });
@@ -73,8 +73,8 @@
       ]
     },
     motion: { js: [`${base}motion-runtime.js?v=20260918-ux1`] },
-    channel: { js: [`${base}channel-talk.js?v=20260918-ch1`] },
-    finance: { js: [`${base}phase4-finance-wiring.js?v=20260919-p4r2`] },
+    channel: { js: [`${base}channel-talk.js?v=20260920-ch2`] },
+    finance: { js: [`${base}phase4-finance-wiring.js?v=20260920-toast1`] },
     brand: { js: [`${base}brand-runtime.js?v=20260919-logo1`] },
     adminUiux: isAdmin ? {
       css: [`${adminBase}uiux-admin-premium-2026.css?v=20260919-uiux2`],
@@ -102,8 +102,10 @@
     }
   }
 
-  // UIUX·입금·브랜드는 셸이 직접 로드한다. 여기서는 무거운 3D/채널톡만 늦게 붙인다.
-  idle(() => { ensure('motion').catch(() => {}); }, 4000);
+  // 무거운 연출과 외부 상담 위젯은 첫 화면·인증 bootstrap과 경쟁하지 않게 idle 이후 붙인다.
+  const lowPerf = document.documentElement.dataset.lowPerf === '1';
+  idle(() => { ensure('motion').catch(() => {}); }, lowPerf ? 7000 : 3500);
+  idle(() => { ensure('channel').catch(() => {}); }, lowPerf ? 10000 : 5000);
 
   window.PutdukPerf = {
     ensure,
