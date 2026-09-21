@@ -1,5 +1,22 @@
 const RECOVERY_ORIGIN = 'https://putduk-data-platform.pages.dev';
 const RECOVERY_COOKIE = 'putduk_recovery';
+const RESPONSE_ORIGIN = 'putduk-data-platform-pages';
+const RESPONSE_ROUTER = '20260921-v020-cutover1';
+
+function withRoutingHeaders(response, extraHeaders = {}) {
+  const headers = new Headers(response.headers);
+  headers.set('X-Putduk-Origin', RESPONSE_ORIGIN);
+  headers.set('X-Putduk-Router', RESPONSE_ROUTER);
+  for (const [name, value] of Object.entries(extraHeaders)) {
+    if (value == null) headers.delete(name);
+    else headers.set(name, value);
+  }
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers
+  });
+}
 
 export async function onRequest(context) {
   const url = new URL(context.request.url);
@@ -26,21 +43,21 @@ export async function onRequest(context) {
     const cleanUrl = new URL(url);
     cleanUrl.searchParams.delete('__recovery');
     cleanUrl.searchParams.delete('__native');
-    const response = Response.redirect(cleanUrl.toString(), 302);
-    response.headers.append(
-      'Set-Cookie',
-      recoveryRequested
-        ? `${RECOVERY_COOKIE}=1; Path=/; Max-Age=3600; Secure; HttpOnly; SameSite=Lax`
-        : `${RECOVERY_COOKIE}=; Path=/; Max-Age=0; Secure; HttpOnly; SameSite=Lax`
+    return withRoutingHeaders(
+      Response.redirect(cleanUrl.toString(), 302),
+      {
+        'Set-Cookie': recoveryRequested
+          ? `${RECOVERY_COOKIE}=1; Path=/; Max-Age=3600; Secure; HttpOnly; SameSite=Lax`
+          : `${RECOVERY_COOKIE}=; Path=/; Max-Age=0; Secure; HttpOnly; SameSite=Lax`
+      }
     );
-    return response;
   }
 
   const recoveryMemberHost = isOfficialMemberHost && recoveryCookie;
 
   if (isOps && !adminPath && !staticPath) {
     url.pathname = '/admin/';
-    return Response.redirect(url.toString(), 302);
+    return withRoutingHeaders(Response.redirect(url.toString(), 302));
   }
 
   if (!isOps && adminPath) {
@@ -52,7 +69,7 @@ export async function onRequest(context) {
     if (opsHost) {
       url.hostname = opsHost;
       url.pathname = '/admin/';
-      return Response.redirect(url.toString(), 302);
+      return withRoutingHeaders(Response.redirect(url.toString(), 302));
     }
   }
 
@@ -64,18 +81,19 @@ export async function onRequest(context) {
       redirect: 'manual'
     });
     const upstreamResponse = await fetch(upstreamRequest);
-    const recoveryResponse = new Response(method === 'HEAD' ? null : upstreamResponse.body, upstreamResponse);
+    const recoveryResponse = withRoutingHeaders(
+      new Response(method === 'HEAD' ? null : upstreamResponse.body, upstreamResponse)
+    );
     recoveryResponse.headers.delete('Clear-Site-Data');
     recoveryResponse.headers.set('X-Putduk-Recovery-Origin', 'stable-pages-v1');
     recoveryResponse.headers.set('X-Putduk-Boot', 'recovery-v1');
     return recoveryResponse;
   }
 
-  const response = await context.next();
+  const response = withRoutingHeaders(await context.next());
   if (staticPath) return response;
 
-  const next = new Response(response.body, response);
-  next.headers.delete('Clear-Site-Data');
-  next.headers.set('X-Putduk-Boot', 'native-v41');
-  return next;
+  response.headers.delete('Clear-Site-Data');
+  response.headers.set('X-Putduk-Boot', 'native-v41');
+  return response;
 }
