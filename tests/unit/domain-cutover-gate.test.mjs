@@ -13,6 +13,10 @@ test('v0.2.0 release는 명시적 member/ops domain 없이는 fail-closed한다'
   assert.equal(pkg.scripts?.['release:domain'], 'node tooling/cloudflare/domain-cutover-audit.mjs --require-target');
   assert.match(release, /domain-cutover-audit\.mjs/);
   assert.match(release, /--require-target/);
+  assert.ok(
+    release.indexOf("await run('도메인 cutover gate'") < release.indexOf("await run('정적 검증'"),
+    'domain cutover gate must run before the rest of release preflight'
+  );
 
   for (const token of [
     'MEMBER_URL',
