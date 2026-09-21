@@ -62,9 +62,15 @@ begin
     raise exception using errcode = '22023', message = '시작할 업무 노드가 없습니다.';
   end if;
 
+  -- 잠금 키와 두 일일 집계가 모두 같은 KST 날짜 경계를 사용해야 한다.
+  v_kst_day_start := date_trunc('day', v_now at time zone 'Asia/Seoul') at time zone 'Asia/Seoul';
+
   perform pg_advisory_xact_lock(hashtextextended('putduk-user:' || v_user_id::text, 0));
   perform pg_advisory_xact_lock(
-    hashtextextended('putduk-node:' || new.node_id::text || ':' || to_char(v_now, 'YYYY-MM-DD'), 0)
+    hashtextextended(
+      'putduk-node:' || new.node_id::text || ':' || to_char(v_now at time zone 'Asia/Seoul', 'YYYY-MM-DD'),
+      0
+    )
   );
 
   select a.*
@@ -122,9 +128,7 @@ begin
     raise exception using errcode = '23514', message = '진행 중인 업무를 먼저 마무리해 주세요.';
   end if;
 
-  -- 노드 공급량과 회원 횟수 모두 같은 KST 날짜 경계를 사용한다.
-  v_kst_day_start := date_trunc('day', v_now at time zone 'Asia/Seoul') at time zone 'Asia/Seoul';
-
+  -- 노드 공급량과 회원 횟수 모두 위에서 고정한 같은 KST 날짜 경계를 사용한다.
   v_cap := case when coalesce(v_node.daily_cap, 0) > 0 then v_node.daily_cap else v_node.daily_capacity end;
   if v_cap > 0 then
     select count(*)::integer into v_daily_count
@@ -149,7 +153,6 @@ begin
 
   if v_member_daily_limit > 0 then
     v_member_cap := v_member_daily_limit + v_extra;
-    v_kst_day_start := date_trunc('day', v_now at time zone 'Asia/Seoul') at time zone 'Asia/Seoul';
     select count(*)::integer
       into v_member_daily_count
     from public.task_runs r
