@@ -4865,7 +4865,7 @@
       try { await window.PUTDUK_PUSH.unsubscribeWithSession(authState.session); } catch (_) {}
     }
     if (supabaseClient) {
-      const { error } = await supabaseClient.auth.signOut();
+      const { error } = await supabaseClient.auth.signOut({ scope: 'local' });
       if (error) { showToast('로그아웃을 완료하지 못했어요. 잠시 후 다시 시도해 주세요.', 'info'); return; }
     }
     applySignedOutState({ navigate: true });
@@ -5041,7 +5041,7 @@
     if (code === 'email_not_confirmed' || message.includes('email not confirmed')) return '이메일 인증이 완료되지 않았어요. 받은 메일의 인증 링크를 확인해 주세요.';
     if (code === 'user_banned' || message.includes('banned')) return '이 계정은 현재 이용이 제한되어 있어요. 고객센터에 문의해 주세요.';
     if (code === 'over_request_rate_limit' || code === 'over_email_send_rate_limit' || status === 429) return '로그인 요청이 잠시 제한됐어요. 잠시 후 다시 시도해 주세요.';
-    if (code === 'invalid_credentials' || status === 400) return '이메일 또는 비밀번호가 올바르지 않아요. 다시 확인하거나 비밀번호를 재설정해 주세요.';
+    if (code === 'invalid_credentials') return '이메일 또는 비밀번호가 올바르지 않아요. 다시 확인하거나 비밀번호를 재설정해 주세요.';
     if (message.includes('fetch') || message.includes('network') || status >= 500) return '인증 서버에 연결하지 못했어요. 인터넷 연결을 확인한 뒤 다시 시도해 주세요.';
     return '로그인을 완료하지 못했어요. 잠시 후 다시 시도해 주세요.';
   }
