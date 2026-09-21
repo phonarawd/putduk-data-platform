@@ -24,6 +24,7 @@ async function run(name, command, args, options = {}) {
 
 const node = process.execPath;
 
+await run('도메인 cutover gate', node, ['tooling/cloudflare/domain-cutover-audit.mjs', '--require-target']);
 await run('정적 검증', node, ['tooling/scripts/verify-static.mjs']);
 await run('타입·문법', node, ['tooling/scripts/typecheck.mjs']);
 await run('단위 테스트', node, ['tooling/scripts/run-node-tests.mjs', 'tests/unit/**/*.test.mjs']);
@@ -33,7 +34,6 @@ await run('접근성 정적 검사', node, ['tooling/scripts/run-node-tests.mjs'
 await run('보안 검사', node, ['tooling/scripts/security-scan.mjs']);
 await run('성능 설정 검사', node, ['tooling/scripts/run-performance.mjs']);
 await run('헬스체크', node, ['scripts/automation/health-check.mjs']);
-await run('도메인 cutover gate', node, ['tooling/cloudflare/domain-cutover-audit.mjs', '--require-target']);
 
 console.log('\n릴리스 사전 검증을 통과했습니다.');
 console.log('Supabase 운영 변경은 MCP/CLI Path A로 먼저 적용·검증합니다.');
