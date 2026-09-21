@@ -2356,7 +2356,21 @@
           return;
         }
         window.setTimeout(async () => {
-          await hydrateSession(session);
+          // 다중 GoTrueClient가 남긴 낡은 session 객체로 로그아웃 UI가 되살아나지 않게 storage 기준을 다시 본다.
+          let liveSession = session || null;
+          try {
+            const current = await supabaseClient.auth.getSession();
+            liveSession = current?.data?.session || null;
+          } catch (_) {
+            liveSession = null;
+          }
+          if (!liveSession) {
+            if (authState.session || document.querySelector('[data-action="logout"]')) {
+              applySignedOutState({ navigate: !isAdmin });
+            }
+            return;
+          }
+          await hydrateSession(liveSession);
           if (authState.session) recordOwnSession();
           if (isAdmin) {
             await hydrateAdminAuthorization();
