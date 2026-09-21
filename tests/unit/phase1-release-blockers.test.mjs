@@ -4,11 +4,16 @@ import { readFileSync } from 'node:fs';
 
 const read = (path) => readFileSync(new URL(`../../${path}`, import.meta.url), 'utf8');
 
-test('업무별 공급량과 회원 횟수는 같은 KST 경계를 사용한다', () => {
+test('업무별 공급량과 회원 횟수는 같은 KST 경계와 잠금을 사용한다', () => {
   const sql = read('supabase/migrations/20260921102905_phase1_kst_day_boundary.sql');
   assert.equal(sql.includes("created_at >= date_trunc('day', v_now)"), false);
   assert.equal((sql.match(/created_at >= v_kst_day_start/g) || []).length, 2);
-  assert.match(sql, /Asia\/Seoul/);
+  assert.equal(
+    (sql.match(/v_kst_day_start := date_trunc\('day', v_now at time zone 'Asia\/Seoul'\) at time zone 'Asia\/Seoul'/g) || []).length,
+    1
+  );
+  assert.match(sql, /to_char\(v_now at time zone 'Asia\/Seoul', 'YYYY-MM-DD'\)/);
+  assert.doesNotMatch(sql, /to_char\(v_now, 'YYYY-MM-DD'\)/);
 });
 
 test('회원 화면은 서버 reset 시각에 KST 일일 상태를 다시 불러온다', () => {
