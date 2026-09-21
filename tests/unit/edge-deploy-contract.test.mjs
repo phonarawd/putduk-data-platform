@@ -33,3 +33,21 @@ test('운영 Edge deploy/verify/rollback 계약이 모든 함수 디렉터리를
     assert.match(config, new RegExp(`\\[functions\\.${escaped}\\]\\s*verify_jwt = true`), `verify_jwt:${name}`);
   }
 });
+
+test('운영 Edge 9개는 PUTDUK_ALLOWED_ORIGINS allow-list 계약을 공유하고 Origin 반사형 CORS를 금지한다', async () => {
+  const envLoader = await readRepo('tooling/supabase/lib/load-env.mjs');
+  const sharedHttp = await readRepo('supabase/functions/_shared/http.ts');
+
+  assert.match(envLoader, /PUTDUK_ALLOWED_ORIGINS/);
+  assert.match(sharedHttp, /PUTDUK_ALLOWED_ORIGINS/);
+  assert.doesNotMatch(sharedHttp, /headers\.get\(["']origin["']\)\s*\|\|\s*["']\*["']/);
+
+  for (const name of edgeFunctions) {
+    const source = await readRepo(`supabase/functions/${name}/index.ts`);
+    const importsSharedCors = /import\s*\{[^}]*\bcorsHeaders\b[^}]*\}\s*from\s*["']\.\.\/_shared\/http\.ts["']/.test(source);
+    const hasLocalAllowlist = source.includes('PUTDUK_ALLOWED_ORIGINS');
+
+    assert.equal(importsSharedCors || hasLocalAllowlist, true, `cors allow-list:${name}`);
+    assert.doesNotMatch(source, /headers\.get\(["']origin["']\)\s*\|\|\s*["']\*["']/, `origin reflection:${name}`);
+  }
+});
