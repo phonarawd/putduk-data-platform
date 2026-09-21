@@ -12,31 +12,31 @@
   Cross-Origin-Resource-Policy: same-origin
 
 /assets/app.js
-  Cache-Control: public, max-age=3600, stale-while-revalidate=86400
+  Cache-Control: public, max-age=0, must-revalidate
 
 /assets/app.css
-  Cache-Control: public, max-age=3600, stale-while-revalidate=86400
+  Cache-Control: public, max-age=0, must-revalidate
 
 /assets/origin-split.js
-  Cache-Control: public, max-age=3600, stale-while-revalidate=86400
+  Cache-Control: public, max-age=0, must-revalidate
 
 /assets/perf-deferred.js
-  Cache-Control: public, max-age=3600, stale-while-revalidate=86400
+  Cache-Control: public, max-age=0, must-revalidate
 
 /assets/channel-talk.js
-  Cache-Control: public, max-age=3600, stale-while-revalidate=86400
+  Cache-Control: public, max-age=0, must-revalidate
 
 /admin/admin.js
-  Cache-Control: public, max-age=3600, stale-while-revalidate=86400
+  Cache-Control: public, max-age=0, must-revalidate
 
 /admin/phase3-admin-wiring.js
-  Cache-Control: public, max-age=3600, stale-while-revalidate=86400
+  Cache-Control: public, max-age=0, must-revalidate
 
 /admin/balance-adjust-safety.js
-  Cache-Control: public, max-age=3600, stale-while-revalidate=86400
+  Cache-Control: public, max-age=0, must-revalidate
 
 /admin/withdrawal-safety.js
-  Cache-Control: public, max-age=3600, stale-while-revalidate=86400
+  Cache-Control: public, max-age=0, must-revalidate
 
 /icons/*
   Cache-Control: public, max-age=31536000, immutable
