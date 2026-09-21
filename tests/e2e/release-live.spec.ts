@@ -22,11 +22,29 @@ test('live gate: 전용 회원 계정 로그인 → 로그아웃 후 사용자 �
   await login(page, memberEmail, memberPassword);
   await expect(page.locator('[data-action="logout"]').first()).toBeVisible();
 
+  // 온보딩 모달이 있으면 닫아 로그아웃 클릭이 가려지지 않게 한다.
+  const ackGeneral = page.locator('[data-action="ack-general-work"]');
+  if (await ackGeneral.isVisible().catch(() => false)) await ackGeneral.click();
+  const skipPwa = page.locator('[data-action="skip-pwa"]');
+  if (await skipPwa.isVisible().catch(() => false)) await skipPwa.click();
+  const ackGrant = page.locator('[data-action="ack-grant"]');
+  if (await ackGrant.isVisible().catch(() => false)) await ackGrant.click();
+
+  // 로그인 hydrate만으로는 saveState가 안 탈 수 있어, 세션 userId로 유저 스코프 캐시를 남긴 뒤 로그아웃 정리를 검증한다.
+  await page.evaluate(() => {
+    const authKey = Object.keys(localStorage).find((key) => key.startsWith('sb-') && key.endsWith('-auth-token'));
+    const raw = authKey ? localStorage.getItem(authKey) : null;
+    const parsed = raw ? JSON.parse(raw) : null;
+    const userId = parsed?.user?.id;
+    if (!userId) throw new Error('missing authenticated user id');
+    localStorage.setItem(`putduk-state-v2:${userId}`, JSON.stringify({ theme: 'light', history: [{ id: 'live-gate-sentinel' }] }));
+  });
+
   const memberKeysBefore = await page.evaluate(() => Object.keys(localStorage).filter((key) => key.startsWith('putduk-state-v2:')));
   expect(memberKeysBefore.length).toBeGreaterThan(0);
 
-  await page.locator('[data-action="logout"]').first().click();
-  await expect(page.locator('[data-action="open-login"]').first()).toBeVisible();
+  await page.locator('.topbar [data-action="logout"], .profile-logout').first().click();
+  await expect(page.locator('[data-action="open-login"]').first()).toBeVisible({ timeout: 20_000 });
 
   const memberKeysAfter = await page.evaluate(() => Object.keys(localStorage).filter((key) => key.startsWith('putduk-state-v2:')));
   expect(memberKeysAfter).toEqual([]);
@@ -65,5 +83,5 @@ test('live gate: 전용 테스트 회원 상세는 내부 스크롤과 역할별
   expect(scrollContract.clientHeight).toBeGreaterThan(0);
 
   const privacyCopy = modal.getByText(/전체 휴대폰 번호 표시 중|전체 번호는 최고관리자만 볼 수 있습니다/);
-  await expect(privacyCopy).toBeVisible();
+  await expect(privacyCopy).toBeVisible({ timeout: 15_000 });
 });

@@ -4723,7 +4723,12 @@
     noticesHydrated = false;
     stopMemberLive();
     if (!isAdmin && authState.session && window.PUTDUK_PUSH?.unsubscribeWithSession) {
-      try { await window.PUTDUK_PUSH.unsubscribeWithSession(authState.session); } catch (_) {}
+      try {
+        await Promise.race([
+          window.PUTDUK_PUSH.unsubscribeWithSession(authState.session),
+          new Promise((resolve) => window.setTimeout(resolve, 1500))
+        ]);
+      } catch (_) {}
     }
     if (supabaseClient) {
       const { error } = await supabaseClient.auth.signOut({ scope: 'local' });
