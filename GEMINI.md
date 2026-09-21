@@ -9,12 +9,14 @@
 - 복구 기준 commit: `8d2f914d445348a3fa6c6aa1ed943a0f4a1ae06b`
 - 이 commit 이후 최신 `main`이 항상 우선한다.
 
-## FOMO / 봇 활동
+## FOMO / 봇 활동 및 어드민 연출 제어
 
 - 근무 화면의 FOMO/봇 활동은 제품 의도다.
 - 가상 이름 회전, 출근/자리/라인/근무시작 피드, 활동 인원, 자리 소진, 남은 자리 표시는 사용자의 명시 지시 없이 제거하지 않는다.
 - `realActivity` 또는 실제 활동 API로 임의 대체하지 않는다.
 - commit `ac10e9e89809fde860a0bed38ea725c877850150`의 `replace synthetic FOMO with real activity` 방향은 폐기된 결정이다.
+- 어드민의 `연출` 메뉴와 FOMO/봇 활동 제어 UI도 제품 기능으로 보호한다.
+- `bot_enabled`, `crowd_min`, `crowd_max`, `burn_per_minute` 및 `get_motion_settings` / `save_motion_settings` 흐름은 명시 지시 없이 제거·숨김·대체하지 않는다.
 - FOMO/봇 제거·축소·대체는 사용자의 명시 요청이 있을 때만 진행한다.
 
 ## 폐기된 변경 — 참고/재사용 금지
