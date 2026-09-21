@@ -7,6 +7,7 @@ test('v0.2.0 release는 명시적 member/ops domain 없이는 fail-closed한다'
   const release = await readRepo('scripts/automation/release.mjs');
   const audit = await readRepo('tooling/cloudflare/domain-cutover-audit.mjs');
   const doc = await readRepo('docs/v0.2.0-domain-cutover.md');
+  const stage12 = await readRepo('docs/stage12-release-freeze.md');
 
   assert.equal(pkg.scripts?.['domain:audit'], 'node tooling/cloudflare/domain-cutover-audit.mjs');
   assert.equal(pkg.scripts?.['release:domain'], 'node tooling/cloudflare/domain-cutover-audit.mjs --require-target');
@@ -35,4 +36,9 @@ test('v0.2.0 release는 명시적 member/ops domain 없이는 fail-closed한다'
   assert.match(doc, /PUTDUK_ALLOWED_ORIGINS/);
   assert.match(doc, /member-task-detail/);
   assert.match(doc, /admin-work-asset/);
+
+  assert.match(stage12, /SUPERSEDED/);
+  assert.match(stage12, /v0\.2\.0-domain-cutover\.md/);
+  assert.match(stage12, /PENDING \/ BLOCKED UNTIL DOMAIN MAPPING IS EXPLICIT/);
+  assert.doesNotMatch(stage12, /현재 Stage 12 PR 생성 조건은 충족한다/);
 });
