@@ -2397,7 +2397,7 @@
       });
       if (!syncTimer) {
         syncTimer = window.setInterval(async () => {
-          if (!authState.session || document.hidden) return;
+          if (signedOutLock || !authState.session || document.hidden) return;
           if (isLiveWorkOverlay() || state._startingWork || state.run?._submitting || state.run?._submitWaiting) return;
           if (state.modal) {
             if (isAdmin && authState.adminAuthorized) await refreshAdminPageData({ silent: true });
@@ -2585,10 +2585,10 @@
 
   function renderTopbar() {
     const title = isAdmin ? ({ overview: '전체 현황', members: '회원 관리', companies: '기업 관리', nodes: '업무 카드 관리', reviews: '업무 검수', finance: '입출금 처리', motion: '연출', notifications: '공지·알림', settings: '운영 설정' }[state.adminPage] || '전체 현황') : ({ dashboard: '작업실', nodes: '라인 찾기', history: '내역', wallet: '지갑', membership: '사원증', benefits: '등급·혜택', referrals: '추천', support: '도움말' }[state.memberPage] || '작업실');
-    const memberIdentity = authState.session
+    const memberIdentity = authState.session && !signedOutLock
       ? `<div class="profile-chip"><span class="avatar">${esc(profileInitial())}</span><span>${esc(profileName())}</span><button class="profile-logout" data-action="logout">로그아웃</button></div>`
       : `<button class="small-button" data-action="open-login">로그인</button>`;
-    const adminIdentity = authState.adminAuthorized && authState.session
+    const adminIdentity = authState.adminAuthorized && authState.session && !signedOutLock
       ? `<div class="profile-chip"><span class="avatar">관</span><span>운영자 계정</span><button class="profile-logout" data-action="logout">로그아웃</button></div>`
       : `<button class="small-button" data-action="open-login">운영자 로그인</button>`;
     const installButton = !isAdmin ? `<button class="icon-button" data-action="install-app" aria-label="퍼뜩 앱 설치">${icon('download', 17)}</button>` : '';
@@ -4748,26 +4748,27 @@
 
   async function signOut() {
     signedOutLock = true;
-    await lockDepositReveal({ silent: true });
+    const session = authState.session;
     noticesHydrated = false;
     stopMemberLive();
-    if (!isAdmin && authState.session && window.PUTDUK_PUSH?.unsubscribeWithSession) {
+    // 로그아웃 UI를 먼저 반영한다. 푸시/토큰 정리는 뒤에서 이어간다.
+    applySignedOutState({ navigate: true });
+    try {
+      await lockDepositReveal({ silent: true });
+    } catch (_) {}
+    if (!isAdmin && session && window.PUTDUK_PUSH?.unsubscribeWithSession) {
       try {
         await Promise.race([
-          window.PUTDUK_PUSH.unsubscribeWithSession(authState.session),
+          window.PUTDUK_PUSH.unsubscribeWithSession(session),
           new Promise((resolve) => window.setTimeout(resolve, 1500))
         ]);
       } catch (_) {}
     }
     if (supabaseClient) {
-      const { error } = await supabaseClient.auth.signOut({ scope: 'local' });
-      if (error) {
-        signedOutLock = false;
-        showToast('로그아웃을 완료하지 못했어요. 잠시 후 다시 시도해 주세요.', 'info');
-        return;
-      }
+      try {
+        await supabaseClient.auth.signOut({ scope: 'local' });
+      } catch (_) {}
     }
-    applySignedOutState({ navigate: true });
   }
 
   async function checkpointWork() {
