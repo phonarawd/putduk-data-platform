@@ -20,7 +20,7 @@ Stage 12에서는 기능 추가, 카탈로그 공개, 금융 오픈, 도메인 �
 - 회원 canonical/origin: `https://app.hiptk.app/`
 - 운영자 origin: `https://ops.hiptk.app/admin/`
 - 기존 `hiptk.app`, `www.hiptk.app`, `go.hiptk.app` 라우팅: 현 상태 유지
-- 사용자 확인 기준 `https://hiptk.com` 연결도 현 상태 유지하며 이 PR에서 재매핑하지 않는다.
+- `hiptk.com`은 퍼뜩과 관계없는 외부 도메인이며 퍼뜩의 운영·출시·도메인 토폴로지 범위에서 제외한다. 퍼뜩 작업의 일부로 변경하거나 설정하지 않는다.
 
 `putduk.com` 또는 다른 신규 도메인 전환은 이 Stage 12의 범위가 아니며, 별도 명시적 승인 없이는 기존 운영 도메인을 대체하지 않는다.
 
