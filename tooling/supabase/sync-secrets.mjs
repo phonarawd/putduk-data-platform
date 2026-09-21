@@ -74,6 +74,14 @@ const payout = process.env.PUTDUK_PAYOUT_SECRET;
 await ghSecret("PUTDUK_PAYOUT_SECRET", payout);
 await supabaseSecret("PUTDUK_PAYOUT_SECRET", payout);
 
+if (isPresent(process.env.PUTDUK_ALLOWED_ORIGINS)) {
+  const allowedOrigins = process.env.PUTDUK_ALLOWED_ORIGINS;
+  await ghSecret("PUTDUK_ALLOWED_ORIGINS", allowedOrigins);
+  await supabaseSecret("PUTDUK_ALLOWED_ORIGINS", allowedOrigins);
+} else {
+  console.log("PUTDUK_ALLOWED_ORIGINS → GitHub/Supabase: SKIPPED (MISSING)");
+}
+
 if (isPresent(process.env.SUPABASE_PROJECT_REF) || projectRef) {
   await ghSecret("SUPABASE_PROJECT_REF", projectRef);
 }
