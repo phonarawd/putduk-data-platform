@@ -1453,8 +1453,10 @@
     const pack = currentMemberPack();
     const id = member.id || member.user_id || '';
     const piiNote = pack && pack.pii_access === false
-      ? `<div class="notice" style="margin-bottom:12px"><span style="color:var(--gold)">${icon('shield-alert', 17)}</span><div>전체 개인정보는 최고 운영자만 볼 수 있어요.</div></div>`
-      : '';
+      ? `<div class="notice" style="margin-bottom:12px"><span style="color:var(--gold)">${icon('shield-alert', 17)}</span><div>개인정보 보호를 위해 휴대폰 번호가 가려져 있어요. 전체 번호는 최고관리자만 볼 수 있습니다.</div></div>`
+      : (pack && pack.pii_access === true
+        ? `<div class="notice member-pii-visible" style="margin-bottom:12px"><span style="color:var(--emerald)">${icon('shield-check', 17)}</span><div><strong>전체 휴대폰 번호 표시 중</strong><br />최고관리자의 열람 기록이 보안 감사기록에 저장됩니다.</div></div>`
+        : '');
     const quota = member.daily_task_quota || pack.daily_task_quota || {};
     const override = member.daily_task_limit_override ?? pack.daily_task_limit_override ?? pack.profile?.daily_task_limit_override ?? null;
     const extra = Number(member.extra_task_starts ?? pack.extra_task_starts ?? pack.profile?.extra_task_starts ?? 0);
