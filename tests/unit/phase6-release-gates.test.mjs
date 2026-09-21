@@ -45,8 +45,13 @@ test('관리자 회원 상세는 92dvh 제한과 modal-body 내부 스크롤을 
 
 test('Phase 6 실행 스크립트와 아키텍처 문서는 Render를 새 런타임으로 도입하지 않는다', () => {
   const pkg = JSON.parse(read('package.json'));
+  const ci = read('.github/workflows/ci.yml');
   const doc = read('docs/v0.2.0-phase6-release-gates.md');
-  assert.equal(pkg.scripts['test:e2e:release'], 'pnpm dlx playwright test tests/e2e/release-auth.spec.ts tests/e2e/release-live.spec.ts');
+  assert.equal(pkg.scripts['test:e2e:release'], 'pnpm exec playwright test tests/e2e/release-auth.spec.ts tests/e2e/release-live.spec.ts');
+  assert.equal(pkg.devDependencies?.['@playwright/test'], '1.63.0');
+  assert.match(ci, /pnpm exec playwright install --with-deps chromium/);
+  assert.match(ci, /pnpm exec playwright test tests\/e2e\/release-auth\.spec\.ts/);
+  assert.doesNotMatch(ci, /pnpm exec playwright test tests\/e2e\/release-live\.spec\.ts/);
   assert.equal(existsSync(new URL('../../render.yaml', import.meta.url)), false);
   assert.equal(existsSync(new URL('../../Render.yaml', import.meta.url)), false);
   assert.equal(existsSync(new URL('../../wrangler.toml', import.meta.url)), true);
