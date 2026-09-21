@@ -29,12 +29,46 @@ test('live gate는 기존 환경변수만으로 자격증명을 받고 값 자�
   assert.doesNotMatch(spec, /replace-with-(?:admin|trial)-password/);
 });
 
+test('live gate는 사업 상태를 변경하지 않고 인증·PII 경계만 확인한다', () => {
+  const spec = read('tests/e2e/release-live.spec.ts');
+  const forbiddenBusinessMutations = [
+    'start_task',
+    'submit_work',
+    'review_task',
+    'adjust_balance',
+    'approve_withdrawal',
+    'complete_withdrawal',
+    'reject_withdrawal',
+    'approve_deposit',
+    'create_assignment',
+    'update_assignment',
+    'support_grant',
+    'referral_reward'
+  ];
+  for (const action of forbiddenBusinessMutations) {
+    assert.equal(spec.includes(action), false, action);
+  }
+  assert.doesNotMatch(spec, /phone_e164|legal_name|birth_date|last_login_ip/);
+  assert.doesNotMatch(spec, /page\.request\.(?:post|put|patch|delete)/);
+});
+
 test('회원 상세 PII 원문은 super_admin만 공개하고 member_support 접근권한과 분리된다', () => {
   const adminOps = read('supabase/functions/_shared/admin-ops.ts');
   assert.match(adminOps, /const memberRoles = \["super_admin", "member_support"\]/);
   assert.match(adminOps, /function canRevealMemberPii\(roles: string\[\]\): boolean \{\s*return roles\.includes\("super_admin"\);\s*\}/);
   assert.match(adminOps, /pii_access: revealPii/);
   assert.match(adminOps, /pii_masked: !revealPii/);
+});
+
+test('super_admin 원문 PII 열람은 audit side effect를 남기고 문서가 이를 허용 범위로 고정한다', () => {
+  const adminOps = read('supabase/functions/_shared/admin-ops.ts');
+  const doc = read('docs/v0.2.0-phase6-release-gates.md');
+
+  assert.match(adminOps, /if \(revealPii\) \{[\s\S]*await appendAudit\(/);
+  assert.match(adminOps, /"회원 개인정보 열람"/);
+  assert.match(adminOps, /fields: \["phone_e164", "email", "legal_name", "birth_date", "last_login_ip"\]/);
+  assert.match(doc, /사업 상태 mutation 0, 인증\/보안 감사 side effect만 허용/);
+  assert.match(doc, /Production write 0/);
 });
 
 test('관리자 회원 상세는 92dvh 제한과 modal-body 내부 스크롤을 유지한다', () => {
