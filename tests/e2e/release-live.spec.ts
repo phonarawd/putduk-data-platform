@@ -4,6 +4,7 @@ const memberEmail = process.env.PUTDUK_TRIAL_EMAIL || '';
 const memberPassword = process.env.PUTDUK_TRIAL_PASSWORD || '';
 const adminEmail = process.env.PUTDUK_ADMIN_EMAIL || '';
 const adminPassword = process.env.PUTDUK_ADMIN_PASSWORD || '';
+const adminMemberPublicId = process.env.PUTDUK_E2E_MEMBER_PUBLIC_ID || '';
 const memberUrl = process.env.PLAYWRIGHT_MEMBER_URL || process.env.PLAYWRIGHT_BASE_URL || 'http://127.0.0.1:4173/';
 const adminUrl = process.env.PLAYWRIGHT_ADMIN_URL || new URL('/admin/', memberUrl).toString();
 
@@ -31,15 +32,21 @@ test('live gate: 전용 회원 계정 로그인 → 로그아웃 후 사용자 �
   expect(memberKeysAfter).toEqual([]);
 });
 
-test('live gate: 운영자 회원 상세는 내부 스크롤과 역할별 PII 안내를 유지한다', async ({ page }) => {
+test('live gate: 전용 테스트 회원 상세은 내부 스크롤과 역할별 PII 안내를 유지한다', async ({ page }) => {
   test.skip(!adminEmail || !adminPassword, 'PUTDUK_ADMIN_EMAIL / PUTDUK_ADMIN_PASSWORD가 있을 때만 실행합니다.');
+  test.skip(!adminMemberPublicId, 'PUTDUK_E2E_MEMBER_PUBLIC_ID로 전용 테스트 회원을 지정했을 때만 실행합니다.');
 
   await page.goto(adminUrl);
   await login(page, adminEmail, adminPassword);
   await expect(page.locator('[data-action="logout"]').first()).toBeVisible();
 
   await page.locator('[data-nav="members"]').first().click();
-  const detailButton = page.locator('[data-action="member-detail"]').first();
+  await page.locator('#memberSearchInput').fill(adminMemberPublicId);
+  await page.locator('#memberSearchForm').getByRole('button', { name: '찾기', exact: true }).click();
+
+  const testMemberRow = page.locator('tr', { hasText: adminMemberPublicId }).first();
+  await expect(testMemberRow).toBeVisible();
+  const detailButton = testMemberRow.locator('[data-action="member-detail"]');
   await expect(detailButton).toBeVisible();
   await detailButton.click();
 
