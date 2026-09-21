@@ -542,6 +542,19 @@ export async function getMember(admin: AdminClient, userId: string, payload: Jso
     }
     : null;
 
+  if (revealPii) {
+    await appendAudit(
+      admin,
+      userId,
+      "회원 개인정보 열람",
+      "profile",
+      memberId,
+      "회원 상세에서 전체 휴대폰 번호 열람",
+      null,
+      { fields: ["phone_e164", "email", "legal_name", "birth_date", "last_login_ip"] }
+    );
+  }
+
   return {
     profile: profileResult.data,
     private_profile: revealPii ? privateProfile : maskedPrivate,
