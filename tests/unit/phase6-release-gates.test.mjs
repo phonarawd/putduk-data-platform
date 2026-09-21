@@ -19,14 +19,29 @@ test('Phase 6 Playwright 게이트는 로그인 원인 5종과 로그아웃 캐�
 
 test('live gate는 기존 환경변수만으로 자격증명을 받고 값 자체를 저장하지 않는다', () => {
   const spec = read('tests/e2e/release-live.spec.ts');
-  for (const name of ['PUTDUK_TRIAL_EMAIL', 'PUTDUK_TRIAL_PASSWORD', 'PUTDUK_ADMIN_EMAIL', 'PUTDUK_ADMIN_PASSWORD']) {
+  for (const name of ['PUTDUK_TRIAL_EMAIL', 'PUTDUK_TRIAL_PASSWORD', 'PUTDUK_ADMIN_EMAIL', 'PUTDUK_ADMIN_PASSWORD', 'PUTDUK_E2E_MEMBER_PUBLIC_ID']) {
     assert.match(spec, new RegExp(`process\\.env\\.${name}`));
   }
   assert.match(spec, /test\.skip\(!memberEmail \|\| !memberPassword/);
   assert.match(spec, /test\.skip\(!adminEmail \|\| !adminPassword/);
+  assert.match(spec, /test\.skip\(!adminMemberPublicId/);
   assert.match(spec, /member-detail-modal/);
   assert.match(spec, /전체 휴대폰 번호 표시 중\|전체 번호는 최고관리자만 볼 수 있습니다/);
   assert.doesNotMatch(spec, /replace-with-(?:admin|trial)-password/);
+});
+
+test('live admin gate는 전용 테스트 사원번호 검색 결과만 열고 첫 회원을 임의 선택하지 않는다', () => {
+  const spec = read('tests/e2e/release-live.spec.ts');
+  const doc = read('docs/v0.2.0-phase6-release-gates.md');
+
+  assert.match(spec, /#memberSearchInput/);
+  assert.match(spec, /#memberSearchForm/);
+  assert.match(spec, /page\.locator\('tr', \{ hasText: adminMemberPublicId \}\)\.first\(\)/);
+  assert.match(spec, /testMemberRow\.getByText\(adminMemberPublicId, \{ exact: true \}\)/);
+  assert.match(spec, /testMemberRow\.locator\('\[data-action="member-detail"\]'\)/);
+  assert.doesNotMatch(spec, /page\.locator\('\[data-action="member-detail"\]'\)\.first\(\)/);
+  assert.match(doc, /회원 목록의 첫 번째 행을 임의로 열지 않는다/);
+  assert.match(doc, /PUTDUK_E2E_MEMBER_PUBLIC_ID/);
 });
 
 test('live gate는 사업 상태를 변경하지 않고 인증·PII 경계만 확인한다', () => {
