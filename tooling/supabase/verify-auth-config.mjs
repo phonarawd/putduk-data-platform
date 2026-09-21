@@ -21,14 +21,15 @@ function originOnly(raw, label) {
 
 function redirectEntry(raw, allowedOrigins) {
   const value = String(raw || "").trim();
-  if (!value || value === "*" || /^https:\/\/\*/i.test(value)) throw new Error("Auth redirect entries must not use a global/host wildcard.");
+  if (!value || value === "*") throw new Error("Auth redirect entries must not use a global wildcard.");
   let url;
   try { url = new URL(value); } catch { throw new Error(`Invalid Auth redirect URL: ${value}`); }
   if (url.protocol !== "https:" || url.username || url.password || url.search || url.hash) {
     throw new Error(`Auth redirect must be an HTTPS URL/pattern without query/hash: ${value}`);
   }
+  if (url.hostname.includes("*")) throw new Error("Auth redirect entries must not use a host wildcard.");
   if (!allowedOrigins.has(url.origin)) throw new Error(`Auth redirect uses an unapproved origin: ${url.origin}`);
-  return value.replace(/\/$/, url.pathname === "/" ? "" : "/");
+  return value;
 }
 
 if (projectRef !== EXPECTED_PROJECT_REF) {
@@ -54,6 +55,7 @@ try {
   const allowedOrigins = new Set([memberOrigin, opsOrigin]);
   expectedRedirects = expectedRedirectRaw.split(",").map((value) => redirectEntry(value, allowedOrigins));
   if (!expectedRedirects.length) throw new Error("At least one Auth redirect URL is required.");
+  if (new Set(expectedRedirects).size !== expectedRedirects.length) throw new Error("Auth redirect list contains duplicates.");
   for (const origin of allowedOrigins) {
     if (!expectedRedirects.some((entry) => entry === origin || entry.startsWith(`${origin}/`))) {
       throw new Error(`Auth redirect list must cover ${origin}.`);
