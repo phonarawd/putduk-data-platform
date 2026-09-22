@@ -1,3 +1,17 @@
+-- 근무 카드 13종 시드 (historical migration).
+--
+-- 이 migration은 과거 production 적용 이력을 보존한다.
+-- 원래 이 migration은 putduk_admin_upsert_node 함수와
+-- stake_krw, stipend_krw 등의 컬럼(migration 40에서 추가)에 의존한다.
+-- 로컬 db reset에서 타임스탬프 순서로 실행할 때 이 시점에는 아직
+-- 함수와 컬럼이 정의되지 않았기 때문에, dependency가 준비되지 않은 경우
+-- 안전한 no-op로 종료한다.
+--
+-- canonical published work ladder catalog(13종)는
+-- 이후 reconcile migration(20260922000000)에서 보장한다.
+--
+-- dependency가 준비된 환경(운영 재구축 등)에서는 원래 동작을 그대로 실행한다.
+
 do $$
 declare
   v_admin uuid;
@@ -6,15 +20,127 @@ declare
   v_row public.nodes%rowtype;
   v_brands jsonb;
 begin
+
+  -- dependency 1: putduk_admin_upsert_node 함수 존재 여부
+  if not exists (
+    select 1 from pg_proc
+    where proname = 'putduk_admin_upsert_node'
+      and pronamespace = 'public'::regnamespace
+  ) then
+    return;
+  end if;
+
+  -- dependency 2: 필수 nodes 컬럼 존재 여부
+  if not exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'nodes'
+      and column_name = 'stake_krw'
+  ) then
+    return;
+  end if;
+
+  if not exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'nodes'
+      and column_name = 'stipend_krw'
+  ) then
+    return;
+  end if;
+
+  if not exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'nodes'
+      and column_name = 'tier_band'
+  ) then
+    return;
+  end if;
+
+  if not exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'nodes'
+      and column_name = 'partner_slug'
+  ) then
+    return;
+  end if;
+
+  if not exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'nodes'
+      and column_name = 'question_prompt_ko'
+  ) then
+    return;
+  end if;
+
+  if not exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'nodes'
+      and column_name = 'question_image_path'
+  ) then
+    return;
+  end if;
+
+  if not exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'nodes'
+      and column_name = 'choice_a_ko'
+  ) then
+    return;
+  end if;
+
+  if not exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'nodes'
+      and column_name = 'choice_b_ko'
+  ) then
+    return;
+  end if;
+
+  if not exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'nodes'
+      and column_name = 'daily_cap'
+  ) then
+    return;
+  end if;
+
+  if not exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'nodes'
+      and column_name = 'requires_assign'
+  ) then
+    return;
+  end if;
+
+  if not exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'nodes'
+      and column_name = 'is_trial'
+  ) then
+    return;
+  end if;
+
+  -- dependency 3: super_admin 데이터 존재 여부
   select user_id into v_admin
   from private.admin_roles
   where role = 'super_admin'
   order by created_at nulls last
   limit 1;
   if v_admin is null then
-    raise exception '운영자 계정이 필요합니다.';
+    return;
   end if;
 
+  -- 여기부터 기존 migration 27 원본 로직 그대로 실행
   select jsonb_object_agg(slug, id::text) into v_brands from public.partner_brands;
 
   update public.nodes
