@@ -101,13 +101,14 @@ test('DB 마이그레이션은 등급별 하루 한도 테이블·트리거 보�
   assert.match(migration, /오늘 준비된 업무 수량이 모두 소진되었습니다\./);
 });
 
-test('원금 출금 강등은 전담→선임→크루→라인 순서이고 라인이 바닥이다', () => {
+test('등급 한 단계 헬퍼는 전담→선임→크루→라인 순서이고 라인이 바닥이다', () => {
+  // 레거시 헬퍼 단위 검증. 원금 출금 SoT(무강등)와 별개이며, 출금 완료 경로에서 호출하지 않는다.
   assert.deepEqual(demoteMemberTierOnce('전담'), { previousTier: '전담', newTier: '선임' });
   assert.deepEqual(demoteMemberTierOnce('선임'), { previousTier: '선임', newTier: '크루' });
   assert.deepEqual(demoteMemberTierOnce('크루'), { previousTier: '크루', newTier: '라인' });
   assert.deepEqual(demoteMemberTierOnce('라인'), { previousTier: '라인', newTier: '라인' });
 
-  // 구 표기가 저장돼 있어도 먼저 정규화한 뒤 강등한다.
+  // 구 표기가 저장돼 있어도 먼저 정규화한 뒤 한 단계 내려간다.
   assert.deepEqual(demoteMemberTierOnce('글로벌 디렉터'), { previousTier: '전담', newTier: '선임' });
   assert.deepEqual(demoteMemberTierOnce('우수 파트너'), { previousTier: '선임', newTier: '크루' });
   assert.deepEqual(demoteMemberTierOnce('인증 파트너'), { previousTier: '크루', newTier: '라인' });
@@ -118,7 +119,7 @@ test('원금 출금 강등은 전담→선임→크루→라인 순서이고 라
   assert.deepEqual(demoteMemberTierOnce(''), { previousTier: '라인', newTier: '라인' });
 });
 
-test('강등 마이그레이션은 기존 파일을 고치지 않고 정규화 함수로 분기한다', async () => {
+test('과거 패널티 마이그레이션 파일은 정규화 분기를 유지하고, 무강등 SoT는 후속 마이그레이션이 덮는다', async () => {
   const migration = await readRepo('supabase', 'migrations', '20260918130000_putduk_member_tier_normalize_penalties.sql');
   assert.match(migration, /create or replace function private\.putduk_apply_principal_penalties/);
   assert.match(migration, /v_tier_label := private\.putduk_normalize_member_tier\(v_tier\)/);
@@ -135,6 +136,11 @@ test('강등 마이그레이션은 기존 파일을 고치지 않고 정규화 �
   // 기존(문제가 있던) 마이그레이션 파일 자체는 이번 수정에서 건드리지 않는다.
   const original = await readRepo('supabase', 'migrations', '20260917210000_putduk_three_bucket_ledger.sql');
   assert.match(original, /when '주임' then '라인'/);
+
+  // B안 SoT: 후속 no-op 마이그레이션이 원금 출금 패널티를 무해화한다.
+  const noop = await readRepo('supabase', 'migrations', '20260920193500_putduk_remove_principal_withdraw_penalties.sql');
+  assert.match(noop, /'penalty_applied', false/);
+  assert.match(noop, /demotion_applied\s*=\s*false/i);
 });
 
 test('관리자 등급 변경 저장은 서버에서 배지 라벨로 정규화한다', async () => {
@@ -174,9 +180,11 @@ test('라인 찾기 목록·업무 카드·출근 확인 화면이 대시보드�
   assert.match(nodesPageBody, /dailyQuotaSummaryText\(\)/);
 
   const nodeCardBody = appJs.slice(appJs.indexOf('function renderNodeCard'), appJs.indexOf('function renderNodeCard') + 1800);
-  assert.match(nodeCardBody, /참여 가능/);
+  // 업무 카드는 하루한도를 자체 계산/표시하지 않고 FOMO 자리만 보여 준다
+  assert.match(nodeCardBody, /자리 남음/);
   assert.equal(nodeCardBody.includes('오늘 소진'), false);
   assert.equal(nodeCardBody.includes('dailyQuotaParts()'), false);
+  assert.equal(nodeCardBody.includes('dailyQuotaSummaryText()'), false);
 
   const startConfirmBody = appJs.slice(appJs.indexOf('function renderStartConfirm'), appJs.indexOf('function renderStartConfirm') + 1800);
   assert.match(startConfirmBody, /dailyQuotaSummaryText\(\)/);

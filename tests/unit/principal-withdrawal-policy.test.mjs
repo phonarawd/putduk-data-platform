@@ -35,6 +35,17 @@ test('레거시 패널티 함수는 회원 상태를 바꾸지 않는 호환 함
   assert.match(helperBlock, /'penalty_applied', false/);
 });
 
+test('제품 규칙은 원금 출금 무강등 SoT를 문서화한다', async () => {
+  const product = await readRepo('.cursor', 'rules', 'putduk-product.mdc');
+  assert.match(product, /원금 출금 무강등/);
+  assert.match(product, /등급·라인 무강등 SoT/);
+  assert.match(product, /다시 넣지 마세요/);
+  assert.match(product, /finance SQL\/RPC/);
+  assert.doesNotMatch(product, /멤버십 등급을 \*\*강등\*\*하세요/);
+  assert.doesNotMatch(product, /불이익은 \*\*권한·등급·라인\*\*/);
+  assert.match(product, /사원증이 내려가는\(강등\) 3D 컷을 쓰지 마세요/);
+});
+
 test('회원 화면은 잘못된 원금 출금 강등 토스트를 통합 정책 가드에서 제거한다', async () => {
   const indexHtml = await readRepo('dist', 'index.html');
   const guard = await readRepo('dist', 'assets', 'toast-policy-guard.js');
