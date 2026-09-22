@@ -2931,7 +2931,7 @@
       work: `<h3>오늘 라인 근무</h3><p class="help-line">${icon('briefcase', 16)}<span>작업실에서 한 칸만 골라 출근해요. 오늘 배정 물량 5건의 실물 라벨 번호를 입력해 전표와 대조하면 돼요.</span></p><p class="help-line">${icon('monitor', 16)}<span>컴퓨터 화면에서도 근무할 수 있어요. 홈 화면 아이콘은 있으면 편하고, 없어도 출근할 수 있어요.</span></p><p>5건을 마치면 제출해요. 하루 30~60분이면 충분해요.</p>`,
       badge: `<h3>사원으로서 확인</h3><p class="help-line">${icon('id-card', 16)}<span>카드 한 장에 이름·사진·사원번호·협력사 배지가 있어요. PDK- 번호가 사원번호예요.</span></p><p class="help-line">${icon('building-2', 16)}<span>지금 출근하는 라인의 협력사가 카드에 보여요. 다른 협력사 칸으로 일하면 배지도 그 라인으로 바뀌어요.</span></p><p class="membership-links"><button type="button" class="text-link" data-nav="benefits">${icon('award', 16)} 등급·혜택 보기</button></p><p class="help-legal">퍼뜩 멤버십 운영이며, 근로계약·4대보험·협력사 인사 채용은 아니에요.</p>`,
       pay: `<h3>원금과 수당</h3><p class="help-line">${icon('layout-grid', 16)}<span>지갑은 지원금·업무잔액·출금가능 세 칸이에요. 섞지 않아요.</span></p><p class="help-line">${icon('lock', 16)}<span>근무 보증은 잠금 금액이에요. 승인되면 원금은 업무잔액, 수당은 출금가능 칸에 보여요.</span></p>${settleNote('p')}<p>화면에서 숫자를 바꾸지 않아요. 서버가 정해요.</p>`,
-      out: `<h3>출금은 이렇게</h3><p class="help-line">${icon('banknote', 16)}<span>큰 버튼은 수당만 출금이에요. 원금은 업무잔액에 남아 보여요.</span></p><p class="help-line">${icon('landmark', 16)}<span>보증금까지 신청하면 대기 일수 없이 바로 지급하고, 등급과 라인은 내려가요.</span></p><p>체험 첫 출금 3천 원은 운영 경로로만 처리돼요.</p><p class="membership-links"><button type="button" class="text-link" data-nav="benefits">${icon('award', 16)} 강등·혜택 안내</button></p>`
+      out: `<h3>출금은 이렇게</h3><p class="help-line">${icon('banknote', 16)}<span>큰 버튼은 수당만 출금이에요. 원금은 업무잔액에 남아 보여요.</span></p><p class="help-line">${icon('landmark', 16)}<span>원금까지 신청하면 운영자 확인 후 지급 처리되며, 완료된 원금만큼 업무잔액이 줄어요. 원금 출금 자체로 회원 등급이나 라인을 낮추지 않아요.</span></p><p>체험 첫 출금 3천 원은 운영 경로로만 처리돼요.</p><p class="membership-links"><button type="button" class="text-link" data-nav="benefits">${icon('award', 16)} 등급·혜택 보기</button></p>`
     };
     return `<div class="section-heading" style="margin-top:0"><div><h1 class="page-title">도움말</h1><p class="page-copy">오늘 근무부터 정산까지, 사원 안내를 나눠 두었어요.</p></div></div>
       <div class="help-tabs">${tabs.map((item) => `<button type="button" class="filter-button ${tab === item.id ? 'active' : ''}" data-help-tab="${item.id}">${item.label}</button>`).join('')}</div>
@@ -3463,16 +3463,11 @@
   }
 
   function renderPrincipalConfirm() {
-    const band = tierBand();
-    const next = demoteBandLabel(band.label);
     const w = walletThree();
     const work = Number(w.work || 0);
     const stipend = Number(w.withdrawable || 0);
     const total = work + stipend;
-    const gradeCopy = band.label === next
-      ? `사원증 등급이 내려가요. 지금은 ${esc(band.label)}${ieya(band.label)}.`
-      : `사원증 등급이 ${esc(band.label)}에서 ${esc(next)}${eulo(next)} 내려가요.`;
-    return `<div class="modal-backdrop" data-modal="withdraw-principal"><div class="modal penalty-sheet cinematic-modal"><div class="result-stage compact"><canvas id="demoteMotionCanvas" aria-hidden="true"></canvas></div><div class="modal-head"><div><h2 class="modal-title-row">${icon('landmark', 20)} 보증금까지 출금할까요?</h2><p>대기 기간 없이 바로 지급하고, 지위는 내려가요.</p></div><button class="icon-button" data-action="close-modal" aria-label="닫기">${icon('x',18)}</button></div><div class="modal-body"><div class="penalty-figures"><div><span>지금 업무잔액(원금)</span><strong>${money(work)}</strong></div><div><span>지금 출금가능(수당)</span><strong>${money(stipend)}</strong></div><div><span>신청하면 바로 이 합까지</span><strong>${money(total)}</strong></div></div><div class="notice penalty-list"><div class="penalty-row">${icon('banknote', 16)}<span>같은 날 ${money(total)}까지 즉시 지급해요. 며칠 뒤에 돈을 묶지 않아요.</span></div><div class="penalty-row">${icon('trending-down', 16)}<span>${gradeCopy}</span></div><div class="penalty-row">${icon('door-closed', 16)}<span>근무 잔액이 0원이 되면 그 라인은 바로 닫혀요.</span></div><p>우선 집기·주간 근무 자리·전담 라인은 빠지고, 같은 고액 칸은 다시 입금해야 열려요.</p></div><div class="modal-actions"><button class="secondary-button" type="button" data-action="close-modal">취소</button><button class="gold-button" type="button" data-action="confirm-principal">이해하고 신청</button></div></div></div></div>`;
+    return `<div class="modal-backdrop" data-modal="withdraw-principal"><div class="modal penalty-sheet cinematic-modal"><div class="modal-head"><div><h2 class="modal-title-row">${icon('landmark', 20)} 보증금까지 출금할까요?</h2><p>대기 기간 없이 바로 지급하고, 등급은 그대로예요.</p></div><button class="icon-button" data-action="close-modal" aria-label="닫기">${icon('x',18)}</button></div><div class="modal-body"><div class="penalty-figures"><div><span>지금 업무잔액(원금)</span><strong>${money(work)}</strong></div><div><span>지금 출금가능(수당)</span><strong>${money(stipend)}</strong></div><div><span>신청하면 바로 이 합까지</span><strong>${money(total)}</strong></div></div><div class="notice penalty-list"><div class="penalty-row">${icon('banknote', 16)}<span>같은 날 ${money(total)}까지 즉시 지급해요. 며칠 뒤에 돈을 묶지 않아요.</span></div><div class="penalty-row">${icon('shield-check', 16)}<span>원금 출금 자체로 회원 등급·혜택·라인은 바뀌지 않아요.</span></div><div class="penalty-row">${icon('wallet', 16)}<span>완료된 원금만큼 업무잔액이 줄어요. 남은 잔액이 잠금보다 적으면 그 칸은 새로 시작하기 어려워요.</span></div></div><div class="modal-actions"><button class="secondary-button" type="button" data-action="close-modal">취소</button><button class="gold-button" type="button" data-action="confirm-principal">이해하고 신청</button></div></div></div></div>`;
   }
 
   function renderKycModal() {
@@ -4440,14 +4435,7 @@
       return;
     }
 
-    if (state.modal === 'withdraw-principal') {
-      const canvas = document.getElementById('demoteMotionCanvas');
-      const token = 'demote';
-      playCueOnCanvas(canvas, token, () => {
-        motion.playWorkPhase(canvas, companies[0] || { name: '퍼뜩', slug: 'putduk' }, 'demote');
-      });
-      return;
-    }
+    // B안 SoT: 원금 출금 확인은 무강등. demote(사원증 하강) 컷을 재생하지 않음. 이모지 연출로 대체하지 않음.
 
     if (state.modal === 'deposit-jump') {
       const canvas = document.getElementById('depositJumpMotionCanvas');
@@ -5753,7 +5741,7 @@
       await refreshMemberWallet();
       closeModal();
       showToast('⏳ 출금 신청을 접수했어요. 운영자가 확인하면 같은 날 지급 처리돼요.', 'success');
-      if (kind === 'principal') showToast('⬇️ 등급과 라인이 내려가는 출금이에요. 돈은 바로 지급 처리돼요.', 'warning');
+      if (kind === 'principal') showToast('✅ 원금만큼 업무잔액이 줄어요. 등급·라인은 출금 자체로 바뀌지 않아요.', 'success');
     } catch (error) {
       showToast(friendlyAdminError(error), isUnsupportedAction(error) ? 'warning' : 'error');
     }

@@ -99,9 +99,12 @@ export function dailyQuotaLabel(quota) {
   return `오늘 작업 가능 ${quota.remaining_today}/${quota.daily_limit}회 남음`;
 }
 
-// private.putduk_apply_principal_penalties()와 같은 강등 순서(전담→선임→크루→라인).
-// '라인'이 바닥이라 더 내려가지 않는다('체험'은 1회성 온보딩이라 강등 목적지가 아님).
-// 분기 전 항상 normalizeMemberTier로 정규화해서 구 표기·미정의 값을 흡수한다.
+/**
+ * 레거시 단위 테스트용 강등 헬퍼.
+ * B안 SoT(원금 출금 무강등): 출금 완료 경로·finance RPC에서 호출하지 말 것.
+ * 과거 putduk_apply_principal_penalties 순서(전담→선임→크루→라인)만 재현한다.
+ * '라인'이 바닥('체험'은 온보딩이라 강등 목적지 아님). normalizeMemberTier로 구 표기 흡수.
+ */
 export function demoteMemberTierOnce(rawTier) {
   const tier = normalizeMemberTier(rawTier);
   const next = ({

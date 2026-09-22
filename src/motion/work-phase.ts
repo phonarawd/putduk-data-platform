@@ -38,7 +38,7 @@ const PHASE_ALIASES: Record<string, WorkCut> = {
   badge_home: 'pwa_home',
   home_badge: 'pwa_home',
   demote: 'demote',
-  principal_withdraw: 'demote',
+  // B안 SoT: 원금 출금은 무강등 — principal_withdraw를 demote 컷에 묶지 않는다.
   badge_down: 'demote',
   rank_down: 'demote',
   stripe_down: 'demote'
