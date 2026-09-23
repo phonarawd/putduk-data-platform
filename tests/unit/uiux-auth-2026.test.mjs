@@ -20,7 +20,7 @@ test('member shell wires premium auth/legal assets and service worker caches the
   assert.match(memberHtml, /uiux-auth-2026\.js\?v=20260920-landscape1/);
   assert.match(memberHtml, /uiux-legal-2026\.css\?v=20260919-uiux8/);
   assert.match(memberHtml, /uiux-legal-2026\.js\?v=20260919-uiux8/);
-  assert.match(memberHtml, /uiux-compliance-2026\.js\?v=20260919-uiux8/);
+  assert.match(memberHtml, /uiux-compliance-2026\.js\?v=20260924-phase41f1/);
   assert.match(memberHtml, /uiux-growth-2026\.css\?v=20260919-uiux3/);
   assert.match(memberHtml, /uiux-growth-2026\.js\?v=20260919-uiux3/);
 
@@ -159,7 +159,7 @@ test('landscape member shell and auth surfaces keep one usable scroll owner', as
 
   assert.doesNotMatch(memberHtml, /user-scalable=no/);
   assert.doesNotMatch(memberHtml, /maximum-scale=1\.0/);
-  assert.match(memberHtml, /app\.css\?v=20260924-phase4h1/);
+  assert.match(memberHtml, /app\.css\?v=20260924-phase41f1/);
   assert.match(memberHtml, /uiux-auth-2026\.css\?v=20260920-landscape1/);
   assert.match(memberHtml, /uiux-auth-2026\.js\?v=20260920-landscape1/);
   assert.match(appCss, /orientation:\s*landscape/);

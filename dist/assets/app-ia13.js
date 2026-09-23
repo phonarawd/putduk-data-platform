@@ -3114,43 +3114,30 @@
       { id: 'pay', label: '정산·지갑' },
       { id: 'out', label: '출금' }
     ];
-    const card = (iconName, title, copy) => `<div class="help-card"><span class="help-card-icon">${icon(iconName, 18)}</span><div><strong>${title}</strong><span>${copy}</span></div></div>`;
+    const faq = (question, answer) => `<details class="help-faq"><summary>${question}</summary><div class="help-faq-body">${answer}</div></details>`;
     const bodies = {
-      work: `<div class="help-cards">
-        ${card('briefcase', '한 칸 골라 출근', '오늘 배정 물량 5건의 실물 라벨 번호를 전표와 대조해요.')}
-        ${card('monitor', 'PC에서도 근무 가능', '홈 화면 아이콘은 있으면 편하고, 없어도 출근할 수 있어요.')}
-        ${card('clock', '하루 30~60분', '5건을 마치면 제출하고 검수를 기다려요.')}
-      </div>`,
-      badge: `<div class="help-cards">
-        ${card('id-card', '사원증 한 장에 다 있어요', '이름·사진·사원번호·협력사 배지. PDK- 번호가 사원번호예요.')}
-        ${card('building-2', '라인 따라 배지가 바뀌어요', '지금 출근하는 라인의 협력사가 카드에 보여요.')}
-      </div>
-      <p class="membership-links"><button type="button" class="text-link" data-nav="benefits">${icon('award', 16)} 등급·혜택 보기</button></p>
-      <p class="help-legal">퍼뜩 멤버십 운영이며, 근로계약·4대보험·협력사 인사 채용은 아니에요.</p>`,
-      pay: `<div class="help-cards">
-        ${card('layout-grid', '지갑은 세 칸이에요', '지원금·업무잔액·출금가능. 섞지 않아요.')}
-        ${card('lock', '근무 보증은 잠금 금액', '승인되면 원금은 업무잔액, 수당은 출금가능 칸에 보여요.')}
-      </div>
-      ${settleNote('p')}
-      <p class="help-card-note">화면에서 숫자를 바꾸지 않아요. 서버가 정해요.</p>`,
-      out: `<div class="help-cards">
-        ${card('banknote', '큰 버튼은 수당만', '원금은 업무잔액에 남아 보여요.')}
-        ${card('landmark', '원금 포함은 운영자 확인 후 지급', '완료된 원금만큼 업무잔액이 줄어요. 원금 출금 자체로 회원 등급이나 라인을 낮추지 않아요.')}
-      </div>
-      <p class="help-card-note">체험 첫 출금 3천 원은 운영 경로로만 처리돼요.</p>
-      <p class="membership-links"><button type="button" class="text-link" data-nav="benefits">${icon('award', 16)} 등급·혜택 보기</button></p>`
+      work: `
+        ${faq('출근은 어떻게 하나요?', '작업실에서 한 칸을 골라 출근해요. 오늘 배정 물량 5건의 실물 라벨 번호를 전표와 대조하면 돼요. 하루 30~60분이면 충분해요.')}
+        ${faq('검수는 언제 끝나나요?', '제출한 칸이 승인되거나 반려되면 다음 칸을 골라 출근할 수 있어요.')}
+        ${faq('PC에서도 근무할 수 있나요?', '네. 브라우저에서 바로 근무·입금이 돼요. 홈 화면 아이콘은 있으면 편하고, 없어도 출근할 수 있어요.')}`,
+      badge: `
+        ${faq('사원번호는 무엇인가요?', 'PDK-로 시작하는 번호가 사원번호예요. 카드 한 장에 이름·사진·사원번호·협력사 배지가 같이 있어요.')}
+        ${faq('협력사 배지는 왜 바뀌나요?', '지금 출근하는 라인의 협력사가 카드에 보여요. 다른 라인으로 일하면 배지도 그 라인으로 바뀌어요.')}
+        ${faq('등급·혜택은 어디서 보나요?', '<p class="membership-links"><button type="button" class="text-link" data-nav="benefits">등급·혜택 보기</button></p>')}
+        <p class="help-legal">퍼뜩 멤버십 운영이며, 근로계약·4대보험·협력사 인사 채용은 아니에요.</p>`,
+      pay: `
+        ${faq('지갑의 세 칸은 무엇인가요?', '지원금·업무잔액·출금가능. 세 칸은 섞이지 않아요.')}
+        ${faq('근무 보증금은 언제 돌아오나요?', '승인되면 원금은 업무잔액으로, 수당은 출금가능 칸에 반영돼요. <br>✅ 일이 끝나면 원금과 수당이 잔액에 같이 반영돼요.')}
+        ${faq('화면의 금액은 어떻게 정해지나요?', '서버가 정해요. 화면에서 숫자를 더하거나 빼지 않아요.')}`,
+      out: `
+        ${faq('수당은 어떻게 출금하나요?', '지갑의 큰 버튼은 수당만 출금이에요. 원금은 업무잔액에 남아 보여요.')}
+        ${faq('원금도 출금할 수 있나요?', '네. 운영자 확인 후 지급되고, 완료된 원금만큼 업무잔액이 줄어요. 원금 출금 자체로 회원 등급이나 라인을 낮추지 않아요.')}
+        ${faq('첫 출금은 어떻게 하나요?', '체험 수당 3천 원은 1회만, 원화 계좌로 신청할 수 있어요.')}`
     };
-    return `<div class="section-heading" style="margin-top:0"><div><h1 class="page-title">도움말</h1><p class="page-copy">오늘 근무부터 정산까지, 사원 안내를 나눠 두었어요.</p></div></div>
+    return `<div class="section-heading" style="margin-top:0"><div><h1 class="page-title">도움말</h1><p class="page-copy">궁금한 것을 바로 찾아보세요.</p></div></div>
       <div class="help-tabs">${tabs.map((item) => `<button type="button" class="filter-button ${tab === item.id ? 'active' : ''}" data-help-tab="${item.id}">${item.label}</button>`).join('')}</div>
       <div class="panel panel-pad help-body">${bodies[tab] || bodies.work}</div>
-      <div class="panel panel-pad help-channel">
-        <h3>실시간 상담</h3>
-        <p class="help-line">${icon('circle-help', 16)}<span>💬 근무나 정산이 막히면 상담 창에서 바로 물어보세요.</span></p>
-        <button type="button" class="primary-button" data-action="open-channel-talk" aria-label="상담원에게 물어보기">💬 상담원에게 물어보기</button>
-      </div>
-      <div class="help-accordion">
-        <details><summary>검수가 끝날 때까지 새 출근은 기다려요</summary><p>제출한 칸이 승인되거나 반려되면 다음 칸을 고를 수 있어요.</p></details>
-      </div>`;
+      <p class="help-contact-line">💬 답을 못 찾았으면 <button type="button" class="text-link" data-action="open-channel-talk" aria-label="상담원에게 물어보기">상담원에게 물어보세요</button></p>`;
   }
 
   function renderMemberPage() {

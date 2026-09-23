@@ -71,9 +71,8 @@ test('기존 auth 계약은 그대로 유지한다', async () => {
 test('로그인 딜레이 UX는 FOMO·봇 보호 설정을 수정하지 않는다', async () => {
   const appJs = await readRepo('dist', 'assets', 'app-ia13.js');
   const css = await readRepo('dist', 'assets', 'app.css');
-  for (const protectedName of ['bot_enabled', 'crowd_min', 'crowd_max', 'burn_per_minute', 'crew_pulse', 'FOMO_ACTIONS']) {
-    const before = appJs.split(protectedName).length - 1;
-    assert.ok(before >= 0, `app-ia13.js에서 ${protectedName} 확인 실패`);
+  for (const protectedName of ['bot_enabled', 'crowd_min', 'crowd_max', 'burn_per_minute']) {
+    assert.ok(appJs.includes(protectedName), `app-ia13.js에 ${protectedName} FOMO 계약이 사라졌어요`);
   }
   assert.doesNotMatch(css, /bot_enabled|crowd_min|crowd_max|burn_per_minute|crew_pulse/);
 });

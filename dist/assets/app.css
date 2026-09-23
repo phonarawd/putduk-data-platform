@@ -813,6 +813,17 @@ html[data-theme="dark"] .toast {
 .help-card-note { margin:12px 0 0; color:var(--muted); font-size:13px; line-height:1.55; word-break:keep-all; }
 .help-body .help-card + .membership-links { margin:12px 0 0; }
 .help-body .help-legal { margin:14px 0 0; }
+.help-faq { border-bottom:1px solid var(--line); }
+.help-faq:first-child { border-top:1px solid var(--line); }
+.help-faq summary { cursor:pointer; padding:16px 4px; font-size:15px; font-weight:800; letter-spacing:-.01em; list-style:none; display:flex; justify-content:space-between; align-items:center; gap:12px; }
+.help-faq summary::-webkit-details-marker { display:none; }
+.help-faq summary::after { content:""; width:9px; height:9px; flex:0 0 9px; border-right:2px solid var(--muted); border-bottom:2px solid var(--muted); transform:rotate(45deg); transition:transform .18s ease; margin-right:3px; }
+.help-faq[open] summary::after { transform:rotate(225deg); }
+.help-faq-body { padding:0 4px 18px; color:var(--muted); font-size:14px; line-height:1.7; word-break:keep-all; }
+.help-faq-body .membership-links { margin:8px 0 0; }
+.help-body .help-legal { margin:16px 0 0; }
+.help-contact-line { display:flex; flex-wrap:wrap; align-items:center; gap:4px; margin:16px 2px 0; color:var(--muted); font-size:13px; }
+.help-contact-line .text-link { min-height:0; font-size:13px; }
 @media (max-width: 640px) { .help-card { grid-template-columns:36px minmax(0,1fr); gap:10px; padding:12px 12px 12px 10px; } .help-card-icon { width:36px; height:36px; } }
 .player-backdrop { align-items:stretch; }
 .player-sheet { width:min(560px,100%); margin:auto; display:flex; flex-direction:column; max-height:min(92vh,860px); overflow:auto; border-radius:24px; background:var(--surface-strong); }

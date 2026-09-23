@@ -5,13 +5,6 @@
   if (window.__PUTDUK_PHASE4_MEMBER_CLARITY__) return;
   window.__PUTDUK_PHASE4_MEMBER_CLARITY__ = true;
 
-  const HELP_TOPICS = [
-    { id: 'work', title: '오늘 근무', copy: '업무 선택부터 제출·검수까지' },
-    { id: 'badge', title: '사원증', copy: '사원번호·협력사 표시 기준' },
-    { id: 'pay', title: '정산·지갑', copy: '지원금·업무잔액·수당 구분' },
-    { id: 'out', title: '출금', copy: '수당·원금 포함 출금 기준' }
-  ];
-
   function text(node) {
     return String(node?.textContent || '').replace(/\s+/g, ' ').trim();
   }
@@ -138,9 +131,6 @@
   function enhanceHelp() {
     const title = pageTitle('도움말');
     if (!title) return;
-    const heading = title.closest('.section-heading');
-    const copy = heading?.querySelector('.page-copy');
-    if (copy) copy.textContent = '궁금한 주제를 먼저 고르면 핵심 안내로 바로 이동합니다.';
 
     const tabs = document.querySelector('.help-tabs');
     if (tabs) {
@@ -153,36 +143,11 @@
       });
     }
 
-    if (heading && !document.querySelector('[data-phase4-help-index]')) {
-      const index = document.createElement('nav');
-      index.className = 'phase4-help-index';
-      index.dataset.phase4HelpIndex = '1';
-      index.setAttribute('aria-label', '도움말 빠른 찾기');
-      index.innerHTML = HELP_TOPICS.map((topic) => `
-        <button type="button" data-help-tab="${topic.id}">
-          <strong>${topic.title}</strong><span>${topic.copy}</span>
-        </button>`).join('');
-      heading.insertAdjacentElement('afterend', index);
-    }
-
     const body = document.querySelector('.help-body');
     if (body) {
       body.id = 'phase4HelpBody';
       body.setAttribute('role', 'tabpanel');
       body.setAttribute('aria-live', 'polite');
-    }
-
-    const accordion = document.querySelector('.help-accordion');
-    if (accordion && !accordion.previousElementSibling?.classList?.contains('phase4-help-more-title')) {
-      const more = document.createElement('h2');
-      more.className = 'phase4-help-more-title';
-      more.textContent = '자주 찾는 추가 안내';
-      accordion.insertAdjacentElement('beforebegin', more);
-    }
-
-    const channel = document.querySelector('.help-channel');
-    if (accordion && channel && accordion.nextElementSibling !== channel) {
-      accordion.insertAdjacentElement('afterend', channel);
     }
   }
 
