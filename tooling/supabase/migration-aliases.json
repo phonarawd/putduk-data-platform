@@ -189,6 +189,10 @@
     "harden_push_dispatch_token_binding": [
       "20260923140000",
       "20260923022747"
+    ],
+    "harden_pin_failure_atomic_and_withdraw_ref": [
+      "20260923143000",
+      "20260923024033"
     ]
   },
   "remote_history_only": [

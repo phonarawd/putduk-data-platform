@@ -17,7 +17,6 @@ import {
   isSixDigitPin,
   newRevealToken,
   PIN_SCOPES,
-  registerPinFailure,
   verifyPin
 } from "./deposit-pin.ts";
 
@@ -115,45 +114,36 @@ async function recordFailure(
   ipHash: string | null,
   ipRow: JsonRecord | null
 ) {
-  const now = new Date();
-  const userFail = registerPinFailure(Number(userRow?.failed_attempts || 0), now);
-  const ipFail = registerPinFailure(Number(ipRow?.failed_attempts || 0), now);
-  if (userRow?.pin_hash && userRow.pin_hash !== "pending") {
-    await rpcCall(admin, "putduk_security_pin_set_failures", {
-      p_user_id: userId,
-      p_failed_attempts: userFail.failedAttempts,
-      p_locked_until: userFail.lockedUntil ? userFail.lockedUntil.toISOString() : null
-    });
-  }
-  if (ipHash) {
-    await rpcCall(admin, "putduk_security_pin_ip_upsert", {
-      p_ip_hash: ipHash,
-      p_failed_attempts: ipFail.failedAttempts,
-      p_locked_until: ipFail.lockedUntil ? ipFail.lockedUntil.toISOString() : null
-    });
-  }
-  await writeAudit(admin, userId, userId, userFail.locked || ipFail.locked ? "pin_lock" : "pin_fail", PIN_SCOPES.DEPOSIT_INFO_REVEAL, ipHash, {
-    remaining: Math.min(userFail.remaining, ipFail.remaining)
+  const failure = await rpcCall<JsonRecord>(
+    admin,
+    "putduk_security_pin_register_failure",
+    { p_user_id: userId, p_ip_hash: ipHash }
+  );
+  const userFail = failure?.user && typeof failure.user === "object"
+    ? failure.user as JsonRecord
+    : {};
+  const ipFail = failure?.ip && typeof failure.ip === "object"
+    ? failure.ip as JsonRecord
+    : {};
+  const userLocked = userFail.locked === true;
+  const ipLocked = ipFail.locked === true;
+  const userRemaining = Number(userFail.remaining ?? 0);
+  const ipRemaining = ipHash ? Number(ipFail.remaining ?? 0) : 5;
+  const locked = userLocked || ipLocked;
+  await writeAudit(admin, userId, userId, locked ? "pin_lock" : "pin_fail", PIN_SCOPES.DEPOSIT_INFO_REVEAL, ipHash, {
+    remaining: Math.min(userRemaining, ipRemaining)
   });
-  if (userFail.locked || ipFail.locked) {
+  if (locked) {
     throw new HttpError(423, "🔒 보안 PIN을 여러 번 틀려서 잠시 잠갔어요. 15분 뒤에 다시 해 주세요.", DEPOSIT_INFO_LOCKED);
   }
-  throw new HttpError(403, `🙂 보안 PIN이 올바르지 않아요. ${userFail.remaining}번 더 시도할 수 있어요.`, DEPOSIT_INFO_PIN_REQUIRED);
+  throw new HttpError(403, `🙂 보안 PIN이 올바르지 않아요. ${userRemaining}번 더 시도할 수 있어요.`, DEPOSIT_INFO_PIN_REQUIRED);
 }
 
 async function clearFailures(admin: AdminClient, userId: string, ipHash: string | null) {
-  await rpcCall(admin, "putduk_security_pin_set_failures", {
+  await rpcCall(admin, "putduk_security_pin_clear_failures", {
     p_user_id: userId,
-    p_failed_attempts: 0,
-    p_locked_until: null
+    p_ip_hash: ipHash
   });
-  if (ipHash) {
-    await rpcCall(admin, "putduk_security_pin_ip_upsert", {
-      p_ip_hash: ipHash,
-      p_failed_attempts: 0,
-      p_locked_until: null
-    });
-  }
 }
 
 async function signQr(admin: AdminClient, path: unknown) {
