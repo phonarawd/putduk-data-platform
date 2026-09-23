@@ -236,6 +236,10 @@ test('회원 화면의 오늘 남은 횟수 표시가 단일 표시 계약을 �
   assert.match(appJs, /if \(retry < 2\)/);
   assert.match(appJs, /void hydrateDailyTaskQuota\(\);/);
   assert.doesNotMatch(appJs, /state\.dailyTaskQuota = quotaResult\.quota \|\| null;/);
+  assert.match(appJs, /supabaseClient\.rpc\('putduk_member_daily_task_quota', \{ p_user_id: userId \}\)/);
+
+  const quotaMigration = await readRepo('supabase', 'migrations', '20260923223500_putduk_member_daily_quota_client_rpc.sql');
+  assert.match(quotaMigration, /grant execute on function public\.putduk_member_daily_task_quota\(uuid\) to authenticated/);
 
   const index = await readRepo('dist', 'index.html');
   const headers = await readRepo('dist', '_headers');
