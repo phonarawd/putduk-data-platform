@@ -55,7 +55,7 @@ test('저장 후 최신 값을 다시 조회하고 회원 quota 응답을 그대
   assert.match(adminOps, /return \{ limit: data, \.\.\.latest \}/);
   assert.match(adminJs, /latest\?\.limits/);
   assert.match(appJs, /memberFinanceRequest\('daily_task_quota'\)/);
-  assert.match(appJs, /state\.dailyTaskQuota = quotaResult\.quota/);
+  assert.match(appJs, /state\.dailyTaskQuota = quota/);
   assert.match(adminOps, /putduk_member_daily_task_quota/);
 });
 

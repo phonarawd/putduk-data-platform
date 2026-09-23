@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
-const app = await readFile(new URL('../../dist/assets/app.js', import.meta.url), 'utf8');
+const app = await readFile(new URL('../../dist/assets/app-ia13.js', import.meta.url), 'utf8');
 
 test('new members see trial-first onboarding before install or balance education', () => {
   assert.match(app, /state\.onboardingStep = 'first-work'/);

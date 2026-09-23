@@ -6,7 +6,7 @@ const requiredFiles = [
   'dist/index.html',
   'dist/admin/index.html',
   'dist/assets/app.css',
-  'dist/assets/app.js',
+  'dist/assets/app-ia13.js',
   'dist/assets/overlay-surface.css',
   'dist/assets/overlay-surface.js',
   'dist/assets/origin-split.js',
@@ -66,7 +66,7 @@ test('회원 FOMO 화면에 봇·가짜·연출 티가 없다', async () => {
   assert.equal(appJs.includes('지금은 봇 연출을 꺼 두었어요'), false);
   assert.equal(appJs.includes('실제 최근 활동'), false);
   assert.equal(appJs.includes("action: 'real_activity'"), false);
-  assert.match(memberHtml, /fomo-bot-runtime\.js/);
+  assert.match(memberHtml, /fomo-bot-runtime-v2\.js/);
   assert.match(fomoRuntime, /방금 들어온 크루/);
   assert.doesNotMatch(fomoRuntime, /실제 최근 활동|실제 업무 현황|최근 30분 동안 공개할 실제 활동이 없습니다/);
 });

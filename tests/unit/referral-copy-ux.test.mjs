@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 
 const root = new URL('../../', import.meta.url);
-const app = fs.readFileSync(new URL('dist/assets/app.js', root), 'utf8');
+const app = fs.readFileSync(new URL('dist/assets/app-ia13.js', root), 'utf8');
 const index = fs.readFileSync(new URL('dist/index.html', root), 'utf8');
 const adminIndex = fs.readFileSync(new URL('dist/admin/index.html', root), 'utf8');
 
@@ -17,8 +17,8 @@ test('referral copy gives explicit success and failure feedback', () => {
 });
 
 test('referral copy ships on fresh member asset ia11', () => {
-  assert.match(index, /assets\/app-ia11\.js/);
-  assert.match(adminIndex, /assets\/app-ia11\.js/);
+  assert.match(index, /assets\/app-ia13\.js/);
+  assert.match(adminIndex, /assets\/app-ia13\.js/);
 });
 
 new Function(app);

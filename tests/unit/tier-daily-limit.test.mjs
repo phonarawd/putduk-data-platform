@@ -174,7 +174,7 @@ test('라인 찾기 목록·업무 카드·출근 확인 화면이 대시보드�
   assert.match(nodesPageBody, /dailyQuotaSummaryText\(\)/);
 
   const nodeCardBody = appJs.slice(appJs.indexOf('function renderNodeCard'), appJs.indexOf('function renderNodeCard') + 1800);
-  assert.match(nodeCardBody, /참여 가능/);
+  assert.match(nodeCardBody, /출근하기/);
   assert.equal(nodeCardBody.includes('오늘 소진'), false);
   assert.equal(nodeCardBody.includes('dailyQuotaParts()'), false);
 
@@ -243,6 +243,6 @@ test('회원 화면의 오늘 남은 횟수 표시가 단일 표시 계약을 �
 
   const index = await readRepo('dist', 'index.html');
   const headers = await readRepo('dist', '_headers');
-  assert.match(index, /app\.js\?v=20260923-quota3/);
+  assert.match(index, /app-ia13\.js\?v=20260924-phase10e/);
   assert.match(headers, /\/assets\/app\.js[\\s\\S]*! Cache-Control[\\s\\S]*Cache-Control: public, max-age=0, must-revalidate/);
 });
