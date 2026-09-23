@@ -1,0 +1,24 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+
+const root = new URL('../../', import.meta.url);
+const app = fs.readFileSync(new URL('dist/assets/app.js', root), 'utf8');
+const index = fs.readFileSync(new URL('dist/index.html', root), 'utf8');
+const adminIndex = fs.readFileSync(new URL('dist/admin/index.html', root), 'utf8');
+
+test('referral copy gives explicit success and failure feedback', () => {
+  assert.match(app, /action === 'copy-referral'/);
+  assert.match(app, /navigator\.clipboard\?\.writeText/);
+  assert.match(app, /추천 코드를 복사했어요\./);
+  assert.match(app, /추천 코드를 복사하지 못했어요\. 코드를 길게 눌러 복사해 주세요\./);
+  assert.match(app, /await navigator\.clipboard\.writeText\(code\)/);
+});
+
+test('referral copy ships on fresh member asset ia10', () => {
+  assert.match(index, /assets\/app-ia10\.js/);
+  assert.match(adminIndex, /assets\/app-ia10\.js/);
+});
+
+new Function(app);
+console.log('referral copy UX contract: ok');

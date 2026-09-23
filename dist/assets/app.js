@@ -5367,7 +5367,19 @@
       if (state.reviewWait) { rememberReviewWaitDismissed(state.reviewWait); state.reviewWait.overlayOpen = false; saveState(); render(); }
       return;
     }
-    if (action === 'copy-referral') { navigator.clipboard?.writeText(referralCode()); return; }
+    if (action === 'copy-referral') {
+      const code = referralCode();
+      void (async () => {
+        try {
+          if (!navigator.clipboard?.writeText) throw new Error('clipboard_unavailable');
+          await navigator.clipboard.writeText(code);
+          showToast('추천 코드를 복사했어요.', 'success');
+        } catch (_) {
+          showToast('추천 코드를 복사하지 못했어요. 코드를 길게 눌러 복사해 주세요.', 'warning');
+        }
+      })();
+      return;
+    }
     if (action === 'email-check') {
       const email = document.getElementById('signupEmail')?.value.trim() || '';
       showToast(email && email.includes('@') ? '형식은 괜찮아요. 이미 있는 이메일은 가입 버튼을 눌렀을 때 안내돼요.' : '이메일 주소를 올바르게 입력해 주세요.', 'info');
