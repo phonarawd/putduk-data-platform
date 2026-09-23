@@ -162,11 +162,11 @@
       "20260923120000",
       "20260923015217"
     ],
-    "harden_push_dispatch_claim": [
+    "harden_push_dispatch_claim_v2": [
       "20260923121500",
       "20260923015605"
     ],
-    "restore_push_dispatch_legacy_contract": [
+    "restore_push_dispatch_legacy_contract_v2": [
       "20260923123000",
       "20260923015900"
     ]
