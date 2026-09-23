@@ -1928,18 +1928,50 @@
   }
 
   async function memberFinanceRequest(action, payload = {}) {
-    if (!authState.session || !memberFinanceUrl) {
-      throw new Error('로그인이 필요해요.');
+    if (!memberFinanceUrl || !supabaseClient) {
+      if (!authState.session) throw new Error('로그인이 필요해요.');
+      throw new Error('인증 서버가 준비되지 않았어요.');
     }
-    const response = await fetch(memberFinanceUrl, {
+
+    // Supabase JS가 자동 갱신한 최신 세션을 먼저 동기화한다.
+    let session = authState.session;
+    try {
+      const { data, error } = await supabaseClient.auth.getSession();
+      if (error) throw error;
+      if (data?.session) {
+        session = data.session;
+        authState.session = data.session;
+      }
+    } catch (_) {
+      session = authState.session;
+    }
+
+    if (!session) throw new Error('로그인이 필요해요.');
+
+    const request = async (accessToken) => fetch(memberFinanceUrl, {
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${authState.session.access_token}`,
+        Authorization: `Bearer ${accessToken}`,
         apikey: config.supabasePublishableKey || '',
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({ action, ...payload })
     });
+
+    let response = await request(session.access_token);
+
+    // 토큰이 갱신되는 순간의 경쟁 상태로 401이 나면 최신 세션을 한 번만 재확인한다.
+    if (response.status === 401) {
+      try {
+        const { data, error } = await supabaseClient.auth.refreshSession();
+        if (!error && data?.session) {
+          session = data.session;
+          authState.session = data.session;
+          response = await request(session.access_token);
+        }
+      } catch (_) {}
+    }
+
     const result = await response.json().catch(() => ({}));
     if (!response.ok || result.ok !== true) {
       const err = new Error(result.error || '요청을 처리하지 못했어요.');
