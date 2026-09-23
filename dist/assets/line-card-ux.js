@@ -190,7 +190,7 @@
 
   function enhanceMatchingCopy(root) {
     const title = Array.from(root.querySelectorAll?.('.section-heading .page-title') || [])
-      .find((node) => ['라인 찾기', '업무 매칭'].includes(String(node.textContent || '').trim()));
+      .find((node) => ['업무 매칭'].includes(String(node.textContent || '').trim()));
     if (title) {
       const copy = title.closest('.section-heading')?.querySelector('.page-copy');
       if (copy) setText(copy, PAGE_COPY);

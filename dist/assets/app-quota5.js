@@ -752,10 +752,6 @@
     });
   }
 
-  function isStandalonePwa() {
-    return window.navigator.standalone === true || window.matchMedia?.('(display-mode: standalone)').matches;
-  }
-
   function approvedTrialExists() {
     return (state.history || []).some((item) => {
       if (String(item.statusRaw || item.runStatus || '') !== 'approved') return false;
@@ -792,12 +788,6 @@
       state.onboardingStep = 'general-work';
       return;
     }
-    if (trialApproved && state.onboardingGeneralSeen && !state.onboardingPwaDone && !isStandalonePwa()) {
-      if (state.onboardingStep !== 'pwa') state._playedMotionCue = null;
-      state.onboardingStep = 'pwa';
-      return;
-    }
-    if (isStandalonePwa()) state.onboardingPwaDone = true;
     state.onboardingStep = null;
   }
 
@@ -2688,9 +2678,10 @@
       { id: 'settings', label: '설정·기타 운영', icon: 'sliders-horizontal' }
     ] : [
       { id: 'dashboard', label: '근무', icon: 'briefcase' },
-      { id: 'nodes', label: '라인 찾기', icon: 'waypoints' },
+      { id: 'nodes', label: '업무 매칭', icon: 'waypoints' },
       { id: 'history', label: '내역', icon: 'clipboard-list' },
       { id: 'wallet', label: '지갑', icon: 'wallet-cards' },
+      { id: 'referrals', label: '추천', icon: 'user-plus' },
       { id: 'membership', label: '사원증', icon: 'id-card' },
       { id: 'support', label: '도움말', icon: 'circle-help' }
     ];
@@ -2718,7 +2709,7 @@
   }
 
   function renderTopbar() {
-    const title = isAdmin ? ({ overview: '전체 현황', members: '회원 관리', operations: '업무 운영', companies: '기업 관리', nodes: '업무 카드 관리', reviews: '업무 검수', finance: '입출금 처리', motion: '연출', 'landing-content': '랜딩 현황·후기', notifications: '공지·알림', settings: '설정·기타 운영' }[state.adminPage] || '전체 현황') : ({ dashboard: '작업실', nodes: '라인 찾기', history: '내역', wallet: '지갑', membership: '사원증', benefits: '등급·혜택', referrals: '추천', support: '도움말' }[state.memberPage] || '작업실');
+    const title = isAdmin ? ({ overview: '전체 현황', members: '회원 관리', operations: '업무 운영', companies: '기업 관리', nodes: '업무 카드 관리', reviews: '업무 검수', finance: '입출금 처리', motion: '연출', 'landing-content': '랜딩 현황·후기', notifications: '공지·알림', settings: '설정·기타 운영' }[state.adminPage] || '전체 현황') : ({ dashboard: '작업실', nodes: '업무 매칭', history: '내역', wallet: '지갑', membership: '사원증', benefits: '등급·혜택', referrals: '추천', support: '도움말' }[state.memberPage] || '작업실');
     const memberIdentity = authState.session && !signedOutLock
       ? `<div class="profile-chip"><span class="avatar">${esc(profileInitial())}</span><span>${esc(profileName())}</span><button class="profile-logout" data-action="logout">로그아웃</button></div>`
       : `<button class="small-button" data-action="open-login">로그인</button>`;
@@ -3574,9 +3565,6 @@
       const approved = (state.history || []).find((item) => String(item.statusRaw || item.runStatus || '') === 'approved' && nodeById(item.nodeId)?.isTrial);
       const reward = Number(approved?.reward || state.wallet.available || 0);
       return `<div class="modal-backdrop" data-modal="onboard-general-work"><div class="modal grant-modal"><div class="modal-body"><p class="eyebrow">✅ 첫 업무가 승인됐어요</p><h2 class="modal-title-row">완료 수당 <span style="color:var(--emerald)">+${money(reward)}</span></h2><p class="page-copy">이제 일반 업무를 둘러볼 수 있어요. 일반 업무의 업무 보증금은 진행 중에만 잠기고, 완료하면 업무 잔액으로 돌아옵니다. 수당은 출금 가능 금액에 따로 쌓입니다.</p><div class="modal-actions"><button class="primary-button" type="button" data-action="ack-general-work">일반 업무 보기</button></div></div></div></div>`;
-    }
-    if (state.onboardingStep === 'pwa') {
-      return `<div class="modal-backdrop" data-modal="onboard-pwa"><div class="modal"><div class="result-stage compact"><canvas id="onboardMotionCanvas" aria-hidden="true"></canvas></div><div class="modal-body"><h2 class="modal-title-row">${icon('smartphone', 20)} 홈 화면에 사원증 두기</h2><p class="page-copy">아이콘으로 바로 출근하고, 자리 남음 알림도 받기 쉬워요. PC·브라우저에서도 근무할 수 있어요. 설치는 선택이고 건너뛰어도 작업실에 들어가요.</p><div class="modal-actions"><button class="secondary-button" type="button" data-action="skip-pwa">건너뛰기</button><button class="primary-button" type="button" data-action="onboard-install">사원증 두기</button></div></div></div></div>`;
     }
     return '';
   }
@@ -4600,15 +4588,6 @@
       return;
     }
 
-    if (state.onboardingStep === 'pwa') {
-      const canvas = document.getElementById('onboardMotionCanvas');
-      const token = 'pwa_home';
-      playCueOnCanvas(canvas, token, () => {
-        motion.playWorkPhase(canvas, companies[0] || { name: '퍼뜩', slug: 'putduk' }, 'pwa_home');
-      });
-      return;
-    }
-
     if (state.modal === 'withdraw-principal') {
       const canvas = document.getElementById('demoteMotionCanvas');
       const token = 'demote';
@@ -5365,8 +5344,6 @@
       render();
       return;
     }
-    if (action === 'skip-pwa') { releaseNamedCanvas('onboardMotionCanvas'); state.onboardingPwaDone = true; queueOnboarding(); saveState(); render(); return; }
-    if (action === 'onboard-install') { installApp(); return; }
     if (action === 'ack-grant') { state.onboardingGrantSeen = true; state.onboardingStep = null; saveState(); render(); return; }
     if (action === 'open-kyc') { openModal('kyc'); return; }
     if (action === 'open-run') { if (state.run) { overlayDismissed = false; state.run.overlayOpen = true; render(); } return; }
