@@ -1603,6 +1603,7 @@
       state = loadState(storageKey);
       return;
     }
+    if (signedOutLock) return;
     const sameUser = activeStorageKey === `${storageKey}:${session.user.id}`;
     switchToUserState(session.user.id);
     if (isAdmin) {
@@ -1639,6 +1640,7 @@
           .order('created_at', { ascending: false })
           .limit(50)
       ]);
+      if (signedOutLock || authState.session?.user?.id !== session.user.id) return;
       const runRows = Array.isArray(runResult.data) ? runResult.data : [];
       const needsCatalogForRunState = runRows.some((row) => row.status === 'approved' || isActiveRunStatus(row.status) || isReviewWaitStatus(row.status) || REWORK_RUN_STATUSES.includes(row.status));
       if (needsCatalogForRunState) {
