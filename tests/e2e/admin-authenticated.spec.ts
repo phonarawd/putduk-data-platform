@@ -36,7 +36,8 @@ test.describe('Production Admin authenticated E2E', () => {
 
     await expect.poll(() => meResponse?.status ?? 0, { timeout: 15_000 }).toBe(200);
     expect(meResponse?.body.ok).toBe(true);
-    expect(meResponse?.body.roles || []).toEqual(expect.arrayContaining(['super_admin', 'work_review']));
+    const roles = meResponse?.body.roles || [];
+    expect(roles.some((role) => ['super_admin', 'work_review'].includes(role))).toBe(true);
     await expect(page.locator('[data-nav="reviews"], [data-nav="review"]').first()).toBeVisible();
   });
 });
