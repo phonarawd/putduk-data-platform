@@ -40,7 +40,7 @@ const LOGIN_CASES = [
 
 for (const scenario of LOGIN_CASES) {
   test(`로그인 오류 분류: ${scenario.name}`, async ({ page }) => {
-    await page.route('**/auth/v1/token?grant_type=password**', async (route) => {
+    await page.route('**/auth/v1/token*', async (route) => {
       await route.fulfill({
         status: scenario.status,
         contentType: 'application/json',
