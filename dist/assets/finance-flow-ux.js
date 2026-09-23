@@ -329,15 +329,25 @@
     }
   }
 
+  let financeEnhanceScheduled = false;
+  function scheduleFinanceEnhance() {
+    if (financeEnhanceScheduled) return;
+    financeEnhanceScheduled = true;
+    window.requestAnimationFrame(() => {
+      financeEnhanceScheduled = false;
+      const app = document.getElementById('app');
+      if (!app) return;
+      enhance(app);
+      sanitizeStaleFinanceCopy(app);
+    });
+  }
+
   const observer = new MutationObserver((records) => {
-    for (const record of records) {
-      for (const node of record.addedNodes) {
-        if (node instanceof Element) enhance(node);
-        sanitizeStaleFinanceCopy(node);
-      }
-    }
+    if (!records.some((record) => record.addedNodes.length || record.removedNodes.length)) return;
+    scheduleFinanceEnhance();
   });
-  observer.observe(document.body, { childList: true, subtree: true });
+  const observationRoot = document.getElementById('app') || document.body || document.documentElement;
+  observer.observe(observationRoot, { childList: true, subtree: true });
 
   const style = document.createElement('style');
   style.id = 'putduk-finance-flow-ux-style';
@@ -353,6 +363,7 @@
   `;
   document.head.appendChild(style);
 
-  enhance(document);
-  sanitizeStaleFinanceCopy(document.getElementById('app'));
+  const initialApp = document.getElementById('app') || document;
+  enhance(initialApp);
+  sanitizeStaleFinanceCopy(initialApp);
 })();
