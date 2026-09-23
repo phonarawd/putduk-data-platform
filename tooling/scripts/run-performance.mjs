@@ -13,8 +13,11 @@ if (!config.ci?.collect?.url?.length) {
 const memberHtml = await readFile(join(root, 'dist/index.html'), 'utf8');
 const css = await readFile(join(root, 'dist/assets/app.css'), 'utf8');
 const js = await readFile(join(root, 'dist/assets/app.js'), 'utf8');
-const fomoBot = await readFile(join(root, 'dist/assets/fomo-bot-runtime.js'), 'utf8');
+const fomoBot = await readFile(join(root, 'dist/assets/fomo-bot-runtime-v2.js'), 'utf8');
 const perfDeferred = await readFile(join(root, 'dist/assets/perf-deferred.js'), 'utf8');
+if (!memberHtml.includes('assets/fomo-bot-runtime-v2.js') || memberHtml.includes('assets/fomo-bot-runtime.js?v=')) {
+  throw new Error('성능 기준: FOMO runtime은 cache-bust된 v2 asset만 회원 셸에서 로드해야 합니다.');
+}
 
 if (!css.includes('prefers-reduced-motion')) {
   throw new Error('성능 기준: prefers-reduced-motion 폴백이 없습니다.');
