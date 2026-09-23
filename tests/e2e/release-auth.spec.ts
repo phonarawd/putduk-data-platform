@@ -44,7 +44,7 @@ for (const scenario of LOGIN_CASES) {
       await route.fulfill({
         status: scenario.status,
         contentType: 'application/json',
-        body: JSON.stringify({ code: scenario.code, msg: scenario.message, message: scenario.message })
+        body: JSON.stringify({ code: scenario.code, error_code: scenario.code, msg: scenario.message, message: scenario.message })
       });
     });
 
@@ -107,7 +107,8 @@ test('SIGNED_OUT/로그아웃은 회원 전용 캐시와 화면 상태를 정리
           display_name: 'Phase6 회원',
           member_tier: '라인',
           status: 'active',
-          kyc_status: 'pending'
+          kyc_status: 'pending',
+          trial_consumed_at: '2026-09-20T00:00:00.000Z'
         })
       });
       return;
