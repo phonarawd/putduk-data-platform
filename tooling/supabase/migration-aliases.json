@@ -217,6 +217,10 @@
     "harden_security_definer_pg_temp": [
       "20260923171000",
       "20260923042820"
+    ],
+    "harden_rls_security_definer_pg_temp": [
+      "20260923172000",
+      "20260923043003"
     ]
   },
   "remote_history_only": [
