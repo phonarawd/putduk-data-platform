@@ -1637,9 +1637,17 @@
           .select('id,public_id,node_id,status,reward_amount,reward_status,started_at,created_at,completed_at,expected_completed_at,motion_variant,motion_seed,updated_at')
           .eq('user_id', session.user.id)
           .order('created_at', { ascending: false })
-          .limit(50),
-        light && nodes.length ? Promise.resolve() : hydratePublishedCatalog()
+          .limit(50)
       ]);
+      const runRows = Array.isArray(runResult.data) ? runResult.data : [];
+      const needsCatalogForRunState = runRows.some((row) => row.status === 'approved' || isActiveRunStatus(row.status) || isReviewWaitStatus(row.status) || REWORK_RUN_STATUSES.includes(row.status));
+      if (needsCatalogForRunState || nodes.length === 0) {
+        await hydratePublishedCatalog();
+      } else if (!light) {
+        void hydratePublishedCatalog().then(() => {
+          if (authState.session?.user?.id === session.user.id && !state.modal) render();
+        }).catch(() => {});
+      }
       if (profileResult.error) throw profileResult.error;
       authState.profile = profileResult.data || null;
       if (!walletResult.error && Array.isArray(walletResult.data) && walletResult.data.length) {

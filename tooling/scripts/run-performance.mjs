@@ -48,6 +48,11 @@ const memberCatalog = await readFile(join(root, 'dist/assets/member-catalog-runt
 if (!memberRuntime.includes('getMemberExperience') || !memberRuntime.includes('snapshotPromise') || !memberRuntime.includes('maxAgeMs = 2000')) {
   throw new Error('성능 기준: 회원 snapshot 요청 병합 캐시가 없습니다.');
 }
+if (js.includes("light && nodes.length ? Promise.resolve() : hydratePublishedCatalog()")
+  || !js.includes('const needsCatalogForRunState = runRows.some')
+  || !js.includes('void hydratePublishedCatalog().then')) {
+  throw new Error('성능 기준: 공개 카탈로그는 인증 critical path에서 조건부로만 대기하고, 그 외에는 백그라운드 hydration이어야 합니다.');
+}
 if (!memberCatalog.includes('const PAGE_SIZE = 12') || !memberCatalog.includes('rows.slice(0, state.visibleCount)')) {
   throw new Error('성능 기준: 12개 증분 catalog 렌더링이 유지되어야 합니다.');
 }
