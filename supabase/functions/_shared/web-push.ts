@@ -74,6 +74,7 @@ export async function dispatchPushToUser(admin: SupabaseClient, payload: PushPay
 
   let sent = 0;
   let removed = 0;
+  let failed = 0;
 
   for (const row of rows) {
     try {
@@ -93,13 +94,18 @@ export async function dispatchPushToUser(admin: SupabaseClient, payload: PushPay
           p_user_id: payload.user_id,
           p_endpoint: row.endpoint
         });
-        if (removeError) console.error("push subscription remove failed", removeError);
+        if (removeError) {
+          console.error("push subscription remove failed", removeError);
+          failed += 1;
+          continue;
+        }
         removed += 1;
         continue;
       }
       console.error("push send failed", row.endpoint, err);
+      failed += 1;
     }
   }
 
-  return { sent, removed };
+  return { sent, removed, failed };
 }
