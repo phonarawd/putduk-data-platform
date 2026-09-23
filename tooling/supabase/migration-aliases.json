@@ -181,6 +181,10 @@
     "harden_member_pin_reveal_live_auth": [
       "20260923133000",
       "20260923021757"
+    ],
+    "harden_member_aux_live_auth": [
+      "20260923134500",
+      "20260923022339"
     ]
   },
   "remote_history_only": [
