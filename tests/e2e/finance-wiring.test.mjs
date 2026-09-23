@@ -7,7 +7,7 @@ test('자동 정산은 닫아도 회원 입금·출금 신청은 인증된 membe
   const [html, wiring, appJs, perfDeferred, guard] = await Promise.all([
     readFile(repoPath('dist/index.html'), 'utf8'),
     readFile(repoPath('dist/assets/phase4-finance-wiring.js'), 'utf8'),
-    readFile(repoPath('dist/assets/app.js'), 'utf8'),
+    readFile(repoPath('dist/assets/app-ia13.js'), 'utf8'),
     readFile(repoPath('dist/assets/perf-deferred.js'), 'utf8'),
     readFile(repoPath('supabase/functions/_shared/finance-api-guard.ts'), 'utf8')
   ]);
@@ -15,7 +15,7 @@ test('자동 정산은 닫아도 회원 입금·출금 신청은 인증된 membe
   assert.match(html, /enableFinanceApi:\s*false/);
   assert.match(html, /phase4-finance-wiring\.js/);
   assert.match(perfDeferred, /phase4-finance-wiring\.js\?v=20260919-p4r2/);
-  assert.match(html, /app\.js\?v=20260922-live6/);
+  assert.match(html, /app-ia13\.js\?v=20260924-phase10e/);
   assert.match(wiring, /request_upload/);
   assert.match(wiring, /purpose:\s*'deposit_proof'/);
   assert.match(wiring, /uploadToSignedUrl/);
