@@ -9,12 +9,12 @@ if (!supabaseUrl || !serviceRoleKey) throw new Error("Supabase 서버 환경변�
 const admin = createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false, autoRefreshToken: false } });
 const ALLOWED_ROLES = ["super_admin", "member_support"];
 
+// Work assets use a user UUID as the first path segment.
+// KYC and deposit-proof namespaces are handled by their dedicated role-gated preview paths.
 function ownerFromPath(path: string): string | null {
   const parts = path.split("/").filter(Boolean);
-  if (!parts.length) return null;
-  if (isUuid(parts[0])) return parts[0];
-  if (["kyc", "deposit-proof", "deposit_proof"].includes(parts[0]) && isUuid(parts[1])) return parts[1];
-  return null;
+  if (parts.length < 2 || !isUuid(parts[0])) return null;
+  return parts[0];
 }
 
 async function requireAdmin(userId: string) {
@@ -41,16 +41,16 @@ Deno.serve(async (request) => {
     }
     const path = String(payload.path || "").trim();
     const ownerId = ownerFromPath(path);
-    if (!ownerId || !isOwnStoragePath(ownerId, path)) throw new HttpError(400, "회원 증빙 경로를 확인해 주세요.");
+    if (!ownerId || !isOwnStoragePath(ownerId, path)) throw new HttpError(400, "업무 자료 경로를 확인해 주세요.");
     const { data, error } = await admin.storage.from(PRIVATE_BUCKET).createSignedUrl(path, SIGNED_URL_SECONDS);
     if (error || !data?.signedUrl) {
       console.error("admin work asset signed url failed", error);
-      throw new HttpError(503, "증빙 이미지를 불러오지 못했습니다.");
+      throw new HttpError(503, "업무 자료를 불러오지 못했습니다.");
     }
     return jsonResponse(request, { ok: true, asset: { path, url: data.signedUrl, expires_in: SIGNED_URL_SECONDS } });
   } catch (error) {
     const status = error instanceof HttpError ? error.status : 500;
-    const message = error instanceof HttpError ? error.message : "증빙 이미지를 불러오지 못했습니다.";
+    const message = error instanceof HttpError ? error.message : "업무 자료를 불러오지 못했습니다.";
     if (!(error instanceof HttpError)) console.error("admin-work-asset failed", error);
     return jsonResponse(request, { ok: false, error: message }, status);
   }
