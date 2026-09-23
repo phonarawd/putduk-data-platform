@@ -45,7 +45,7 @@ for (const scenario of LOGIN_CASES) {
         status: scenario.status,
         contentType: 'application/json',
         headers: { 'x-supabase-api-version': '2024-01-01' },
-        body: JSON.stringify({ error: 'invalid_grant', error_description: scenario.message, error_code: scenario.code, code: scenario.code, msg: scenario.message, message: scenario.message })
+        body: JSON.stringify({ error: 'invalid_grant', error_description: scenario.message, error_code: scenario.code, msg: scenario.message, message: scenario.message })
       });
     });
 
