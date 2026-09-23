@@ -241,22 +241,6 @@
   },
   "remote_history_only": [
     {
-      "version": "20260918073323",
-      "name": "putduk_payout_destination_upsert_keep"
-    },
-    {
-      "version": "20260918073354",
-      "name": "putduk_member_submit_path_ok"
-    },
-    {
-      "version": "20260918073429",
-      "name": "putduk_ops_usdt_destination_replace"
-    },
-    {
-      "version": "20260918210000",
-      "name": "putduk_admin_list_roles"
-    },
-    {
       "version": "20260919220330",
       "name": "putduk_money_ops_pin_copy_fix"
     }
