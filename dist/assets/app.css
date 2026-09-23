@@ -1809,3 +1809,9 @@ html[data-low-perf="1"] #resultMotionCanvas {
     pointer-events: none !important;
   }
 }
+
+#putdukLoginTransition{position:fixed;inset:0;z-index:10090;display:grid;place-content:center;justify-items:center;gap:0;padding:24px;background:var(--bg,#f7fbf9);text-align:center}
+#putdukLoginTransition .auth-boot{min-height:0;display:grid;place-content:center;justify-items:center;gap:12px;padding:24px;color:#123c30;background:transparent;font-family:Pretendard,system-ui,sans-serif}
+#putdukLoginTransition .auth-boot img{border-radius:14px;box-shadow:0 10px 28px rgba(13,95,71,.14)}
+#putdukLoginTransition .auth-boot strong{font-size:20px;letter-spacing:-.04em}
+#putdukLoginTransition .auth-boot span{color:#6d817a;font-size:13px;line-height:1.5}
