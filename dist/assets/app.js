@@ -2851,6 +2851,18 @@
     return rows;
   }
 
+  function renderWalletLedgerBody(allRows, rows) {
+    const emptyCopy = allRows.length
+      ? { title: '이 구분에는 아직 기록이 없어요.', body: '다른 칸을 눌러 입금·출금을 확인해 보세요.' }
+      : { title: '아직 기록된 입출금이 없어요.', body: '잔액은 서버가 정하고, 화면에서 더하거나 빼지 않아요.' };
+    const empty = `<div class="empty-state compact record-empty"><strong>${esc(emptyCopy.title)}</strong><p>${esc(emptyCopy.body)}</p></div>`;
+    const cards = rows.map((row) => `<article class="record-card"><div class="record-card-top"><strong>${esc(row.kind)}</strong><span class="pill ${row.ok ? 'ok' : 'wait'}">${esc(row.status)}</span></div><div class="record-card-meta"><span>${esc(row.copy)}</span><span>${esc(row.amount)}</span></div><p class="record-card-id">${row.at ? new Date(row.at).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '-'}</p></article>`).join('');
+    const tableRows = rows.map((row) => `<tr><td>${esc(row.kind)}</td><td>${esc(row.copy)}</td><td><strong>${esc(row.amount)}</strong></td><td><span class="pill ${row.ok ? 'ok' : 'wait'}">${esc(row.status)}</span></td><td>${row.at ? new Date(row.at).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '-'}</td></tr>`).join('');
+    return rows.length
+      ? `<div class="record-list">${cards}</div><div class="record-table-wrap"><table class="record-table"><thead><tr><th>구분</th><th>내용</th><th>금액</th><th>상태</th><th>일시</th></tr></thead><tbody>${tableRows}</tbody></table></div>`
+      : empty;
+  }
+
   function renderWalletPage() {
     const allRows = walletRows();
     const rows = visibleWalletRows();
@@ -2867,9 +2879,7 @@
     const empty = `<div class="empty-state compact record-empty"><strong>${esc(emptyCopy.title)}</strong><p>${esc(emptyCopy.body)}</p></div>`;
     const cards = rows.map((row) => `<article class="record-card"><div class="record-card-top"><strong>${esc(row.kind)}</strong><span class="pill ${row.ok ? 'ok' : 'wait'}">${esc(row.status)}</span></div><div class="record-card-meta"><span>${esc(row.copy)}</span><span>${esc(row.amount)}</span></div><p class="record-card-id">${row.at ? new Date(row.at).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '-'}</p></article>`).join('');
     const tableRows = rows.map((row) => `<tr><td>${esc(row.kind)}</td><td>${esc(row.copy)}</td><td><strong>${esc(row.amount)}</strong></td><td><span class="pill ${row.ok ? 'ok' : 'wait'}">${esc(row.status)}</span></td><td>${row.at ? new Date(row.at).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '-'}</td></tr>`).join('');
-    const body = rows.length
-      ? `<div class="record-list">${cards}</div><div class="record-table-wrap"><table class="record-table"><thead><tr><th>구분</th><th>내용</th><th>금액</th><th>상태</th><th>일시</th></tr></thead><tbody>${tableRows}</tbody></table></div>`
-      : empty;
+    const body = renderWalletLedgerBody(allRows, rows);
     return `<div class="section-heading" style="margin-top:0"><div><h1 class="page-title">지갑</h1><p class="page-copy">지원금·업무잔액·출금가능 세 칸을 나눠 봐요.</p></div><div class="wallet-toolbar"><button class="secondary-button" data-action="open-kyc">${icon('shield-check', 16)} 본인확인</button><button class="secondary-button" data-action="deposit-info">${icon('credit-card', 16)} 입금하기</button></div></div>
       <div class="wallet-card" style="margin-bottom:18px"><div class="eyebrow" style="color:#a8f3d2">${icon('layout-grid',14)} 세 칸 잔액</div>${renderWalletSlots()}</div>
       ${pendingOut ? `<div class="notice" style="margin-bottom:18px"><span style="color:var(--gold)">${icon('hourglass',17)}</span><div><strong>출금 ${pendingOut}건이 처리 중이에요.</strong><br>운영자가 같은 날 바로 처리해요. 화면에서 금액을 숨기지 않아요.</div></div>` : ''}
@@ -4671,7 +4681,7 @@
     sync();
   }
 
-  function closeModal() {
+  function closeModal({ render: shouldRender = true } = {}) {
     releaseNamedCanvas('demoteMotionCanvas');
     releaseNamedCanvas('depositJumpMotionCanvas');
     if (state.modal === 'deposit' || state.modal === 'info') lockDepositReveal({ silent: true });
@@ -4682,8 +4692,19 @@
     state.adminWithdrawalReveal = null;
     state.modal = null;
     state.modalPayload = null;
+    if (!shouldRender) {
+      state.depositJump = null;
+      const app = document.getElementById('app');
+      app?.querySelector('[data-surface], [data-modal]')?.remove();
+      document.body?.classList.remove('modal-open', 'overlay-open');
+      paintNoticeBadge();
+      syncChannelTalk();
+      return;
+    }
     render();
   }
+
+  window.__putdukCloseFinanceModal = () => closeModal({ render: false });
 
   let deferredInstallPrompt = null;
 
@@ -5040,6 +5061,19 @@
     if (target.dataset.ledgerTab) {
       state.walletLedgerTab = target.dataset.ledgerTab;
       saveState();
+      const panel = document.querySelector('#app .record-panel');
+      const walletVisible = Boolean(document.querySelector('#app .withdraw-actions'));
+      if (panel && walletVisible) {
+        const allRows = walletRows();
+        const rows = visibleWalletRows();
+        document.querySelectorAll('[data-ledger-tab]').forEach((button) => {
+          const active = button.dataset.ledgerTab === state.walletLedgerTab;
+          button.classList.toggle('active', active);
+          button.setAttribute('aria-selected', active ? 'true' : 'false');
+        });
+        panel.innerHTML = renderWalletLedgerBody(allRows, rows);
+        return;
+      }
       render();
       return;
     }
@@ -5667,7 +5701,7 @@
         note: [values.bank, values.holder].filter(Boolean).join(' · ') || null
       });
       state.depositJump = null;
-      closeModal();
+      closeModal({ render: false });
       showToast('입금 신청을 접수했어요. 운영자가 확인하면 잔액에 반영돼요 💳', 'success');
     } catch (error) {
       showToast(friendlyAdminError(error), isUnsupportedAction(error) ? 'warning' : 'error');
