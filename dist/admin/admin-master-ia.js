@@ -2,31 +2,6 @@
   'use strict';
   if (document.documentElement.dataset.mode !== 'admin') return;
 
-  const MASTER_MENU = [
-    { id: 'overview', label: '운영 현황', icon: 'layout-dashboard' },
-    { id: 'members', label: '회원', icon: 'users' },
-    { id: 'partners', label: '협력사', icon: 'building-2' },
-    { id: 'funding', label: '지급예산', icon: 'badge-won' },
-    { id: 'work-create', label: '업무 만들기', icon: 'square-plus' },
-    { id: 'published-work', label: '공개 업무', icon: 'briefcase-business' },
-    { id: 'assignments', label: '회원 업무 배정', icon: 'user-round-check' },
-    { id: 'reviews', label: '업무 검수', icon: 'clipboard-check' },
-    { id: 'finance', label: '입출금', icon: 'wallet-cards' },
-    { id: 'grants', label: '가입 지원금', icon: 'gift' },
-    { id: 'member-tiers', label: '회원 등급', icon: 'medal' },
-    { id: 'onboarding', label: '첫 이용 안내', icon: 'route' },
-    { id: 'faq', label: '자주 묻는 질문', icon: 'circle-help' },
-    { id: 'member-alerts', label: '회원 알림', icon: 'bell' },
-    { id: 'live-status', label: '실시간 현황 표시', icon: 'activity' },
-    { id: 'notices', label: '공지', icon: 'megaphone' },
-    { id: 'identity', label: '본인확인', icon: 'badge-check' },
-    { id: 'audit', label: '변경 기록', icon: 'history' },
-    { id: 'preview', label: '화면 미리보기', icon: 'monitor-smartphone' },
-    { id: 'landing-metrics', label: '랜딩 이용 현황', icon: 'chart-no-axes-combined' },
-    { id: 'landing-reviews', label: '랜딩 회원 후기', icon: 'message-square-heart' }
-  ];
-  if (MASTER_MENU.length !== 21) throw new Error('Admin MASTER menu must have exactly 21 items.');
-
   const core = () => window.PUTDUK_ADMIN_CORE || null;
   const S = () => core()?.getState?.() || {};
   const patch = (v) => core()?.patchState?.(v);
@@ -57,14 +32,6 @@
     const b = brands().find((x) => String(x.id) === String(id));
     return b?.name || b?.display_name_ko || b?.legal_name || '협력사';
   };
-
-  function replaceSidebar() {
-    const nav = document.querySelector('#sidebar nav[aria-label="주요 메뉴"]');
-    if (!nav) return;
-    nav.innerHTML = MASTER_MENU.map((x) => `<button class="nav-item ${S().adminPage === x.id ? 'active' : ''}" data-nav="${x.id}">${icon(x.icon)}<span>${x.label}</span></button>`).join('');
-    const label = document.querySelector('#sidebar .nav-label');
-    if (label) label.textContent = '운영 메뉴 · 21개';
-  }
 
   function modal(html) {
     document.getElementById('masterModalHost')?.remove();
@@ -145,11 +112,19 @@
 
   function install() {
     const ext = window.PUTDUK_ADMIN;
-    if (!ext || ext.__master21Installed) return false;
-    ext.__master21Installed = true;
+    if (!ext || ext.__master7Installed) return false;
+    ext.__master7Installed = true;
     const baseRender = ext.renderPage.bind(ext), baseAfter = ext.afterRender.bind(ext), baseRefresh = ext.refreshPage.bind(ext), baseClick = ext.handleClick.bind(ext);
 
     ext.renderPage = (page) => {
+      if (page === 'operations') {
+        const base = baseRender('operations') || '';
+        return base + '<div class="admin-card" style="margin-top:14px"><div class="admin-card-head"><div><h3>업무 운영 세부 도구</h3><p>메인 메뉴는 7개로 유지하고, 드물게 쓰는 운영 작업은 여기에서 엽니다.</p></div></div><div class="form-grid"><button class="secondary-button" type="button" data-nav="partners">협력사 관리</button><button class="secondary-button" type="button" data-nav="funding">지급예산</button><button class="secondary-button" type="button" data-nav="work-create">업무 만들기</button><button class="secondary-button" type="button" data-nav="published-work">공개 업무</button><button class="secondary-button" type="button" data-nav="assignments">회원 업무 배정</button></div></div>';
+      }
+      if (page === 'settings') {
+        const base = baseRender('settings') || '';
+        return base + '<div class="admin-card" style="margin-top:14px"><div class="admin-card-head"><div><h3>기타 운영 세부 도구</h3><p>콘텐츠·감사·미리보기처럼 자주 쓰지 않는 도구를 이곳에 모았습니다.</p></div></div><div class="form-grid"><button class="secondary-button" type="button" data-nav="grants">가입 지원금</button><button class="secondary-button" type="button" data-nav="member-tiers">회원 등급</button><button class="secondary-button" type="button" data-nav="onboarding">첫 이용 안내</button><button class="secondary-button" type="button" data-nav="faq">자주 묻는 질문</button><button class="secondary-button" type="button" data-nav="member-alerts">회원 알림</button><button class="secondary-button" type="button" data-nav="live-status">실시간 현황 표시</button><button class="secondary-button" type="button" data-nav="audit">변경 기록</button><button class="secondary-button" type="button" data-nav="preview">화면 미리보기</button></div></div>';
+      }
       if (page === 'partners') return renderPartners();
       if (page === 'funding') return renderFunding();
       if (page === 'work-create') return renderWorkCreate();
@@ -167,7 +142,7 @@
       if (page === 'landing-reviews') return renderLandingReviews(baseRender);
       return baseRender(page);
     };
-    ext.afterRender = () => { baseAfter(); replaceSidebar(); const f = document.getElementById('masterWorkForm'); if (f) updateWorkPreview(f); };
+    ext.afterRender = () => { baseAfter(); const f = document.getElementById('masterWorkForm'); if (f) updateWorkPreview(f); };
     ext.refreshPage = async () => { await baseRefresh(); if (['partners','funding','onboarding','faq','member-alerts','audit'].includes(S().adminPage)) await loadMaster(true); };
     ext.handleClick = (event, target) => {
       const a = target?.dataset?.action;
