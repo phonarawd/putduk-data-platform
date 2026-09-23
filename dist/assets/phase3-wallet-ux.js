@@ -109,22 +109,29 @@
   document.addEventListener('click', (event) => {
     const tab = event.target.closest?.('[data-ledger-tab]');
     if (!tab) return;
-    window.requestAnimationFrame(() => enhance(document));
+    scheduleEnhance();
   }, true);
 
+  let enhanceScheduled = false;
+  function scheduleEnhance() {
+    if (enhanceScheduled) return;
+    enhanceScheduled = true;
+    window.requestAnimationFrame(() => {
+      enhanceScheduled = false;
+      const app = document.getElementById('app');
+      if (app) enhance(app);
+    });
+  }
+
   const observer = new MutationObserver((records) => {
-    for (const record of records) {
-      for (const node of record.addedNodes) {
-        if (node instanceof Element) enhance(node);
-      }
-    }
-    enhance(document);
+    if (!records.some((record) => record.addedNodes.length || record.removedNodes.length)) return;
+    scheduleEnhance();
   });
 
   function boot() {
     const app = document.getElementById('app');
     if (!app) return;
-    enhance(document);
+    enhance(app);
     observer.observe(app, { childList: true, subtree: true });
   }
 
