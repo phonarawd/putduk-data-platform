@@ -104,7 +104,8 @@
     document.addEventListener('click', (event) => {
       const target = event.target.closest('[data-action="open-login"]');
       if (!target) return;
-      if (typeof window.__putdukOpenAuth === 'function') return;
+      const inBootRecovery = Boolean(target.closest('[data-boot-shell="1"]'));
+      if (typeof window.__putdukOpenAuth === 'function' && !inBootRecovery) return;
       event.preventDefault();
       event.stopImmediatePropagation();
       fallbackAuthModal();
