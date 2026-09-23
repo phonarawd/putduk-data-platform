@@ -49,7 +49,12 @@ function payloadFromBody(body: JsonRecord): PushPayload {
   };
 }
 
-async function authorizeDispatch(payload: PushPayload): Promise<PushPayload> {
+type AuthorizedPush = {
+  payload: PushPayload;
+  dispatchToken: string;
+};
+
+async function authorizeDispatch(payload: PushPayload): Promise<AuthorizedPush> {
   const { data, error } = await admin.rpc("putduk_push_authorize_dispatch", {
     p_notification_id: payload.notification_id,
     p_user_id: payload.user_id,
@@ -62,29 +67,34 @@ async function authorizeDispatch(payload: PushPayload): Promise<PushPayload> {
     throw new HttpError(503, "푸시 발송 대상을 확인하지 못했습니다.");
   }
   const row = Array.isArray(data) ? data[0] : null;
-  if (!row) {
+  if (!row || !row.dispatch_token) {
     throw new HttpError(409, "푸시 발송 요청이 이미 처리되었거나 알림 정보가 일치하지 않습니다.");
   }
   return {
-    notification_id: payload.notification_id,
-    user_id: String(row.user_id),
-    title: String(row.title),
-    body: String(row.body),
-    notification_type: String(row.notification_type || "info")
+    payload: {
+      notification_id: payload.notification_id,
+      user_id: String(row.user_id),
+      title: String(row.title),
+      body: String(row.body),
+      notification_type: String(row.notification_type || "info")
+    },
+    dispatchToken: String(row.dispatch_token)
   };
 }
 
-async function markOutboxDispatched(notificationId: string, sent: number, removed: number, lastError: string | null) {
+async function markOutboxDispatched(notificationId: string, dispatchToken: string, sent: number, removed: number, lastError: string | null) {
   const { error } = await admin.rpc("putduk_push_mark_outbox_dispatched", {
     p_notification_id: notificationId,
+    p_dispatch_token: dispatchToken,
     p_last_error: lastError
   });
   if (error) console.error("push outbox update failed", error, { notificationId, sent, removed });
 }
 
-async function markOutboxFailed(notificationId: string, lastError: string) {
+async function markOutboxFailed(notificationId: string, dispatchToken: string, lastError: string) {
   const { error } = await admin.rpc("putduk_push_mark_outbox_failed", {
     p_notification_id: notificationId,
+    p_dispatch_token: dispatchToken,
     p_last_error: lastError
   });
   if (error) console.error("push outbox failure update failed", error, { notificationId });
@@ -99,14 +109,15 @@ Deno.serve(async (request: Request) => {
     assertDispatchAuth(request);
     const body = await parseRequest(request);
     const payload = payloadFromBody(body);
-    const authoritativePayload = await authorizeDispatch(payload);
-    const result = await dispatchPushToUser(admin, authoritativePayload);
+    const authorized = await authorizeDispatch(payload);
+    const result = await dispatchPushToUser(admin, authorized.payload);
     if (result.failed > 0) {
-      await markOutboxFailed(authoritativePayload.notification_id, "push_delivery_failed");
+      await markOutboxFailed(authorized.payload.notification_id, authorized.dispatchToken, "push_delivery_failed");
       throw new HttpError(503, "푸시 발송이 완료되지 않았습니다.");
     }
     await markOutboxDispatched(
-      authoritativePayload.notification_id,
+      authorized.payload.notification_id,
+      authorized.dispatchToken,
       result.sent,
       result.removed,
       result.sent === 0 && result.removed === 0 ? "no_active_subscriptions" : null
