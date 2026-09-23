@@ -105,6 +105,10 @@
   }
 
   function closeDepositFlow() {
+    if (typeof window.__putdukCloseFinanceModal === 'function') {
+      window.__putdukCloseFinanceModal();
+      return;
+    }
     const direct = document.querySelector('[data-modal="info"] [data-action="close-modal"], [data-modal="deposit"] [data-action="close-modal"]');
     if (direct) {
       direct.click();
@@ -214,8 +218,27 @@
     }
   }, true);
 
-  const observer = new MutationObserver(scan);
-  observer.observe(document.documentElement, { childList: true, subtree: true });
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', scan, { once: true });
-  else scan();
+  let scanScheduled = false;
+  function scheduleScan() {
+    if (scanScheduled) return;
+    scanScheduled = true;
+    window.requestAnimationFrame(() => {
+      scanScheduled = false;
+      scan();
+    });
+  }
+
+  const observer = new MutationObserver((records) => {
+    if (!records.some((record) => record.addedNodes.length || record.removedNodes.length)) return;
+    scheduleScan();
+  });
+
+  function boot() {
+    scan();
+    const app = document.getElementById('app');
+    if (app) observer.observe(app, { childList: true, subtree: true });
+  }
+
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot, { once: true });
+  else boot();
 })();
