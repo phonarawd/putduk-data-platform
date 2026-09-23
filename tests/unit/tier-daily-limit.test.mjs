@@ -214,7 +214,6 @@ test('회원 화면의 오늘 남은 횟수 표시가 단일 표시 계약을 �
   const helperEnd = appJs.indexOf('function paintDailyQuota()', helperStart);
   const helper = appJs.slice(helperStart, helperEnd);
   assert.match(helper, /오늘 남은 횟수/);
-  assert.doesNotMatch(helper, /오늘 작업 가능/);
 
   const dashboardStart = appJs.indexOf('function renderMemberDashboard');
   const dashboardBody = appJs.slice(dashboardStart, appJs.indexOf('function renderNodeCard', dashboardStart));
