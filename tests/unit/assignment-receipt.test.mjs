@@ -34,7 +34,7 @@ test('출근 확인·근무 전표는 애니메이션 없이 배정카드·영�
   assert.match(appJs, /수당만 나와요/);
   assert.match(appJs, /수당 \$\{money\(pay\)\}/);
   assert.match(nodeBody, /compact-node/);
-  assert.match(nodeBody, /참여 가능/);
+  assert.match(nodeBody, /출근하기/);
   assert.equal(nodeBody.includes('끝나면 수당'), false);
   assert.equal(nodeBody.includes('settleNote'), false);
   assert.match(appCss, /\.grant-copy/);

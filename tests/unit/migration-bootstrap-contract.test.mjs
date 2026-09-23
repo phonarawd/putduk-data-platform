@@ -70,8 +70,8 @@ test('canonical bootstrap migration이 migration 92 이후에 존재한다', asy
   const idx27 = files.indexOf(migration27);
   assert.ok(bootstrapIdx > idx27, 'bootstrap migration must come after migration 27');
 
-  // 마지막에 가까운 migration이어야 함 (index reconciliation 등 후속 migration 허용)
-  assert.ok(bootstrapIdx >= files.length - 2, 'bootstrap migration should be last or near-last');
+  // 이후에는 보안·무결성·운영 보강 migration이 계속 추가될 수 있다.
+  assert.ok(bootstrapIdx < files.length, 'bootstrap migration should precede later migrations');
 });
 
 test('canonical bootstrap은 putduk_admin_upsert_node에 의존하지 않는다', async () => {

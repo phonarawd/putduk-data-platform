@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 
 const root = new URL('../../', import.meta.url);
-const app = fs.readFileSync(new URL('dist/assets/app.js', root), 'utf8');
+const app = fs.readFileSync(new URL('dist/assets/app-ia13.js', root), 'utf8');
 const index = fs.readFileSync(new URL('dist/index.html', root), 'utf8');
 const adminIndex = fs.readFileSync(new URL('dist/admin/index.html', root), 'utf8');
 

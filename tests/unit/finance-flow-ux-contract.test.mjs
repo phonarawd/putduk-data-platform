@@ -52,8 +52,8 @@ test('DB trigger는 destination 필수와 KRW-bank / USDT-usdt 일치를 강제�
 
 test('member index는 finance flow UX guard를 phase4 finance wiring 뒤에 연결한다', async () => {
   const html = await readRepo('dist', 'index.html');
-  const phase4Index = html.indexOf('phase4-finance-wiring.js?v=20260920-toast1');
-  const guardIndex = html.indexOf('finance-flow-ux.js?v=20260920-p1finance1');
+  const phase4Index = html.indexOf('phase4-finance-wiring.js?v=20260923-finance-perf1');
+  const guardIndex = html.indexOf('finance-flow-ux.js?v=20260923-finance-perf1');
 
   assert.ok(phase4Index >= 0);
   assert.ok(guardIndex > phase4Index);

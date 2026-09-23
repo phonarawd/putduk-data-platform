@@ -3,11 +3,11 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 
 const index = fs.readFileSync(new URL('../../dist/index.html', import.meta.url), 'utf8');
-const runtime = fs.readFileSync(new URL('../../dist/assets/fomo-bot-runtime.js', import.meta.url), 'utf8');
+const runtime = fs.readFileSync(new URL('../../dist/assets/fomo-bot-runtime-v2.js', import.meta.url), 'utf8');
 
 test('member HTML loads the FOMO bot runtime after app.js', () => {
-  const appPos = index.indexOf('./assets/app.js');
-  const fomoPos = index.indexOf('./assets/fomo-bot-runtime.js');
+  const appPos = index.indexOf('./assets/app-ia13.js');
+  const fomoPos = index.indexOf('./assets/fomo-bot-runtime-v2.js');
   assert.ok(appPos >= 0);
   assert.ok(fomoPos > appPos);
 });

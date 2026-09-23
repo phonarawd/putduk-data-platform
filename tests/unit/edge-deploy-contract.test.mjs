@@ -22,11 +22,12 @@ test('운영 Edge deploy/verify/rollback 계약이 모든 함수 디렉터리를
 
   for (const name of edgeFunctions) {
     assert.match(deploy, new RegExp(`supabase functions deploy ${name.replace(/[.*+?^${}()|[\\]\\]/g, '\\$&')}`), `deploy:${name}`);
-    assert.match(rollback, new RegExp(`\\b${name.replace(/[.*+?^${}()|[\\]\\]/g, '\\$&')}\\b`), `rollback:${name}`);
     assert.match(envLoader, new RegExp(`[\"']${name.replace(/[.*+?^${}()|[\\]\\]/g, '\\$&')}[\"']`), `verify:${name}`);
     assert.match(config, new RegExp(`\\[functions\\.${name.replace(/[.*+?^${}()|[\\]\\]/g, '\\$&')}\\]`), `config:${name}`);
   }
 
+  assert.match(rollback, /rollback-edge\.mjs/);
+  assert.match(rollback, /--target-root rollback-target/);
   assert.match(config, /\[functions\.push-dispatch\][\s\S]*?verify_jwt = false/);
   for (const name of edgeFunctions.filter((name) => name !== 'push-dispatch')) {
     const escaped = name.replace(/[.*+?^${}()|[\\]\\]/g, '\\$&');

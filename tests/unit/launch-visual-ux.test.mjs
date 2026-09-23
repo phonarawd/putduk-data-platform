@@ -23,7 +23,7 @@ test('사원증은 진짜 3D 뒤집기를 쓰고 hidden으로 면을 숨기지 �
 
 test('라인 찾기는 FOMO를 중복하지 않고 필터 안내가 있다', async () => {
   const { appJs } = await readLaunchFiles();
-  assert.match(appJs, /renderFomoBoard\('dashboard'\)/);
+  assert.match(appJs, /renderFomoBoardPlaceholder\('dashboard'\)/);
   assert.equal(appJs.includes("renderFomoBoard('nodes')"), false);
   assert.match(appJs, /NODE_FILTER_HINTS/);
   assert.match(appJs, /nodeFilterHint/);

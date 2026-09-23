@@ -17,7 +17,7 @@ test('업무별 공급량과 회원 횟수는 같은 KST 경계와 잠금을 사
 });
 
 test('회원 화면은 서버 reset 시각에 KST 일일 상태를 다시 불러온다', () => {
-  const app = read('dist/assets/app.js');
+  const app = read('dist/assets/app-ia13.js');
   const experience = read('dist/assets/member-experience-p4.js');
   assert.match(app, /scheduleKstQuotaReset\(state\.dailyTaskQuota\?\.resets_at\)/);
   assert.match(app, /putduk:kst-day-changed/);
@@ -25,7 +25,7 @@ test('회원 화면은 서버 reset 시각에 KST 일일 상태를 다시 불러
 });
 
 test('로그인은 인증 원인을 분류하고 로그아웃은 클라이언트 상태를 제거한다', () => {
-  const app = read('dist/assets/app.js');
+  const app = read('dist/assets/app-ia13.js');
   for (const code of ['email_not_confirmed', 'user_banned', 'over_request_rate_limit', 'invalid_credentials']) {
     assert.match(app, new RegExp(code));
   }
