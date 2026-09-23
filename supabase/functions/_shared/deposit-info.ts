@@ -259,12 +259,17 @@ export async function revealDepositInfo(
   const destinations = [];
   for (const row of rows) {
     if (row.enabled === false) continue;
-    const type = String(row.destination_type || "bank");
+    const type = String(row.destination_type || "bank").toLowerCase();
+    if (type !== "bank" && type !== "usdt") continue;
     let account = "";
     let usdt = "";
     try {
-      account = await decryptPayoutSecret(row.account_number || (type === "bank" ? row.encrypted_value : "") || "", secret);
-      usdt = await decryptPayoutSecret(row.usdt_address || (type === "usdt" ? row.encrypted_value : "") || "", secret);
+      account = type === "bank"
+        ? await decryptPayoutSecret(row.account_number || row.encrypted_value || "", secret)
+        : "";
+      usdt = type === "usdt"
+        ? await decryptPayoutSecret(row.usdt_address || row.encrypted_value || "", secret)
+        : "";
     } catch (error) {
       const message = error instanceof Error ? error.message : "입금 안내를 열지 못했어요. 잠시 후 다시 해 주세요.";
       const status = error && typeof error === "object" && "status" in error && typeof (error as { status?: unknown }).status === "number"
@@ -276,12 +281,12 @@ export async function revealDepositInfo(
       id: row.id,
       destination_type: type,
       label: row.label,
-      bank_name: row.bank_name,
-      account_holder: row.account_holder,
-      account_number: account || null,
+      bank_name: type === "bank" ? row.bank_name : null,
+      account_holder: type === "bank" ? row.account_holder : null,
+      account_number: type === "bank" ? account || null : null,
       masked_value: row.masked_value || (type === "usdt" ? maskUsdt(usdt) : maskAccount(String(row.bank_name || ""), account)),
-      usdt_network: row.usdt_network || (type === "usdt" ? "TRC20" : null),
-      usdt_address: usdt || null,
+      usdt_network: type === "usdt" ? (row.usdt_network || "TRC20") : null,
+      usdt_address: type === "usdt" ? usdt || null : null,
       memo: row.memo || null,
       guidance_text: row.guidance_text || null,
       qr_signed_url: await signQr(admin, row.qr_asset_path),
