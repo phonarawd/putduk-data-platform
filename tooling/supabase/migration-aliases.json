@@ -34,7 +34,9 @@
     "putduk_admin_master_21": ["20260921120000", "20260920183928"],
     "putduk_admin_master_fk_indexes": ["20260921120500", "20260920184116"],
     "putduk_member_experience_snapshot": ["20260921133000", "20260920190731"],
-    "phase1_kst_day_boundary": ["20260921102905", "20260921162946"]
+    "phase1_kst_day_boundary": ["20260921102905", "20260921162946"],
+    "harden_admin_auth_user_state": ["20260923103000", "20260923012234"],
+    "harden_admin_auth_state_all_paths": ["20260923104500", "20260923012335"]
   },
   "remote_history_only": [
     { "version": "20260918073323", "name": "putduk_payout_destination_upsert_keep" },
