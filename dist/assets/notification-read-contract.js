@@ -35,6 +35,9 @@
       .putduk-notice-toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 20px;border-bottom:1px solid var(--line,#dfe7e3);font-size:13px}
       .putduk-notice-mark-all{min-height:44px;padding:0 12px;border:0;border-radius:10px;background:transparent;color:var(--emerald,#0d9f76);font:inherit;font-weight:700;cursor:pointer}
       .putduk-notice-mark-all[disabled]{opacity:.48;cursor:default}
+      .putduk-notice-row-wrap{display:grid;grid-template-columns:1fr auto;align-items:center;gap:8px}
+      .putduk-notice-delete{min-width:44px;min-height:44px;padding:0 10px;border:0;border-radius:10px;background:transparent;color:var(--muted,#6c7e77);cursor:pointer;font:inherit;font-size:12px}
+      .putduk-notice-delete:hover,.putduk-notice-delete:focus-visible{background:color-mix(in srgb,var(--emerald,#0d9f76) 8%,var(--surface,#fff));color:var(--text,#17352b);outline:none}
       .putduk-notice-list{overflow:auto;overscroll-behavior:contain;padding:10px 12px 14px}
       .putduk-notice-row{width:100%;display:grid;grid-template-columns:10px 1fr;gap:11px;text-align:left;padding:14px 12px;border:1px solid transparent;border-radius:14px;background:transparent;color:inherit;cursor:pointer}
       .putduk-notice-row:hover,.putduk-notice-row:focus-visible{background:color-mix(in srgb,var(--emerald,#0d9f76) 6%,var(--surface,#fff));outline:none;border-color:color-mix(in srgb,var(--emerald,#0d9f76) 22%,transparent)}
@@ -104,7 +107,7 @@
         const title = safeText(row.title) || '안내';
         const body = safeText(row.body);
         const read = Boolean(row.read_at);
-        return `<button type="button" class="putduk-notice-row${read ? '' : ' is-unread'}" data-putduk-notice-id="${String(row.id || '').replace(/"/g, '&quot;')}"><span class="putduk-notice-dot" aria-hidden="true"></span><span class="putduk-notice-copy"><strong>${escapeHtml(title)}</strong>${body ? `<p>${escapeHtml(body)}</p>` : ''}<small>${escapeHtml(formatTime(row.created_at))} · ${read ? '읽음' : '안 읽음'}</small></span></button>`;
+        return `<div class="putduk-notice-row-wrap"><button type="button" class="putduk-notice-row${read ? '' : ' is-unread'}" data-putduk-notice-id="${String(row.id || '').replace(/"/g, '&quot;')}"><span class="putduk-notice-dot" aria-hidden="true"></span><span class="putduk-notice-copy"><strong>${escapeHtml(title)}</strong>${body ? `<p>${escapeHtml(body)}</p>` : ''}<small>${escapeHtml(formatTime(row.created_at))} · ${read ? '읽음' : '안 읽음'}</small></span></button><button type="button" class="putduk-notice-delete" data-putduk-notice-delete="${String(row.id || '').replace(/"/g, '&quot;')}" aria-label="알림 삭제">삭제</button></div>`;
       }).join('')
       : '<div class="putduk-notice-empty"><strong>새 안내가 없어요.</strong><p>운영자가 보내면 종 숫자에 바로 표시됩니다.</p></div>';
 
@@ -120,6 +123,22 @@
     } catch (_) {
       if (typeof window.__putdukShowToast === 'function') window.__putdukShowToast('알림을 불러오지 못했어요. 잠시 후 다시 눌러 주세요.', 'error');
     }
+  }
+
+  async function deleteItem(id) {
+    const notificationId = String(id || '').trim();
+    if (!notificationId) return;
+    if (typeof window.__putdukDeleteNotification === 'function') {
+      const ok = await window.__putdukDeleteNotification(notificationId);
+      if (!ok) return;
+    } else {
+      const service = api();
+      if (!service) return;
+      const result = await service.rpc('putduk_archive_notification', { p_notification_id: notificationId });
+      if (result.error || result.data !== true) return;
+    }
+    rows = rows.filter((row) => String(row.id || '') !== notificationId);
+    renderOverlay();
   }
 
   async function markAll() {
@@ -160,6 +179,8 @@
     }
     const close = target.closest('[data-putduk-notice-close]');
     if (close) { closeOverlay(); return; }
+    const deleteButton = target.closest('[data-putduk-notice-delete]');
+    if (deleteButton) { event.preventDefault(); event.stopPropagation(); void deleteItem(deleteButton.getAttribute('data-putduk-notice-delete') || ''); return; }
     const mark = target.closest('[data-putduk-notice-mark-all]');
     if (mark) { event.preventDefault(); void markAll(); return; }
     const row = target.closest('[data-putduk-notice-id]');
