@@ -55,6 +55,19 @@ function verifiedUserId(request: Request): string {
   }
 }
 
+function accessToken(request: Request): string {
+  const token = (request.headers.get("authorization") || "").replace(/^Bearer\s+/i, "").trim();
+  if (!token) throw new HttpError(401, "로그인이 필요합니다.");
+  return token;
+}
+
+async function requireLiveAuthUser(request: Request, userId: string) {
+  const { data, error } = await admin.auth.getUser(accessToken(request));
+  if (error || !data.user || data.user.id !== userId) throw new HttpError(401, "세션이 유효하지 않습니다.");
+  const bannedUntil = data.user.banned_until ? Date.parse(data.user.banned_until) : NaN;
+  if (Number.isFinite(bannedUntil) && bannedUntil > Date.now()) throw new HttpError(403, "현재 계정으로 이용할 수 없습니다.");
+}
+
 function uuid(value: unknown): string {
   const text = String(value || "").trim();
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(text)) {
