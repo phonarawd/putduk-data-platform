@@ -1,0 +1,163 @@
+/* PUTDUK Accessibility / Motion / Performance — PHASE 9
+ * Scoped hardening layer. No business, finance, work-state or FOMO logic.
+ */
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  scroll-padding-top: 24px;
+}
+html:focus-within { scroll-behavior: smooth; }
+
+body {
+  min-height: 100dvh;
+  text-rendering: optimizeLegibility;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+button,
+a,
+input,
+select,
+textarea,
+[role="button"],
+[tabindex]:not([tabindex="-1"]) {
+  outline-color: var(--pd-color-primary, #0d9f76);
+}
+
+:where(button, a, input, select, textarea, [role="button"]):focus-visible {
+  outline: 3px solid var(--pd-color-focus, rgba(13,159,118,.46));
+  outline-offset: 3px;
+}
+
+:where(button, a, [role="button"]) {
+  touch-action: manipulation;
+}
+
+:where(button, [role="button"], input[type="button"], input[type="submit"], input[type="reset"]) {
+  min-height: max(44px, 24px);
+}
+
+:where(.pd-input, .pd-select, .pd-textarea, input, select, textarea) {
+  max-width: 100%;
+}
+
+[aria-invalid="true"] {
+  border-color: var(--pd-color-danger, #c84b58) !important;
+}
+
+[aria-busy="true"] {
+  cursor: progress;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+.pd-sr-only,
+.visually-hidden,
+.visually-hidden-focusable:not(:focus) {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+}
+
+.pd-live-region {
+  position: fixed;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+:where(.modal, [role="dialog"], .uiux-auth-modal, .uiux-legal-sheet) {
+  scroll-margin-block: 16px;
+}
+
+:where(.modal, [role="dialog"]) :where(button, a, input, select, textarea):focus-visible {
+  scroll-margin: 16px;
+}
+
+:where(img, svg, video, canvas) {
+  max-width: 100%;
+}
+
+@media (max-width: 760px) {
+  :where(.modal-backdrop, [role="dialog"]) {
+    scroll-padding-bottom: env(safe-area-inset-bottom);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html:focus-within { scroll-behavior: auto; }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+    scroll-behavior: auto !important;
+  }
+  canvas[data-motion],
+  canvas.motion-canvas {
+    content-visibility: auto;
+  }
+}
+
+@media (forced-colors: active) {
+  :where(button, a, input, select, textarea, [role="button"]):focus-visible {
+    outline: 2px solid CanvasText;
+    outline-offset: 3px;
+  }
+  :where(button, input, select, textarea) {
+    forced-color-adjust: auto;
+  }
+}
+
+@media (prefers-contrast: more) {
+  :root {
+    --pd-color-border: rgba(19,54,45,.28);
+    --pd-color-focus: rgba(13,159,118,.72);
+  }
+  :where(button, input, select, textarea, [role="button"]) {
+    border-width: 1px;
+  }
+}
+
+@media (min-width: 761px) {
+  html[data-mode="member"] body,
+  html[data-mode="admin"] body {
+    overflow-x: clip;
+  }
+}
+
+/* User-controlled text spacing must not be defeated by component defaults. */
+[data-a11y-text-spacing="1"] :where(p, li, dd, dt, label, .page-copy, .notice, .empty-state) {
+  line-height: 1.5 !important;
+  letter-spacing: .12em !important;
+  word-spacing: .16em !important;
+}
+[data-a11y-text-spacing="1"] :where(p, li, dd, dt, label) {
+  margin-bottom: 1em !important;
+}
+
+/* Phase 9 performance containment: keep expensive visual work isolated from document flow. */
+html[data-low-perf="1"] .fomo-stage,
+html[data-low-perf="1"] .motion-stage,
+html[data-low-perf="1"] canvas[data-motion],
+html[data-low-perf="1"] canvas.motion-canvas {
+  content-visibility: auto;
+  contain: layout paint style;
+}
