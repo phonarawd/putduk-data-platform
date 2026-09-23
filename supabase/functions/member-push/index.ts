@@ -78,6 +78,13 @@ Deno.serve(async (request: Request) => {
     }
 
     const user = userFromVerifiedJwt(request);
+    const authHeader = request.headers.get("authorization") || "";
+    const accessToken = authHeader.replace(/^Bearer\s+/i, "").trim();
+    if (!accessToken) throw new HttpError(401, "로그인이 필요합니다.");
+    const { data: authData, error: authError } = await admin.auth.getUser(accessToken);
+    if (authError || !authData.user || authData.user.id !== user.id) throw new HttpError(401, "세션이 유효하지 않습니다.");
+    const bannedUntil = authData.user.banned_until ? Date.parse(authData.user.banned_until) : NaN;
+    if (Number.isFinite(bannedUntil) && bannedUntil > Date.now()) throw new HttpError(403, "현재 계정으로 이용할 수 없습니다.");
 
     if (action === "subscribe") {
       return jsonResponse(request, { ok: true, ...(await upsertSubscription(user.id, payload)) });
