@@ -4951,6 +4951,10 @@
     try {
       if (previousStorageKey) window.localStorage.removeItem(previousStorageKey);
       if (previousUserId) window.localStorage.removeItem(`${storageKey}:${previousUserId}`);
+      for (let i = window.localStorage.length - 1; i >= 0; i -= 1) {
+        const key = window.localStorage.key(i);
+        if (key && key.startsWith(`${storageKey}:`)) window.localStorage.removeItem(key);
+      }
     } catch (_) {}
     activeStorageKey = storageKey;
     state = freshState(false);
