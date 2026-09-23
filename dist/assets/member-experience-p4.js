@@ -358,7 +358,14 @@
   }, true);
 
   const stopMutationObserver = runtime.observeMutations((records) => {
-    if (records.some((record) => record.addedNodes.length || record.removedNodes.length)) scheduleApply();
+    const relevant = records.some((record) => {
+      const target = record.target instanceof Element ? record.target : null;
+      if (target?.closest('.modal-backdrop')) return false;
+      const added = Array.from(record.addedNodes || []);
+      const meaningfulAdded = added.some((node) => !(node instanceof Element && (node.matches('.modal-backdrop') || node.closest('.modal-backdrop'))));
+      return meaningfulAdded || record.removedNodes.length > 0;
+    });
+    if (relevant) scheduleApply();
   });
 
   const stopAuthObserver = runtime.onAuthStateChange((_event, session) => {
