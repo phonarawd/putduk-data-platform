@@ -159,7 +159,8 @@
     if (disposition === 'keep') return;
 
     if (disposition === 'inline') {
-      placeInline(toastText(node), toneOf(node));
+      const placed = placeInline(toastText(node), toneOf(node));
+      if (!placed) return;
     }
     node.remove();
   }
