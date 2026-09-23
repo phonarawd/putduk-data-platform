@@ -659,6 +659,17 @@ html[data-theme="dark"] .toast {
   border-color: rgba(255,255,255,.22);
   background: rgba(255,255,255,.1);
 }
+.withdraw-hero { display:grid; gap:12px; padding:16px; border-radius:16px; border:1px solid color-mix(in srgb,var(--emerald) 26%,var(--line)); background:color-mix(in srgb,var(--emerald) 6%,var(--surface)); }
+.withdraw-hero[data-tone="gold"] { border-color: color-mix(in srgb,var(--gold) 34%,var(--line)); background: color-mix(in srgb,var(--gold) 7%,var(--surface)); }
+.withdraw-chip { display:inline-flex; align-items:center; gap:6px; width:fit-content; padding:5px 11px; border-radius:999px; font-size:12px; font-weight:800; color:var(--emerald-strong); background:color-mix(in srgb,var(--emerald) 12%,transparent); }
+.withdraw-hero[data-tone="gold"] .withdraw-chip { color:var(--gold); background:color-mix(in srgb,var(--gold) 14%,transparent); }
+.withdraw-hero-figures { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }
+.withdraw-hero-figures div { min-width:0; padding:12px; border-radius:13px; background:var(--surface); border:1px solid var(--line); }
+.withdraw-hero-figures span { display:block; color:var(--muted); font-size:11px; font-weight:800; }
+.withdraw-hero-figures strong { display:block; margin-top:5px; font-size:19px; letter-spacing:-.04em; font-variant-numeric:tabular-nums; }
+.withdraw-hero-note { margin:0; color:var(--muted); font-size:12px; line-height:1.5; word-break:keep-all; }
+.penalty-figures.withdraw-preview { grid-template-columns:repeat(3,minmax(0,1fr)); }
+.penalty-figures.withdraw-preview .is-total { background:color-mix(in srgb,var(--gold) 9%,var(--surface-soft)); border-color:color-mix(in srgb,var(--gold) 30%,var(--line)); }
 .wallet-slots { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; margin:12px 0 4px; }
 .wallet-slot { min-height: 92px; display:flex; flex-direction:column; justify-content:space-between; padding:14px 12px; border-radius:14px; background:rgba(255,255,255,.1); }
 .wallet-slot .ui-lead { display:flex; font-size:12px; color:#b7d0c2; font-weight:800; }
@@ -1019,6 +1030,10 @@ html[data-theme="dark"] .toast {
   .wallet-slot strong { font-size:20px; }
   .withdraw-actions .primary-button,
   .withdraw-actions .secondary-button { font-size:13px; min-height:48px; }
+  .withdraw-hero-figures { grid-template-columns:1fr; }
+  .withdraw-hero { padding:14px; gap:10px; }
+  .penalty-figures.withdraw-preview { grid-template-columns:1fr; }
+  .withdraw-hero-figures strong { font-size:18px; }
   html[data-mode="member"] .member-tab { font-size:10.5px; }
   .id-back-meta { font-size:12px; gap:6px; }
   .id-face.id-back .id-back-meta .id-number { font-size:12px; letter-spacing:0; }
@@ -1050,6 +1065,16 @@ html[data-theme="dark"] .toast {
 
 @media (min-width: 600px) and (max-width: 840px) {
   .wallet-toolbar, .withdraw-actions { max-width: 420px; }
+}
+
+@media (max-height: 480px) and (orientation: landscape) {
+  .modal { max-height: 94dvh; }
+  .modal-body { max-height: 62dvh; overflow:auto; }
+  .withdraw-hero { padding:10px 12px; gap:8px; }
+  .withdraw-hero-figures { grid-template-columns:repeat(3,minmax(0,1fr)); }
+  .penalty-figures.withdraw-preview { grid-template-columns:repeat(3,minmax(0,1fr)); }
+  .withdraw-hero-figures strong { font-size:15px; }
+  .withdraw-hero-figures span { font-size:10px; }
 }
 
 @media (min-width: 841px) {

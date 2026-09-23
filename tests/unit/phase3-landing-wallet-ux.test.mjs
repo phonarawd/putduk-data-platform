@@ -7,8 +7,8 @@ test('member index의 리터럴 줄바꿈 표기와 Phase 3 wiring을 정리한�
 
   assert.equal(html.includes('\\n'), false);
   assert.match(html, /phase3-wallet-ux\.css\?v=20260921-phase3/);
-  assert.match(html, /phase3-wallet-ux\.js\?v=20260923-wallet-perf1/);
-  assert.ok(html.indexOf('phase3-wallet-ux.js?v=20260923-wallet-perf1') > html.indexOf('finance-flow-ux.js?v=20260923-finance-perf1'));
+  assert.match(html, /phase3-wallet-ux\.js\?v=20260924-phase1w1/);
+  assert.ok(html.indexOf('phase3-wallet-ux.js?v=20260924-phase1w1') > html.indexOf('finance-flow-ux.js?v=20260924-phase1w1'));
 });
 
 test('지갑 빈 상태는 현재 원장 탭에 맞는 문구를 사용한다', async () => {

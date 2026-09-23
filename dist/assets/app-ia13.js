@@ -3062,7 +3062,7 @@
       <div class="wallet-card" style="margin-bottom:18px"><div class="eyebrow" style="color:#a8f3d2">${icon('layout-grid',14)} 세 칸 잔액</div>${renderWalletSlots()}</div>
       ${pendingOut ? `<div class="notice" style="margin-bottom:18px"><span style="color:var(--gold)">${icon('hourglass',17)}</span><div><strong>출금 ${pendingOut}건이 처리 중이에요.</strong><br>운영자가 같은 날 바로 처리해요. 화면에서 금액을 숨기지 않아요.</div></div>` : ''}
       <div class="withdraw-actions"><button class="primary-button" data-action="withdraw-allowance">${icon('banknote', 16)} 수당만 출금</button><button class="secondary-button" data-action="withdraw-principal">${icon('landmark', 16)} 보증금까지 출금</button></div>
-      <div class="notice" style="margin-bottom:18px"><span style="color:var(--emerald)">${icon('info',17)}</span><div>기본 출금은 수당만이에요. 원금은 업무잔액에 남아 보여요. 보증금까지 신청하면 대기 없이 바로 지급하고, 등급·라인은 내려가요.</div></div>
+      <div class="notice" style="margin-bottom:18px"><span style="color:var(--emerald)">${icon('info',17)}</span><div>기본 출금은 수당만이에요. 원금은 업무잔액에 남아 보여요. 보증금까지 신청하면 운영자 확인 후 지급 처리되며, 완료된 원금만큼 업무잔액이 줄어요. 회원 등급은 출금 자체로 변경되지 않아요.</div></div>
       <div class="section-heading"><div><h2>최근 지갑 내역</h2><p>입금·출금 신청과 검수 완료 수당만 표시합니다.</p></div></div>
       <div class="ledger-tabs">${tabs.map((item) => `<button type="button" class="filter-button ${tab === item.id ? 'active' : ''}" data-ledger-tab="${item.id}">${item.label}</button>`).join('')}</div>
       <div class="panel"><div class="panel-pad record-panel">${body}</div></div>`;
@@ -3087,11 +3087,11 @@
       <div class="benefit-grid benefit-ladder">${cards}</div>
       <div class="panel panel-pad benefit-note">
         <h2>보증금까지 출금하면</h2>
-        <p class="help-line">${icon('banknote', 16)}<span>돈은 같은 날 바로 드려요. 며칠 뒤에 묶지 않아요.</span></p>
-        <p class="help-line">${icon('trending-down', 16)}<span>등급은 내려가요. 예: 선임은 라인으로.</span></p>
-        <p class="help-line">${icon('door-closed', 16)}<span>근무 잔액이 0이면 그 라인은 바로 닫혀요.</span></p>
-        <p class="help-line">${icon('waypoints', 16)}<span>우선 집기·주간 자리·전담 라인은 빠지고, 같은 고액 칸은 다시 입금해야 열려요.</span></p>
-        <p class="page-copy">다음 칸은 다시 잔액·완료 사다리를 타요. 출금만으로 그 칸·그 등급을 유지하지 않아요.</p>
+        <p class="help-line">${icon('banknote', 16)}<span>운영자가 확인한 뒤 지급 처리해요. 며칠 뒤에 돈을 묶지 않아요.</span></p>
+        <p class="help-line">${icon('briefcase', 16)}<span>완료된 원금만큼 업무잔액이 줄어요. 회원 등급은 출금 자체로 변경되지 않아요.</span></p>
+        <p class="help-line">${icon('shield-check', 16)}<span>기존 회원 등급·혜택·라인 상태는 원금 출금 자체로 변경하지 않아요.</span></p>
+        <p class="help-line">${icon('waypoints', 16)}<span>출금 완료 후 남은 업무잔액이 필요한 보증금보다 적으면 해당 업무는 새로 시작할 수 없어요.</span></p>
+        <p class="page-copy">남은 업무잔액에 따라 이용 가능한 업무 규모가 다시 계산돼요.</p>
       </div>
       <p class="page-copy" style="margin-top:12px;font-size:12px;color:var(--muted)">이 등급·혜택은 근무 기회를 나누는 기준이에요. 이율이나 이자는 없어요.</p>`;
   }
@@ -3118,7 +3118,7 @@
       work: `<h3>오늘 라인 근무</h3><p class="help-line">${icon('briefcase', 16)}<span>작업실에서 한 칸만 골라 출근해요. 오늘 배정 물량 5건의 실물 라벨 번호를 입력해 전표와 대조하면 돼요.</span></p><p class="help-line">${icon('monitor', 16)}<span>컴퓨터 화면에서도 근무할 수 있어요. 홈 화면 아이콘은 있으면 편하고, 없어도 출근할 수 있어요.</span></p><p>5건을 마치면 제출해요. 하루 30~60분이면 충분해요.</p>`,
       badge: `<h3>사원으로서 확인</h3><p class="help-line">${icon('id-card', 16)}<span>카드 한 장에 이름·사진·사원번호·협력사 배지가 있어요. PDK- 번호가 사원번호예요.</span></p><p class="help-line">${icon('building-2', 16)}<span>지금 출근하는 라인의 협력사가 카드에 보여요. 다른 협력사 칸으로 일하면 배지도 그 라인으로 바뀌어요.</span></p><p class="membership-links"><button type="button" class="text-link" data-nav="benefits">${icon('award', 16)} 등급·혜택 보기</button></p><p class="help-legal">퍼뜩 멤버십 운영이며, 근로계약·4대보험·협력사 인사 채용은 아니에요.</p>`,
       pay: `<h3>원금과 수당</h3><p class="help-line">${icon('layout-grid', 16)}<span>지갑은 지원금·업무잔액·출금가능 세 칸이에요. 섞지 않아요.</span></p><p class="help-line">${icon('lock', 16)}<span>근무 보증은 잠금 금액이에요. 승인되면 원금은 업무잔액, 수당은 출금가능 칸에 보여요.</span></p>${settleNote('p')}<p>화면에서 숫자를 바꾸지 않아요. 서버가 정해요.</p>`,
-      out: `<h3>출금은 이렇게</h3><p class="help-line">${icon('banknote', 16)}<span>큰 버튼은 수당만 출금이에요. 원금은 업무잔액에 남아 보여요.</span></p><p class="help-line">${icon('landmark', 16)}<span>보증금까지 신청하면 대기 일수 없이 바로 지급하고, 등급과 라인은 내려가요.</span></p><p>체험 첫 출금 3천 원은 운영 경로로만 처리돼요.</p><p class="membership-links"><button type="button" class="text-link" data-nav="benefits">${icon('award', 16)} 강등·혜택 안내</button></p>`
+      out: `<h3>출금은 이렇게</h3><p class="help-line">${icon('banknote', 16)}<span>큰 버튼은 수당만 출금이에요. 원금은 업무잔액에 남아 보여요.</span></p><p class="help-line">${icon('landmark', 16)}<span>원금까지 신청하면 운영자 확인 후 지급 처리되며, 완료된 원금만큼 업무잔액이 줄어요. 원금 출금 자체로 회원 등급이나 라인을 낮추지 않아요.</span></p><p>체험 첫 출금 3천 원은 운영 경로로만 처리돼요.</p><p class="membership-links"><button type="button" class="text-link" data-nav="benefits">${icon('award', 16)} 등급·혜택 보기</button></p>`
     };
     return `<div class="section-heading" style="margin-top:0"><div><h1 class="page-title">도움말</h1><p class="page-copy">오늘 근무부터 정산까지, 사원 안내를 나눠 두었어요.</p></div></div>
       <div class="help-tabs">${tabs.map((item) => `<button type="button" class="filter-button ${tab === item.id ? 'active' : ''}" data-help-tab="${item.id}">${item.label}</button>`).join('')}</div>
@@ -3669,22 +3669,25 @@
     }
     const principal = state.withdrawIntent === 'principal';
     const notice = principal
-      ? '보증금까지 신청하면 대기 없이 바로 지급해요. 등급은 내려가고, 근무 잔액 0이면 그 라인은 바로 닫혀요.'
+      ? '원금까지 신청하면 운영자 확인 후 지급 처리되며, 완료된 원금만큼 업무잔액이 줄어요. 원금 출금 자체로 회원 등급이나 라인을 낮추지 않아요.'
       : `수당만 출금해요. 원금은 업무잔액에 남아 보여요. 출금가능 ${money(state.wallet.available)}.`;
-    return `<div class="modal-backdrop" data-modal="info"><div class="modal"><div class="modal-head"><div><h2 class="modal-title-row">${principal ? `${icon('landmark', 20)} 보증금까지 출금` : `${icon('banknote', 20)} 수당만 출금`}</h2><p>신청 후 처리 중으로 보여요. 화면에서 잔액을 빼지 않아요.</p></div><button class="icon-button" data-action="close-modal" aria-label="닫기">${icon('x',18)}</button></div><div class="modal-body"><form id="withdrawForm"><div class="notice"><span style="color:var(--gold)">${icon('shield-check',17)}</span><div>${notice}</div></div><input type="hidden" name="withdraw_kind" value="${principal ? 'principal' : 'allowance'}" /><div class="form-grid" style="margin-top:16px"><div class="field"><label for="withdrawAmount">출금 금액</label><input id="withdrawAmount" name="amount" type="number" min="1000" step="1" required placeholder="출금할 금액" /></div><div class="field"><label for="withdrawMethod">출금 방식</label><select id="withdrawMethod" name="destination_type"><option value="bank">원화 계좌</option><option value="usdt">USDT 지갑</option></select></div><div class="field"><label for="withdrawBank">은행명</label><input id="withdrawBank" name="bank_name" placeholder="예: 국민은행" /></div><div class="field"><label for="withdrawHolder">예금주</label><input id="withdrawHolder" name="account_holder" placeholder="예금주 이름" /></div><div class="field full"><label for="withdrawDest">계좌번호 또는 USDT 주소</label><input id="withdrawDest" name="destination" required placeholder="계좌번호 또는 지갑 주소" /></div><div class="field full"><label for="withdrawNetwork">USDT 네트워크</label><input id="withdrawNetwork" name="usdt_network" placeholder="예: TRC20" /></div><div class="field full"><label for="withdrawPin">출금 비밀번호 6자리</label><input id="withdrawPin" name="pin" type="password" inputmode="numeric" maxlength="6" pattern="[0-9]{6}" required placeholder="••••••" /></div></div><div class="modal-actions"><button class="secondary-button" type="button" data-action="close-modal">취소</button><button class="primary-button" type="submit">신청하고 처리 중으로</button></div></form></div></div></div>`;
+    const chipLabel = principal ? '원금 포함 출금' : '수당만 출금';
+    const chipTone = principal ? 'gold' : 'emerald';
+    const heroFigures = principal
+      ? `<div><span>출금가능 (수당)</span><strong>${money(state.wallet.available)}</strong></div><div><span>업무잔액 (원금)</span><strong>${money(state.wallet.work)}</strong></div><div><span>신청 가능 합계</span><strong>${money(Number(state.wallet.available || 0) + Number(state.wallet.work || 0))}</strong></div>`
+      : `<div><span>출금가능 (수당)</span><strong>${money(state.wallet.available)}</strong></div>`;
+    const heroNote = principal
+      ? '✅ 완료된 원금만큼 업무잔액이 줄고, 회원 등급은 출금 자체로 변경되지 않아요.'
+      : '✅ 원금은 업무잔액에 그대로 남아요. 수당만 신청해요.';
+    return `<div class="modal-backdrop" data-modal="info"><div class="modal"><div class="modal-head"><div><h2 class="modal-title-row">${principal ? `${icon('landmark', 20)} 보증금까지 출금` : `${icon('banknote', 20)} 수당만 출금`}</h2><p>${notice}</p></div><button class="icon-button" data-action="close-modal" aria-label="닫기">${icon('x',18)}</button></div><div class="modal-body"><form id="withdrawForm"><div class="withdraw-hero" data-tone="${chipTone}"><span class="withdraw-chip">${icon('shield-check', 15)} ${chipLabel}</span><div class="withdraw-hero-figures">${heroFigures}</div><p class="withdraw-hero-note">${heroNote}</p></div><input type="hidden" name="withdraw_kind" value="${principal ? 'principal' : 'allowance'}" /><div class="form-grid" style="margin-top:16px"><div class="field"><label for="withdrawAmount">출금 금액</label><input id="withdrawAmount" name="amount" type="number" min="1000" step="1" required placeholder="출금할 금액" /></div><div class="field"><label for="withdrawMethod">출금 방식</label><select id="withdrawMethod" name="destination_type"><option value="bank">원화 계좌</option><option value="usdt">USDT 지갑</option></select></div><div class="field"><label for="withdrawBank">은행명</label><input id="withdrawBank" name="bank_name" placeholder="예: 국민은행" /></div><div class="field"><label for="withdrawHolder">예금주</label><input id="withdrawHolder" name="account_holder" placeholder="예금주 이름" /></div><div class="field full"><label for="withdrawDest">계좌번호 또는 USDT 주소</label><input id="withdrawDest" name="destination" required placeholder="계좌번호 또는 지갑 주소" /></div><div class="field full"><label for="withdrawNetwork">USDT 네트워크</label><input id="withdrawNetwork" name="usdt_network" placeholder="예: TRC20" /></div><div class="field full"><label for="withdrawPin">출금 비밀번호 6자리</label><input id="withdrawPin" name="pin" type="password" inputmode="numeric" maxlength="6" pattern="[0-9]{6}" required placeholder="••••••" /></div></div><div class="modal-actions"><button class="secondary-button" type="button" data-action="close-modal">취소</button><button class="primary-button" type="submit">출금 신청</button></div></form></div></div></div>`;
   }
 
   function renderPrincipalConfirm() {
-    const band = tierBand();
-    const next = demoteBandLabel(band.label);
     const w = walletThree();
     const work = Number(w.work || 0);
     const stipend = Number(w.withdrawable || 0);
     const total = work + stipend;
-    const gradeCopy = band.label === next
-      ? `사원증 등급이 내려가요. 지금은 ${esc(band.label)}${ieya(band.label)}.`
-      : `사원증 등급이 ${esc(band.label)}에서 ${esc(next)}${eulo(next)} 내려가요.`;
-    return `<div class="modal-backdrop" data-modal="withdraw-principal"><div class="modal penalty-sheet cinematic-modal"><div class="result-stage compact"><canvas id="demoteMotionCanvas" aria-hidden="true"></canvas></div><div class="modal-head"><div><h2 class="modal-title-row">${icon('landmark', 20)} 보증금까지 출금할까요?</h2><p>대기 기간 없이 바로 지급하고, 지위는 내려가요.</p></div><button class="icon-button" data-action="close-modal" aria-label="닫기">${icon('x',18)}</button></div><div class="modal-body"><div class="penalty-figures"><div><span>지금 업무잔액(원금)</span><strong>${money(work)}</strong></div><div><span>지금 출금가능(수당)</span><strong>${money(stipend)}</strong></div><div><span>신청하면 바로 이 합까지</span><strong>${money(total)}</strong></div></div><div class="notice penalty-list"><div class="penalty-row">${icon('banknote', 16)}<span>같은 날 ${money(total)}까지 즉시 지급해요. 며칠 뒤에 돈을 묶지 않아요.</span></div><div class="penalty-row">${icon('trending-down', 16)}<span>${gradeCopy}</span></div><div class="penalty-row">${icon('door-closed', 16)}<span>근무 잔액이 0원이 되면 그 라인은 바로 닫혀요.</span></div><p>우선 집기·주간 근무 자리·전담 라인은 빠지고, 같은 고액 칸은 다시 입금해야 열려요.</p></div><div class="modal-actions"><button class="secondary-button" type="button" data-action="close-modal">취소</button><button class="gold-button" type="button" data-action="confirm-principal">이해하고 신청</button></div></div></div></div>`;
+    return `<div class="modal-backdrop" data-modal="withdraw-principal"><div class="modal penalty-sheet"><div class="modal-head"><div><h2 class="modal-title-row">${icon('landmark', 20)} 보증금까지 출금할까요?</h2><p>운영자가 확인한 뒤 지급 처리하고, 출금 자체로 회원 등급을 낮추지 않아요.</p></div><button class="icon-button" data-action="close-modal" aria-label="닫기">${icon('x',18)}</button></div><div class="modal-body"><div class="penalty-figures withdraw-preview"><div><span>지금 업무잔액(원금)</span><strong>${money(work)}</strong></div><div><span>지금 출금가능(수당)</span><strong>${money(stipend)}</strong></div><div class="is-total"><span>신청하면 이 합계까지</span><strong>${money(total)}</strong></div></div><div class="notice penalty-list"><div class="penalty-row">${icon('banknote', 16)}<span>운영자가 확인한 뒤 ${money(total)}까지 지급 처리해요.</span></div><div class="penalty-row">${icon('shield-check', 16)}<span>완료된 원금만큼 업무잔액이 줄어요. 원금 출금 자체로 회원 등급이나 라인을 낮추지 않아요.</span></div><p>출금 완료 후 남은 업무잔액이 필요한 보증금보다 적으면 해당 업무는 새로 시작할 수 없어요.</p></div><div class="modal-actions"><button class="secondary-button" type="button" data-action="close-modal">취소</button><button class="gold-button" type="button" data-action="confirm-principal">출금 정보 입력</button></div></div></div></div>`;
   }
 
   function renderKycModal() {
@@ -4638,15 +4641,6 @@
     if (!motion || typeof motion.playWorkPhase !== 'function') return;
 
     if (state.startNodeId && !state.player) {
-      return;
-    }
-
-    if (state.modal === 'withdraw-principal') {
-      const canvas = document.getElementById('demoteMotionCanvas');
-      const token = 'demote';
-      playCueOnCanvas(canvas, token, () => {
-        motion.playWorkPhase(canvas, companies[0] || { name: '퍼뜩', slug: 'putduk' }, 'demote');
-      });
       return;
     }
 
@@ -6015,7 +6009,7 @@
       await refreshMemberWallet();
       closeModal();
       showToast('⏳ 출금 신청을 접수했어요. 운영자가 확인하면 같은 날 지급 처리돼요.', 'success');
-      if (kind === 'principal') showToast('⬇️ 등급과 라인이 내려가는 출금이에요. 돈은 바로 지급 처리돼요.', 'warning');
+      if (kind === 'principal') showToast('✅ 원금 출금을 접수했어요. 완료된 원금만큼 업무잔액이 줄어요. 회원 등급은 출금 자체로 변경되지 않아요.', 'info');
     } catch (error) {
       showToast(friendlyAdminError(error), isUnsupportedAction(error) ? 'warning' : 'error');
     }

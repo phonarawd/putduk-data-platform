@@ -159,7 +159,7 @@ test('landscape member shell and auth surfaces keep one usable scroll owner', as
 
   assert.doesNotMatch(memberHtml, /user-scalable=no/);
   assert.doesNotMatch(memberHtml, /maximum-scale=1\.0/);
-  assert.match(memberHtml, /app\.css\?v=20260920-landscape1/);
+  assert.match(memberHtml, /app\.css\?v=20260924-phase1w1/);
   assert.match(memberHtml, /uiux-auth-2026\.css\?v=20260920-landscape1/);
   assert.match(memberHtml, /uiux-auth-2026\.js\?v=20260920-landscape1/);
   assert.match(appCss, /orientation:\s*landscape/);
