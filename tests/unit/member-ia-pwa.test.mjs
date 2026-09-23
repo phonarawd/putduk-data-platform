@@ -7,6 +7,7 @@ const app = fs.readFileSync(path.join(root, 'dist/assets/app.js'), 'utf8');
 const bundle = fs.readFileSync(path.join(root, 'dist/assets/app-quota5.js'), 'utf8');
 const lineUx = fs.readFileSync(path.join(root, 'dist/assets/line-card-ux.js'), 'utf8');
 const index = fs.readFileSync(path.join(root, 'dist/index.html'), 'utf8');
+const adminIndex = fs.readFileSync(path.join(root, 'dist/admin/index.html'), 'utf8');
 
 assert.match(app, /id: 'dashboard', label: '근무'/);
 assert.match(app, /id: 'nodes', label: '업무 매칭'/);
@@ -25,6 +26,8 @@ assert.match(lineUx, /\['업무 매칭'\]/);
 assert.doesNotMatch(lineUx, /\['라인 찾기'/);
 assert.equal(app, bundle);
 assert.match(index, /putduk-boot-v44-member-ia7-pwa-off-cloudflare-production-20260923/);
+assert.match(index, /assets\\/app-ia7\\.js/);
+assert.match(adminIndex, /assets\\/app-ia7\\.js/);
 
 new Function(app);
 new Function(lineUx);
