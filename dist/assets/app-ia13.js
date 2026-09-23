@@ -3644,7 +3644,7 @@
     const connectionCopy = supabaseClient
       ? '가입 버튼을 누르면 안전한 인증 서버에 계정이 만들어지고, 이메일 인증 설정에 따라 확인 메일이 발송됩니다.'
       : '이메일 인증을 완료하면 회원 계정이 안전하게 활성화됩니다.';
-    if (isLogin) return `<div class="modal-backdrop" data-modal="auth"><div class="modal auth-modal"><div class="modal-head"><div><h2>퍼뜩 로그인</h2><p>내 작업내역과 멤버십 카드를 이어서 확인해요.</p></div><button class="icon-button" data-action="close-modal" aria-label="닫기">${icon('x',18)}</button></div><div class="auth-tabs"><button type="button" class="active" data-auth-mode="login">로그인</button><button type="button" data-auth-mode="signup">회원가입</button></div><div class="modal-body"><form id="loginForm"><div class="field"><label for="loginEmail">이메일</label><input id="loginEmail" required type="email" autocomplete="email" placeholder="name@example.com" /></div><div class="field" style="margin-top:13px"><label for="loginPassword">비밀번호</label><input id="loginPassword" required type="password" autocomplete="current-password" placeholder="비밀번호를 입력해 주세요" /></div><div class="modal-actions"><button class="secondary-button" type="button" data-action="forgot-password">비밀번호 재설정</button><button class="primary-button" type="submit">로그인</button></div><div class="notice" style="margin-top:14px"><span style="color:var(--gold)">${icon('shield-check',17)}</span><div>${connectionCopy}</div></div></form></div></div></div>`;
+    if (isLogin) return `<div class="modal-backdrop" data-modal="auth"><div class="modal auth-modal"><div class="modal-head"><div><h2>퍼뜩 로그인</h2><p>내 작업내역과 멤버십 카드를 이어서 확인해요.</p></div><button class="icon-button" data-action="close-modal" aria-label="닫기">${icon('x',18)}</button></div><div class="auth-tabs"><button type="button" class="active" data-auth-mode="login">로그인</button><button type="button" data-auth-mode="signup">회원가입</button></div><div class="modal-body"><form id="loginForm"><div class="field"><label for="loginEmail">이메일</label><input id="loginEmail" required type="email" autocomplete="email" placeholder="name@example.com" /></div><div class="field" style="margin-top:13px"><label for="loginPassword">비밀번호</label><input id="loginPassword" required type="password" autocomplete="current-password" placeholder="비밀번호를 입력해 주세요" /></div><div data-auth-feedback hidden role="alert" aria-live="assertive" style="margin:12px 0 0;padding:10px 12px;border:1px solid color-mix(in srgb,var(--danger,#c94a4a) 38%,transparent);border-radius:12px;background:color-mix(in srgb,var(--danger,#c94a4a) 7%,var(--surface,#fff));color:var(--text,#19352c);font-size:13px;line-height:1.5"></div><div class="modal-actions"><button class="secondary-button" type="button" data-action="forgot-password">비밀번호 재설정</button><button class="primary-button" type="submit">로그인</button></div><div class="notice" style="margin-top:14px"><span style="color:var(--gold)">${icon('shield-check',17)}</span><div>${connectionCopy}</div></div></form></div></div></div>`;
     return `<div class="modal-backdrop" data-modal="auth"><div class="modal auth-modal"><div class="modal-head"><div><h2>퍼뜩 회원가입</h2><p>간단한 정보로 나만의 노드 카드를 발급해요.</p></div><button class="icon-button" data-action="close-modal" aria-label="닫기">${icon('x',18)}</button></div><div class="auth-tabs"><button type="button" class="active" data-auth-mode="signup">회원가입</button><button type="button" data-auth-mode="login">이미 계정이 있어요</button></div><div class="modal-body"><form id="signupForm"><div class="form-grid"><div class="field"><label for="signupName">이름</label><input id="signupName" required autocomplete="name" placeholder="실명을 입력해 주세요" /></div><div class="field"><label for="signupBirth">생년월일 6자리</label><input id="signupBirth" required inputmode="numeric" pattern="[0-9]{6}" maxlength="6" placeholder="예: 900101" /></div><div class="field"><label for="signupEmail">이메일</label><div style="display:flex;gap:7px"><input id="signupEmail" required type="email" autocomplete="email" placeholder="name@example.com" style="min-width:0" /><button class="small-button" type="button" data-action="email-check">형식 확인</button></div></div><div class="field"><label for="signupPhone">휴대폰번호</label><input id="signupPhone" required inputmode="tel" autocomplete="tel" placeholder="010-0000-0000" /></div><div class="field"><label for="signupPassword">비밀번호</label><input id="signupPassword" required type="password" autocomplete="new-password" minlength="8" placeholder="8자 이상 입력" /></div><div class="field"><label for="signupPasswordConfirm">비밀번호 확인</label><input id="signupPasswordConfirm" required type="password" autocomplete="new-password" minlength="8" placeholder="한 번 더 입력" /></div><div class="field full"><label for="signupReferral">추천인 코드 <span style="font-weight:500;color:var(--muted)">(선택)</span></label><input id="signupReferral" placeholder="추천인 코드가 있으면 입력해 주세요" /></div></div><label class="check-row"><input id="signupTerms" type="checkbox" required /> <span>필수 <button type="button" class="text-link inline-link" data-action="open-terms">이용약관</button>과 <button type="button" class="text-link inline-link" data-action="open-privacy">개인정보 안내</button>를 확인하고 동의합니다.</span></label><label class="check-row"><input id="signupMarketing" type="checkbox" /> <span>작업 상태와 서비스 안내 알림을 받습니다. (선택)</span></label><div class="notice" style="margin-top:16px"><span style="color:var(--gold)">${icon('info',17)}</span><div>${connectionCopy}</div></div><div class="modal-actions"><button class="secondary-button" type="button" data-action="close-modal">나중에 하기</button><button class="primary-button" type="submit">회원가입하고 카드 발급</button></div></form></div></div></div>`;
   }
 
@@ -4950,7 +4950,7 @@
     nodes = [];
     try {
       if (previousStorageKey) window.localStorage.removeItem(previousStorageKey);
-      if (signedOutUserId) window.localStorage.removeItem(`${storageKey}:${signedOutUserId}`);
+      if (previousUserId) window.localStorage.removeItem(`${storageKey}:${previousUserId}`);
       for (let i = window.localStorage.length - 1; i >= 0; i -= 1) {
         const key = window.localStorage.key(i);
         if (key && key.startsWith(`${storageKey}:`)) window.localStorage.removeItem(key);
@@ -4999,7 +4999,7 @@
     }
     // 비동기 로그아웃 후에도 회원 전용 저장소가 남지 않도록 최종 정리한다.
     try {
-      if (previousUserId) window.localStorage.removeItem(`${storageKey}:${previousUserId}`);
+      if (signedOutUserId) window.localStorage.removeItem(`${storageKey}:${signedOutUserId}`);
       for (let i = window.localStorage.length - 1; i >= 0; i -= 1) {
         const key = window.localStorage.key(i);
         if (key && key.startsWith(`${storageKey}:`)) window.localStorage.removeItem(key);
@@ -5182,6 +5182,13 @@
     return '로그인을 완료하지 못했어요. 잠시 후 다시 시도해 주세요.';
   }
 
+  function setLoginFeedback(message) {
+    const box = document.querySelector('[data-auth-feedback]');
+    if (!box) return;
+    box.textContent = String(message || '');
+    box.hidden = !message;
+  }
+
   async function submitLogin(event) {
     event.preventDefault();
     const form = event.target;
@@ -5192,13 +5199,13 @@
     let data;
     try {
       const result = await supabaseClient.auth.signInWithPassword({ email, password });
-      if (result.error) { showToast(loginErrorMessage(result.error), 'error'); return; }
+      if (result.error) { const message = loginErrorMessage(result.error); setLoginFeedback(message); showToast(message, 'error'); return; }
       data = result.data;
       if (!data?.session) { showToast('로그인 세션을 만들지 못했어요. 이메일 인증 상태를 확인해 주세요.', 'info'); return; }
       signedOutLock = false;
       await hydrateSession(data.session);
     } catch (error) {
-      showToast(loginErrorMessage(error), 'error');
+      const message = loginErrorMessage(error); setLoginFeedback(message); showToast(message, 'error');
       return;
     }
     state.modal = null;
