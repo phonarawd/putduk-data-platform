@@ -466,7 +466,8 @@
     enhanceMatchingPage();
     enhanceWorkJourney();
     ensureMatchingTab();
-    observer.observe(document.body || document.documentElement, {
+    const app = document.getElementById('app');
+    if (app) observer.observe(app, {
       childList: true,
       subtree: true
     });
