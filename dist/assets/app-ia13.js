@@ -4936,6 +4936,7 @@
   function applySignedOutState({ navigate = false } = {}) {
     signedOutLock = true;
     const previousStorageKey = activeStorageKey;
+    const previousUserId = authState.session?.user?.id || null;
     if (kstResetTimer) { window.clearTimeout(kstResetTimer); kstResetTimer = null; }
     authState.session = null;
     authState.profile = null;
@@ -4945,7 +4946,10 @@
     authState.adminLoading = false;
     companies = [];
     nodes = [];
-    try { if (previousStorageKey) window.localStorage.removeItem(previousStorageKey); } catch (_) {}
+    try {
+      if (previousStorageKey) window.localStorage.removeItem(previousStorageKey);
+      if (previousUserId) window.localStorage.removeItem(`${storageKey}:${previousUserId}`);
+    } catch (_) {}
     activeStorageKey = storageKey;
     state = freshState(false);
     saveState();
