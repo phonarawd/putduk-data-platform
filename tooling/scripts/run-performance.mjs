@@ -34,6 +34,11 @@ if (js.includes('realActivityFetchedAt') || js.includes("action: 'real_activity'
 if (!fomoBot.includes("from('crew_pulse')") || !fomoBot.includes('4000')) {
   throw new Error('성능 기준: FOMO bot runtime crew_pulse 폴링 완화가 없습니다.');
 }
+if (fomoBot.includes('observer.observe(document.documentElement')
+  || !fomoBot.includes("const observerRoot = document.getElementById('app')")
+  || !fomoBot.includes('observer.observe(observerRoot')) {
+  throw new Error('성능 기준: FOMO MutationObserver는 전체 document가 아니라 #app 범위만 감시해야 합니다.');
+}
 
 const memberRuntime = await readFile(join(root, 'dist/assets/member-runtime-core.js'), 'utf8');
 const memberCatalog = await readFile(join(root, 'dist/assets/member-catalog-runtime.js'), 'utf8');

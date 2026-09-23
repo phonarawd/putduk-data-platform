@@ -234,8 +234,11 @@
     });
   };
 
-  const observer = new MutationObserver(scheduleApply);
-  observer.observe(document.documentElement, { subtree: true, childList: true, characterData: true });
+  const observerRoot = document.getElementById('app');
+  if (observerRoot) {
+    const observer = new MutationObserver(scheduleApply);
+    observer.observe(observerRoot, { subtree: true, childList: true, characterData: true });
+  }
 
   hydrateSettings().finally(apply);
   setInterval(() => {
