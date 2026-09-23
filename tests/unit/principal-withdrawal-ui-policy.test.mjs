@@ -6,7 +6,7 @@ test('원금 출금 회원 UI는 강등·라인 폐쇄 대신 실제 잔액 계�
   const guard = await readRepo('dist', 'assets', 'toast-policy-guard.js');
   const indexHtml = await readRepo('dist', 'index.html');
 
-  assert.match(indexHtml, /toast-policy-guard\.js\?v=20260920-toast4/);
+  assert.match(indexHtml, /toast-policy-guard\.js\?v=20260924-toast5/);
   assert.match(guard, /WITHDRAWAL_COPY_REPLACEMENTS/);
   assert.match(guard, /회원 등급은 출금 자체로 변경되지 않아요/);
   assert.match(guard, /출금 자체로 회원 등급을 낮추지 않아요/);
