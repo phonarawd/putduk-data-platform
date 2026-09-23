@@ -328,7 +328,7 @@ async function dailyTaskQuota(userId: string) {
   const { data, error } = await admin.rpc("putduk_member_daily_task_quota", { p_user_id: userId });
   if (error || !data) {
     console.error("daily task quota failed", error);
-    throw new HttpError(503, "오늘 작업 가능 횟수를 불러오지 못했어요.");
+    throw new HttpError(503, "오늘 남은 횟수를 불러오지 못했어요.");
   }
   return data;
 }
