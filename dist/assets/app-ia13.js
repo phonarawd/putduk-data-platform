@@ -4996,6 +4996,14 @@
         await supabaseClient.auth.signOut({ scope: 'local' });
       } catch (_) {}
     }
+    // 비동기 로그아웃 후에도 회원 전용 저장소가 남지 않도록 최종 정리한다.
+    try {
+      if (previousUserId) window.localStorage.removeItem(`${storageKey}:${previousUserId}`);
+      for (let i = window.localStorage.length - 1; i >= 0; i -= 1) {
+        const key = window.localStorage.key(i);
+        if (key && key.startsWith(`${storageKey}:`)) window.localStorage.removeItem(key);
+      }
+    } catch (_) {}
   }
 
   async function checkpointWork() {
