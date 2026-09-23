@@ -36,4 +36,4 @@ assert.match(perfDeferred, /ensure\('motion'\)/);
 
 new Function(app);
 new Function(lineUx);
-console.log('member IA + referral + PWA presentation removal contract: ok');
+console.log('member IA + referral + PWA presentation removal contract: ok'); // bundle path is cache-busted with the current app-ia contract
