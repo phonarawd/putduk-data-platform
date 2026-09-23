@@ -5,7 +5,9 @@ const adminPassword = process.env.PUTDUK_ADMIN_PASSWORD || '';
 const baseUrl = process.env.PLAYWRIGHT_BASE_URL || 'https://ops.hiptk.app';
 
 test.describe('Production Admin authenticated E2E', () => {
-  test.skip(!adminEmail || !adminPassword, 'PUTDUK_ADMIN_EMAIL / PUTDUK_ADMIN_PASSWORD are required for authenticated Admin E2E.');
+  test.beforeAll(() => {
+    if (!adminEmail || !adminPassword) throw new Error('PUTDUK_ADMIN_EMAIL / PUTDUK_ADMIN_PASSWORD are required for authenticated Admin E2E.');
+  });
 
   test('Admin login creates an authorized work-review session', async ({ page }) => {
     let meResponse: { status: number; body: { ok?: boolean; roles?: string[] } } | null = null;
