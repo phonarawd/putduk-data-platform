@@ -243,7 +243,7 @@ test('회원 화면의 오늘 남은 횟수 표시가 단일 표시 계약을 �
 
   const index = await readRepo('dist', 'index.html');
   const headers = await readRepo('dist', '_headers');
-  assert.match(index, /app-ia13\.js\?v=20260924-phase10g/);
+  assert.match(index, /app-ia13\.js\?v=20260924-phase10h/);
   assert.match(headers, /\/assets\/app-ia13\.js/);
   assert.match(headers, /Cache-Control: public, max-age=0, must-revalidate/);
 });
