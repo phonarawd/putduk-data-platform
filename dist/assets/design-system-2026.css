@@ -1,0 +1,231 @@
+/* PUTDUK Design System 2026 — PHASE 6
+ * Canonical tokens and reusable primitives.
+ * Existing production classes remain backward-compatible; new UI should use --pd-* tokens.
+ */
+:root {
+  /* Color */
+  --pd-color-bg: #f5f8f7;
+  --pd-color-surface: #ffffff;
+  --pd-color-surface-soft: #eff5f2;
+  --pd-color-text: #13251f;
+  --pd-color-text-muted: #65756f;
+  --pd-color-primary: #0d9f76;
+  --pd-color-primary-strong: #087857;
+  --pd-color-accent: #c18a2d;
+  --pd-color-danger: #c84b58;
+  --pd-color-warning: #b7791f;
+  --pd-color-success: #0d9f76;
+  --pd-color-info: #2563eb;
+  --pd-color-border: rgba(19, 54, 45, .12);
+  --pd-color-focus: color-mix(in srgb, var(--pd-color-primary) 46%, transparent);
+
+  /* Typography */
+  --pd-font-sans: Pretendard, "Noto Sans KR", "Apple SD Gothic Neo", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  --pd-font-size-xs: 12px;
+  --pd-font-size-sm: 14px;
+  --pd-font-size-md: 15px;
+  --pd-font-size-lg: 17px;
+  --pd-font-size-xl: 21px;
+  --pd-font-size-2xl: 28px;
+  --pd-font-size-3xl: clamp(32px, 4vw, 44px);
+  --pd-line-tight: 1.2;
+  --pd-line-normal: 1.5;
+  --pd-line-readable: 1.68;
+  --pd-weight-regular: 400;
+  --pd-weight-medium: 550;
+  --pd-weight-semibold: 700;
+  --pd-weight-bold: 800;
+  --pd-weight-black: 900;
+
+  /* Spacing — 4px base */
+  --pd-space-1: 4px;
+  --pd-space-2: 8px;
+  --pd-space-3: 12px;
+  --pd-space-4: 16px;
+  --pd-space-5: 20px;
+  --pd-space-6: 24px;
+  --pd-space-7: 28px;
+  --pd-space-8: 32px;
+  --pd-space-10: 40px;
+  --pd-space-12: 48px;
+  --pd-space-16: 64px;
+
+  /* Shape */
+  --pd-radius-sm: 8px;
+  --pd-radius-md: 12px;
+  --pd-radius-lg: 16px;
+  --pd-radius-xl: 20px;
+  --pd-radius-2xl: 26px;
+  --pd-radius-pill: 999px;
+
+  /* Elevation */
+  --pd-shadow-xs: 0 4px 14px rgba(13, 63, 47, .055);
+  --pd-shadow-sm: 0 10px 28px rgba(13, 63, 47, .075);
+  --pd-shadow-md: 0 16px 38px rgba(13, 63, 47, .11);
+  --pd-shadow-lg: 0 24px 64px rgba(13, 63, 47, .15);
+
+  /* Layout / layers */
+  --pd-content-max: 1280px;
+  --pd-touch-target: 44px;
+  --pd-z-base: 1;
+  --pd-z-sticky: 20;
+  --pd-z-dropdown: 100;
+  --pd-z-overlay: 500;
+  --pd-z-modal: 700;
+  --pd-z-toast: 900;
+
+  /* Motion */
+  --pd-motion-fast: 120ms;
+  --pd-motion-normal: 180ms;
+  --pd-motion-slow: 280ms;
+  --pd-ease-standard: cubic-bezier(.2, .65, .3, 1);
+  --pd-ease-emphasized: cubic-bezier(.16, 1, .3, 1);
+
+  /* Breakpoints */
+  --pd-bp-sm: 430px;
+  --pd-bp-md: 760px;
+  --pd-bp-lg: 980px;
+  --pd-bp-xl: 1280px;
+}
+
+[data-theme="dark"] {
+  --pd-color-bg: #07100e;
+  --pd-color-surface: #10231e;
+  --pd-color-surface-soft: #0d1b18;
+  --pd-color-text: #edf8f3;
+  --pd-color-text-muted: #9eb5ab;
+  --pd-color-primary: #23d49b;
+  --pd-color-primary-strong: #42edb6;
+  --pd-color-accent: #e7b851;
+  --pd-color-danger: #ff8792;
+  --pd-color-border: rgba(202, 240, 225, .12);
+}
+
+/* Canonical primitives for all new surfaces. */
+.pd-button,
+.pd-input,
+.pd-select,
+.pd-textarea {
+  font: inherit;
+  font-family: var(--pd-font-sans);
+}
+
+.pd-button {
+  min-height: var(--pd-touch-target);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--pd-space-2);
+  padding: 0 var(--pd-space-4);
+  border: 1px solid transparent;
+  border-radius: var(--pd-radius-md);
+  font-size: var(--pd-font-size-sm);
+  font-weight: var(--pd-weight-bold);
+  line-height: var(--pd-line-normal);
+  cursor: pointer;
+  transition:
+    transform var(--pd-motion-normal) var(--pd-ease-standard),
+    border-color var(--pd-motion-normal) var(--pd-ease-standard),
+    background var(--pd-motion-normal) var(--pd-ease-standard),
+    box-shadow var(--pd-motion-normal) var(--pd-ease-standard),
+    opacity var(--pd-motion-fast) linear;
+}
+
+.pd-button--primary {
+  color: #fff;
+  background: var(--pd-color-primary);
+  box-shadow: var(--pd-shadow-sm);
+}
+
+.pd-button--secondary {
+  color: var(--pd-color-text);
+  background: var(--pd-color-surface);
+  border-color: var(--pd-color-border);
+}
+
+.pd-button--danger {
+  color: #fff;
+  background: var(--pd-color-danger);
+}
+
+.pd-button:hover:not(:disabled) { transform: translateY(-1px); }
+.pd-button:disabled { opacity: .45; cursor: not-allowed; }
+.pd-button:focus-visible,
+.pd-input:focus-visible,
+.pd-select:focus-visible,
+.pd-textarea:focus-visible {
+  outline: 3px solid var(--pd-color-focus);
+  outline-offset: 2px;
+}
+
+.pd-input,
+.pd-select,
+.pd-textarea {
+  width: 100%;
+  min-height: var(--pd-touch-target);
+  padding: 0 var(--pd-space-3);
+  color: var(--pd-color-text);
+  background: var(--pd-color-surface);
+  border: 1px solid var(--pd-color-border);
+  border-radius: var(--pd-radius-md);
+}
+
+.pd-textarea {
+  min-height: 120px;
+  padding-block: var(--pd-space-3);
+  resize: vertical;
+  line-height: var(--pd-line-readable);
+}
+
+.pd-card {
+  min-width: 0;
+  padding: var(--pd-space-6);
+  color: var(--pd-color-text);
+  background: var(--pd-color-surface);
+  border: 1px solid var(--pd-color-border);
+  border-radius: var(--pd-radius-xl);
+  box-shadow: var(--pd-shadow-sm);
+}
+
+.pd-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 0 var(--pd-space-3);
+  border-radius: var(--pd-radius-pill);
+  font-size: var(--pd-font-size-xs);
+  font-weight: var(--pd-weight-bold);
+  line-height: 1;
+}
+
+.pd-progress {
+  width: 100%;
+  height: 8px;
+  overflow: hidden;
+  border-radius: var(--pd-radius-pill);
+  background: var(--pd-color-surface-soft);
+}
+
+.pd-progress > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--pd-color-primary);
+  transition: width var(--pd-motion-slow) var(--pd-ease-emphasized);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pd-button,
+  .pd-progress > span {
+    transition: none;
+  }
+  .pd-button:hover:not(:disabled) { transform: none; }
+}
+
+@media (max-width: 760px) {
+  .pd-card { padding: var(--pd-space-4); }
+}
+
+@media (max-width: 430px) {
+  .pd-button { width: 100%; }
+}
