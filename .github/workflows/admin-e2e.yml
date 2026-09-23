@@ -28,6 +28,9 @@ jobs:
           cache: pnpm
       - name: 의존성 설치
         run: pnpm install --frozen-lockfile
+      - name: Admin 인증 비밀 확인
+        run: test -n "$PUTDUK_ADMIN_EMAIL" && test -n "$PUTDUK_ADMIN_PASSWORD"
+
       - name: Playwright Chromium 준비
         run: pnpm exec playwright install --with-deps chromium
       - name: Production Admin authenticated E2E
