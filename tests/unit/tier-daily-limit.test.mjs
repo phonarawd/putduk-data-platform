@@ -77,7 +77,7 @@ test('하루 한도 요약은 남은 횟수를 0 미만으로 내리지 않고, 
   assert.equal(line3.used_today, 1);
   assert.equal(line3.remaining_today, 2);
   assert.equal(line3.unlimited, false);
-  assert.equal(dailyQuotaLabel(line3), '오늘 작업 가능 2/3회 남음');
+  assert.equal(dailyQuotaLabel(line3), '오늘 남은 횟수 2회');
 
   const usedUp = dailyQuotaSummary({ tier: '크루', limit: 5, used: 9, now });
   assert.equal(usedUp.remaining_today, 0);
@@ -85,7 +85,7 @@ test('하루 한도 요약은 남은 횟수를 0 미만으로 내리지 않고, 
   const unlimited = dailyQuotaSummary({ tier: '전담', limit: 0, used: 30, now });
   assert.equal(unlimited.unlimited, true);
   assert.equal(unlimited.remaining_today, null);
-  assert.equal(dailyQuotaLabel(unlimited), '오늘 작업 횟수 제한이 없어요.');
+  assert.equal(dailyQuotaLabel(unlimited), '오늘 남은 횟수 무제한');
 });
 
 test('DB 마이그레이션은 등급별 하루 한도 테이블·트리거 보완·조회·운영자 RPC를 갖춘다', async () => {
@@ -205,4 +205,31 @@ test('관리자 회원 상세는 같은 putduk_member_daily_task_quota RPC로 �
 
   // app.js의 flattenMemberDetail이 daily_task_quota를 흘려보내야 admin.js가 값을 받는다.
   assert.match(appJs, /daily_task_quota: payload\.daily_task_quota \|\| null/);
+});
+
+
+test('회원 화면의 오늘 남은 횟수 표시가 단일 표시 계약을 사용하고 조회 완료 후 즉시 갱신된다', async () => {
+  const { appJs } = await readLaunchFiles();
+  const helperStart = appJs.indexOf('function dailyQuotaDisplay()');
+  const helperEnd = appJs.indexOf('function paintDailyQuota()', helperStart);
+  const helper = appJs.slice(helperStart, helperEnd);
+  assert.match(helper, /오늘 남은 횟수/);
+  assert.doesNotMatch(helper, /오늘 작업 가능/);
+
+  const dashboardStart = appJs.indexOf('function renderMemberDashboard');
+  const dashboardBody = appJs.slice(dashboardStart, appJs.indexOf('function renderNodeCard', dashboardStart));
+  assert.match(dashboardBody, /data-daily-quota-label/);
+  assert.match(dashboardBody, /data-daily-quota-value/);
+
+  const nodesStart = appJs.indexOf('function renderNodesPage');
+  const nodesBody = appJs.slice(nodesStart, appJs.indexOf('function renderHistoryPage', nodesStart));
+  assert.match(nodesBody, /data-daily-quota-summary/);
+  assert.match(nodesBody, /dailyQuotaSummaryText\(\)/);
+
+  const startStart = appJs.indexOf('function renderStartConfirm');
+  const startBody = appJs.slice(startStart, appJs.indexOf('function renderResultOverlay', startStart));
+  assert.match(startBody, /data-daily-quota-summary/);
+  assert.match(startBody, /dailyQuotaSummaryText\(\)/);
+
+  assert.match(appJs, /state\.dailyTaskQuota = quotaResult\.quota \|\| null;\s*scheduleKstQuotaReset\(state\.dailyTaskQuota\?\.resets_at\);\s*paintDailyQuota\(\);/);
 });
