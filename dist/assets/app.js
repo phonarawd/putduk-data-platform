@@ -706,10 +706,43 @@
     };
   }
 
-  function dailyQuotaSummaryText() {
+  function dailyQuotaDisplay() {
     const parts = dailyQuotaParts();
-    if (!parts.loaded) return parts.unlimited ? '' : '오늘 작업 가능 확인 중';
-    return parts.unlimited ? '오늘 작업 가능 무제한' : `오늘 작업 가능 ${parts.value}${parts.suffix}`;
+    if (!parts.loaded) return {
+      value: '확인 중',
+      suffix: '',
+      text: authState.session ? '오늘 남은 횟수 확인 중' : ''
+    };
+    if (parts.unlimited) return {
+      value: '무제한',
+      suffix: '',
+      text: '오늘 남은 횟수 무제한'
+    };
+    return {
+      value: String(Math.max(0, Number(parts.remaining ?? 0))),
+      suffix: '회',
+      text: `오늘 남은 횟수 ${Math.max(0, Number(parts.remaining ?? 0))}회`
+    };
+  }
+
+  function dailyQuotaSummaryText() {
+    return dailyQuotaDisplay().text;
+  }
+
+  function paintDailyQuota() {
+    const display = dailyQuotaDisplay();
+    document.querySelectorAll('[data-daily-quota-label]').forEach((node) => {
+      if (node.textContent !== '오늘 남은 횟수') node.textContent = '오늘 남은 횟수';
+    });
+    document.querySelectorAll('[data-daily-quota-value]').forEach((node) => {
+      if (node.textContent !== display.value) node.textContent = display.value;
+    });
+    document.querySelectorAll('[data-daily-quota-suffix]').forEach((node) => {
+      if (node.textContent !== display.suffix) node.textContent = display.suffix;
+    });
+    document.querySelectorAll('[data-daily-quota-summary]').forEach((node) => {
+      if (node.textContent !== display.text) node.textContent = display.text;
+    });
   }
 
   function isStandalonePwa() {
@@ -1720,8 +1753,11 @@
 
       void memberFinanceRequest('daily_task_quota').then((quotaResult) => {
         state.dailyTaskQuota = quotaResult.quota || null;
-      scheduleKstQuotaReset(state.dailyTaskQuota?.resets_at);
-      }).catch(() => {});
+        scheduleKstQuotaReset(state.dailyTaskQuota?.resets_at);
+        paintDailyQuota();
+      }).catch(() => {
+        paintDailyQuota();
+      });
       void refreshMemberNotices({ toastNew: !light }).catch(() => {});
       syncMemberPush(session, { prompt: false });
       if (!light) {
@@ -2709,9 +2745,7 @@
     const partner = crewPartnerCompany();
     const attendance = crewAttendance(partner);
     const heroLine = partner ? `오늘 ${esc(partner.name)} 라인 근무` : (authState.session ? '오늘 라인 근무' : '로그인하면 오늘 라인에 출근해요');
-    const dashboardQuota = dailyQuotaParts();
-    const quotaValue = dashboardQuota.value;
-    const quotaSuffix = dashboardQuota.suffix;
+    const dashboardQuota = dailyQuotaDisplay();
     const hasEarnings = state.history.some((item) => rewardUiKind(item) === 'posted');
     return `
       ${renderTrustStrip()}
@@ -2722,7 +2756,7 @@
           <h1 class="hero-title">작업실에 출근하고<br><span style="color:var(--emerald-strong)">한 칸만 확인해요.</span></h1>
           <p class="hero-copy">오늘 배정된 물량 5건의 실물 라벨 번호를 입력해 대조하면 돼요.</p>
           <div class="hero-actions"><button class="primary-button" data-nav="nodes">${icon('waypoints', 18)} 라인 찾기</button>${accountButton}</div>
-          <div class="hero-metrics"><div><div class="metric-label">오늘 라인</div><div class="metric-value">${memberCatalogNodes().length}<small>칸</small></div></div><div><div class="metric-label">검수 완료</div><div class="metric-value">${state.history.filter((item) => item.status === '검수 완료').length}<small>건</small></div></div><div><div class="metric-label">오늘 작업 가능</div><div class="metric-value">${esc(quotaValue)}<small>${esc(quotaSuffix)}</small></div></div><div><div class="metric-label">근무 상태</div><div class="metric-value" style="font-size:18px;color:var(--emerald-strong)">${esc(attendance.label)}</div></div></div>
+          <div class="hero-metrics"><div><div class="metric-label">오늘 라인</div><div class="metric-value">${memberCatalogNodes().length}<small>칸</small></div></div><div><div class="metric-label">검수 완료</div><div class="metric-value">${state.history.filter((item) => item.status === '검수 완료').length}<small>건</small></div></div><div><div class="metric-label" data-daily-quota-label>오늘 남은 횟수</div><div class="metric-value"><span data-daily-quota-value>${esc(dashboardQuota.value)}</span><small data-daily-quota-suffix>${esc(dashboardQuota.suffix)}</small></div></div><div><div class="metric-label">근무 상태</div><div class="metric-value" style="font-size:18px;color:var(--emerald-strong)">${esc(attendance.label)}</div></div></div>
         </div>
         <div class="panel panel-pad crew-side">
           ${renderCrewIdCard()}
@@ -2774,7 +2808,7 @@
   function renderNodesPage() {
     const grid = memberCatalogNodes().map(renderNodeCard).join('') || `<div class="empty-state compact action-empty" style="grid-column:1/-1"><div class="empty-icon">${icon('waypoints',22)}</div><strong>현재 참여 가능한 업무가 없습니다.</strong><p>새 업무가 공개되면 이 화면에 바로 표시됩니다.</p><button class="secondary-button" type="button" data-nav="nodes">새로 확인</button></div>`;
     const quotaLine = authState.session
-      ? `<div class="notice" style="margin-bottom:14px"><span style="color:var(--emerald)">${icon('clock-3', 17)}</span><div>${esc(dailyQuotaSummaryText())}</div></div>`
+      ? `<div class="notice" style="margin-bottom:14px" data-daily-quota-summary-wrap><span style="color:var(--emerald)">${icon('clock-3', 17)}</span><div data-daily-quota-summary>${esc(dailyQuotaSummaryText())}</div></div>`
       : '';
     return `<div class="section-heading" style="margin-top:0"><div><h1 class="page-title">라인 찾기</h1><p class="page-copy">오늘 배정된 라인이에요. 잠금 금액과 수당을 보고 출근하세요.</p></div><button class="secondary-button" data-action="deposit-info">${icon('wallet', 16)} 입금 안내</button></div>${quotaLine}<div class="filter-row"><button class="filter-button active" data-filter="all">전체</button><button class="filter-button" data-filter="빠른 확인">빠른 확인</button><button class="filter-button" data-filter="일반 처리">일반 처리</button><button class="filter-button" data-filter="집중 처리">집중 처리</button><button class="filter-button" data-filter="전문 검수">전문 검수</button></div><p class="filter-hint" id="nodeFilterHint">${esc(NODE_FILTER_HINTS.all)}</p><section class="node-grid" id="nodeGrid">${grid}</section><div class="notice" style="margin-top:18px"><span style="color:var(--emerald)">${icon('info',17)}</span><div><strong>정산 안내</strong><br>${settleNote('span')} 화면에서 금액을 더하거나 빼지 않아요.</div></div>`;
   }
@@ -2898,8 +2932,7 @@
   function renderBenefitsPage() {
     const current = tierBand();
     const next = nextMemberBand(current);
-    const quota = dailyQuotaParts();
-    const quotaLine = !quota.loaded ? '오늘 남은 업무는 확인 중이에요.' : quota.unlimited ? '오늘 남은 업무는 무제한이에요.' : `오늘 남은 업무 ${quota.value}${quota.suffix}`;
+    const quotaLine = dailyQuotaSummaryText();
     const nextLine = next ? `다음 등급은 ${next.label}${ieya(next.label)}.` : '지금이 가장 높은 등급이에요.';
     const cards = MEMBER_BANDS.map((band) => {
       const mine = band.label === current.label || band.raw === current.raw;
@@ -3350,7 +3383,7 @@
       : `<ul class="outcome-list"><li>✅ 승인되면 원금과 수당이 잔액에 같이 반영돼요.</li><li>↩️ 반려되면 원금만 돌아와요.</li></ul>`;
     const quotaNote = dailyQuotaSummaryText();
     const quotaLine = quotaNote
-      ? `<p class="page-copy assign-meta">${icon('clock-3', 13)} ${esc(quotaNote)}</p>`
+      ? `<p class="page-copy assign-meta" data-daily-quota-summary>${icon('clock-3', 13)} ${esc(quotaNote)}</p>`
       : '';
     return `<div class="modal-backdrop" data-modal="start-confirm"><div class="modal assign-modal"><div class="modal-head"><div><p class="assign-kicker">업무 배정</p><h2>${esc(node.title)}</h2><p>${esc(company.name)}</p></div><button class="icon-button" data-action="close-start" aria-label="닫기">${icon('x',18)}</button></div><div class="modal-body"><div class="work-receipt-card assign-receipt"><div class="work-receipt-row"><span class="work-receipt-label">${lines.trial ? '지원금 잠금' : '근무 보증'}</span><span class="work-receipt-val">${money(lines.stake)}</span></div><div class="work-receipt-row highlight"><span class="work-receipt-label">수당</span><span class="work-receipt-val">+${money(lines.pay)}</span></div><div class="work-receipt-row"><span class="work-receipt-label">시간</span><span class="work-receipt-val">${esc(node.minutes)}</span></div></div>${outcome}<p class="page-copy assign-copy">${isCatalogWork(node) ? '한 화면에서 상품명·가격·옵션·배송을 적어 제출해요.' : '한 화면에서 실물 라벨 번호 5건을 입력해 대조해요.'}</p>${quotaLine}<div class="modal-actions"><button class="secondary-button" type="button" data-action="close-start">다음에</button><button class="primary-button" type="button" data-action="confirm-start">출근하기</button></div></div></div></div>`;
   }
@@ -3846,6 +3879,7 @@
 
   function finishPaint({ replayMotion = false, rebindOverlayUi = false } = {}) {
     refreshIcons();
+    if (!isAdmin) paintDailyQuota();
     if (isAdmin && window.PUTDUK_ADMIN && typeof window.PUTDUK_ADMIN.afterRender === 'function') window.PUTDUK_ADMIN.afterRender();
     const overlayOpen = Boolean(overlaySurfaceKey());
     if (!overlayOpen) {
