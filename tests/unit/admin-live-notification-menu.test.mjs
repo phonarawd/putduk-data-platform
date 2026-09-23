@@ -18,7 +18,7 @@ assert.match(app, /putduk_archive_notification/);
 assert.match(app, /data-notice-delete/);
 assert.match(notice, /data-putduk-notice-delete/);
 assert.match(notice, /putduk_archive_notification/);
-assert.match(migration, /revoke execute on function public.putduk_archive_notification(uuid) from authenticated/);
+assert.match(migration, /grant execute on function public\.putduk_archive_notification\(uuid\) to authenticated/);
 assert.match(index, /assets\/app-ia13\.js/);
 assert.match(index, /notification-read-contract\.js\?v=20260923-notice-delete1/);
 assert.equal(app, bundle);
