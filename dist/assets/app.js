@@ -1972,6 +1972,36 @@
         }, 750 * (retry + 1));
         return;
       }
+
+      // Edge Function/CORS가 일시적으로 실패해도 authenticated 전용 RPC로 한 번 더 조회한다.
+      if (supabaseClient) {
+        try {
+          const fallbackRequest = supabaseClient.rpc('putduk_member_daily_task_quota', { p_user_id: userId });
+          const fallbackTimeout = new Promise((_, reject) => {
+            window.setTimeout(() => reject(new Error('오늘 남은 횟수 직접 조회 시간이 초과됐어요.')), 5000);
+          });
+          const fallbackResult = await Promise.race([fallbackRequest, fallbackTimeout]);
+          if (requestId !== dailyQuotaRequestId || authState.session?.user?.id !== userId) return;
+          if (fallbackResult?.error) throw fallbackResult.error;
+          const quota = fallbackResult?.data;
+          if (!quota || typeof quota !== 'object') throw new Error('오늘 남은 횟수 정보가 비어 있어요.');
+          if (!Object.prototype.hasOwnProperty.call(quota, 'daily_limit') || !Object.prototype.hasOwnProperty.call(quota, 'remaining_today')) {
+            throw new Error('오늘 남은 횟수 정보가 올바르지 않아요.');
+          }
+          state.dailyTaskQuota = quota;
+          state.dailyTaskQuotaError = null;
+          scheduleKstQuotaReset(quota.resets_at);
+          paintDailyQuota();
+          return;
+        } catch (fallbackError) {
+          if (requestId !== dailyQuotaRequestId || authState.session?.user?.id !== userId) return;
+          state.dailyTaskQuota = null;
+          state.dailyTaskQuotaError = fallbackError?.message || error?.message || '오늘 남은 횟수를 불러오지 못했어요.';
+          paintDailyQuota();
+          return;
+        }
+      }
+
       state.dailyTaskQuota = null;
       state.dailyTaskQuotaError = error?.message || '오늘 남은 횟수를 불러오지 못했어요.';
       paintDailyQuota();
@@ -4226,11 +4256,7 @@
 
   async function refreshWorkSideState() {
     await refreshMemberWallet();
-    try {
-      const quotaResult = await memberFinanceRequest('daily_task_quota');
-      state.dailyTaskQuota = quotaResult.quota || null;
-      scheduleKstQuotaReset(state.dailyTaskQuota?.resets_at);
-    } catch (_) {}
+    await hydrateDailyTaskQuota();
     if (!isLiveWorkOverlay() && !state.startNodeId) render();
   }
 
