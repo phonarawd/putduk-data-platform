@@ -205,16 +205,16 @@
     "harden_deposit_reveal_token_consume": [
       "20260923161000",
       "20260923032611"
+    ],
+    "putduk_payout_destination_type_isolation": [
+      "20260923164000",
+      "20260923040455"
+    ],
+    "putduk_payout_destination_type_isolation_catalog": [
+      "20260923165000",
+      "20260923040523"
     ]
   },
-  "putduk_payout_destination_type_isolation": [
-    "20260923164000",
-    "20260923040455"
-  ],
-  "putduk_payout_destination_type_isolation_catalog": [
-    "20260923165000",
-    "20260923040523"
-  ],
   "remote_history_only": [
     {
       "version": "20260918073323",
