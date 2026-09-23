@@ -221,6 +221,10 @@
     "harden_rls_security_definer_pg_temp": [
       "20260923172000",
       "20260923043003"
+    ],
+    "harden_public_api_grants": [
+      "20260923173000",
+      "20260923043312"
     ]
   },
   "remote_history_only": [
