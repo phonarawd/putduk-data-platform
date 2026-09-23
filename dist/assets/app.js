@@ -1880,6 +1880,21 @@
     });
   }
 
+  async function runAdminAuthorization({ toast = false } = {}) {
+    if (!isAdmin) return false;
+    const authorization = hydrateAdminAuthorization();
+    if (!state.modal) render();
+    await authorization;
+    if (authState.adminAuthorized) queueAdminPageData({ silent: true });
+    if (toast) {
+      showToast(
+        authState.adminAuthorized ? '운영 화면을 열었어요.' : '운영자 권한을 확인해 주세요.',
+        authState.adminAuthorized ? 'success' : 'info'
+      );
+    }
+    return authState.adminAuthorized;
+  }
+
   let sessionRecorded = false;
   async function recordOwnSession() {
     if (!authState.session || sessionRecorded) return;
@@ -2472,8 +2487,7 @@
       if (authState.session) recordOwnSession();
       if (authState.session && !isAdmin) queueOnboarding();
       if (isAdmin) {
-        await hydrateAdminAuthorization();
-        if (authState.adminAuthorized) queueAdminPageData({ silent: true });
+        await runAdminAuthorization();
       }
       supabaseClient.auth.onAuthStateChange((event, session) => {
         if (event === 'SIGNED_OUT') {
@@ -2495,10 +2509,8 @@
           }
           authState.session = session;
           if (isAdmin && authState.session && !authState.adminAuthorized && !authState.adminLoading) {
-            window.setTimeout(async () => {
-              await hydrateAdminAuthorization();
-              if (authState.adminAuthorized) queueAdminPageData({ silent: true });
-              if (!state.modal) render();
+            window.setTimeout(() => {
+              void runAdminAuthorization();
             }, 0);
           }
           return;
@@ -2522,8 +2534,7 @@
           await hydrateSession(liveSession);
           if (authState.session) recordOwnSession();
           if (isAdmin) {
-            await hydrateAdminAuthorization();
-            if (authState.adminAuthorized) queueAdminPageData({ silent: true });
+            await runAdminAuthorization();
           } else {
             queueOnboarding();
             settleMobileViewportAfterAuth();
@@ -5141,10 +5152,7 @@
     }
     state.modal = null;
     if (isAdmin) {
-      await hydrateAdminAuthorization();
-      render();
-      if (authState.adminAuthorized) queueAdminPageData({ silent: true });
-      showToast(authState.adminAuthorized ? '운영 화면을 열었어요.' : '운영자 권한을 확인해 주세요.', authState.adminAuthorized ? 'success' : 'info');
+      await runAdminAuthorization({ toast: true });
       return;
     }
     queueOnboarding();
