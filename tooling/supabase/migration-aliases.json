@@ -229,6 +229,10 @@
     "harden_public_function_default_exec": [
       "20260923174000",
       "20260923043657"
+    ],
+    "harden_public_sequence_privileges": [
+      "20260923175000",
+      "20260923044043"
     ]
   },
   "remote_history_only": [
