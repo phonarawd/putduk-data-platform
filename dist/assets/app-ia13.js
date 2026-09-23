@@ -5183,34 +5183,82 @@
     box.hidden = !message;
   }
 
+  function setLoginBusy(form, busy) {
+    if (!(form instanceof HTMLFormElement)) return;
+    form.dataset.putdukLoginBusy = busy ? '1' : '0';
+    form.setAttribute('aria-busy', busy ? 'true' : 'false');
+    const button = form.querySelector('button[type="submit"]');
+    if (!(button instanceof HTMLButtonElement)) return;
+    if (busy) {
+      if (!button.dataset.putdukIdleLabel) button.dataset.putdukIdleLabel = button.textContent || '로그인';
+      button.disabled = true;
+      button.textContent = '로그인 중…';
+    } else {
+      button.disabled = false;
+      button.textContent = button.dataset.putdukIdleLabel || '로그인';
+    }
+  }
+
+  function showLoginTransitionOverlay(show) {
+    let overlay = document.getElementById('putdukLoginTransition');
+    if (!show) {
+      overlay?.remove();
+      return;
+    }
+    if (overlay) return;
+    overlay = document.createElement('div');
+    overlay.id = 'putdukLoginTransition';
+    overlay.setAttribute('role', 'status');
+    overlay.setAttribute('aria-live', 'polite');
+    overlay.setAttribute('aria-label', '로그인 정보를 불러오고 있어요');
+    overlay.innerHTML = '<div class="auth-boot"><img src="./icons/putduk-premium.png" alt="" width="46" height="46" /><strong>로그인 완료</strong><span>내 업무와 지갑을 안전하게 불러오고 있어요.</span></div>';
+    document.body.appendChild(overlay);
+  }
+
   async function submitLogin(event) {
     event.preventDefault();
     const form = event.target;
     if (!form.reportValidity()) return;
+    if (form.dataset.putdukLoginBusy === '1') return;
     if (!supabaseClient) { showToast('인증 서버가 준비되지 않아 로그인할 수 없어요.', 'info'); return; }
     const email = document.getElementById('loginEmail')?.value.trim().toLowerCase() || '';
     const password = document.getElementById('loginPassword')?.value || '';
+    setLoginBusy(form, true);
+    setLoginFeedback('');
     let data;
     try {
       const result = await supabaseClient.auth.signInWithPassword({ email, password });
-      if (result.error) { const message = loginErrorMessage(result.error); setLoginFeedback(message); showToast(message, 'error'); return; }
+      if (result.error) {
+        setLoginBusy(form, false);
+        const message = loginErrorMessage(result.error); setLoginFeedback(message); showToast(message, 'error'); return;
+      }
       data = result.data;
-      if (!data?.session) { showToast('로그인 세션을 만들지 못했어요. 이메일 인증 상태를 확인해 주세요.', 'info'); return; }
+      if (!data?.session) {
+        setLoginBusy(form, false);
+        showToast('로그인 세션을 만들지 못했어요. 이메일 인증 상태를 확인해 주세요.', 'info'); return;
+      }
       signedOutLock = false;
-      await hydrateSession(data.session);
+      // 모달을 먼저 닫아 클릭 대비 체감 딜레이를 없앤다. 세션 하이드레이션 동안 중립 오버레이가 빈 화면을 막는다.
+      state.modal = null;
+      state.modalPayload = null;
+      showLoginTransitionOverlay(true);
+      render();
+      void hydrateSession(data.session).finally(() => {
+        showLoginTransitionOverlay(false);
+        queueOnboarding();
+        render();
+        settleMobileViewportAfterAuth();
+      });
+      syncMemberPush(data.session, { prompt: true });
     } catch (error) {
+      setLoginBusy(form, false);
       const message = loginErrorMessage(error); setLoginFeedback(message); showToast(message, 'error');
       return;
     }
-    state.modal = null;
     if (isAdmin) {
       await runAdminAuthorization({ toast: true });
       return;
     }
-    queueOnboarding();
-    render();
-    settleMobileViewportAfterAuth();
-    syncMemberPush(data.session, { prompt: true });
   }
 
   function handleClick(event) {
