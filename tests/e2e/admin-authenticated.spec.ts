@@ -25,6 +25,9 @@ test.describe('Production Admin authenticated E2E', () => {
     await page.goto(`${baseUrl}/admin/`, { waitUntil: 'domcontentloaded' });
     await expect(page.locator('html')).toHaveAttribute('data-mode', 'admin');
     const loginForm = page.locator('#loginForm');
+    if (!(await loginForm.isVisible().catch(() => false))) {
+      await page.getByRole('button', { name: '운영자 로그인' }).click();
+    }
     await expect(loginForm).toBeVisible();
     await page.locator('#loginEmail').fill(adminEmail);
     await page.locator('#loginPassword').fill(adminPassword);
