@@ -230,5 +230,10 @@ test('회원 화면의 오늘 남은 횟수 표시가 단일 표시 계약을 �
   assert.match(startBody, /data-daily-quota-summary/);
   assert.match(startBody, /dailyQuotaSummaryText\(\)/);
 
-  assert.match(appJs, /state\.dailyTaskQuota = quotaResult\.quota \|\| null;\s*scheduleKstQuotaReset\(state\.dailyTaskQuota\?\.resets_at\);\s*paintDailyQuota\(\);/);
+  assert.match(appJs, /async function hydrateDailyTaskQuota\(\{ retry = 0 \} = \{\}\)/);
+  assert.match(appJs, /state\.dailyTaskQuotaError/);
+  assert.match(appJs, /Promise\.race\(\[request, timeout\]\)/);
+  assert.match(appJs, /if \(retry < 2\)/);
+  assert.match(appJs, /void hydrateDailyTaskQuota\(\);/);
+  assert.doesNotMatch(appJs, /state\.dailyTaskQuota = quotaResult\.quota \|\| null;/);
 });
