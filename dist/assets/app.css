@@ -1296,8 +1296,8 @@ html[data-theme="dark"] .toast {
   html[data-mode="member"] .main:has(.membership-page) {
     display: flex;
     flex-direction: column;
-    min-height: 100vh;
-    padding-bottom: 28px;
+    min-height: 0;
+    padding-bottom: 16px;
   }
   html[data-mode="member"] .main:has(.membership-page) > div {
     flex: 1 1 auto;
@@ -1306,16 +1306,22 @@ html[data-theme="dark"] .toast {
     flex-direction: column;
   }
   .membership-page {
-    margin-top: auto;
+    margin-top: 0;
     margin-bottom: auto;
     align-items: stretch;
   }
   .membership-stage {
-    padding: 28px 28px 24px;
+    padding: 20px 24px 18px;
     border: 1px solid var(--line);
     border-radius: 28px;
     background: color-mix(in srgb, var(--surface) 72%, transparent);
     box-shadow: var(--shadow);
+  }
+  .membership-page .id-stage,
+  .membership-page .id-flip,
+  .membership-page .id-flip-inner {
+    max-width: 560px;
+    margin: 0 auto;
   }
   .membership-page .id-face {
     padding: 24px 24px 20px;
