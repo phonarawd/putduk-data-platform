@@ -803,6 +803,17 @@ html[data-theme="dark"] .toast {
 .help-tabs { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:14px; }
 .help-body h3 { margin:0 0 8px; font-size:18px; }
 .help-body p, .help-body .settle-note, .help-body .help-line { margin:0 0 12px; color:var(--muted); font-size:14px; line-height:1.65; }
+.help-cards { display:grid; gap:10px; }
+.help-card { display:grid; grid-template-columns:40px minmax(0,1fr); gap:12px; align-items:start; padding:14px 14px 14px 12px; border:1px solid var(--line); border-radius:14px; background:var(--surface); }
+.help-card-icon { display:grid; place-items:center; width:40px; height:40px; border-radius:12px; color:var(--emerald-strong); background:color-mix(in srgb,var(--emerald) 10%,transparent); }
+.help-card-icon svg { flex:0 0 auto; }
+.help-card div { min-width:0; display:grid; gap:3px; }
+.help-card strong { font-size:14px; letter-spacing:-.01em; }
+.help-card span { color:var(--muted); font-size:13px; line-height:1.55; word-break:keep-all; }
+.help-card-note { margin:12px 0 0; color:var(--muted); font-size:13px; line-height:1.55; word-break:keep-all; }
+.help-body .help-card + .membership-links { margin:12px 0 0; }
+.help-body .help-legal { margin:14px 0 0; }
+@media (max-width: 640px) { .help-card { grid-template-columns:36px minmax(0,1fr); gap:10px; padding:12px 12px 12px 10px; } .help-card-icon { width:36px; height:36px; } }
 .player-backdrop { align-items:stretch; }
 .player-sheet { width:min(560px,100%); margin:auto; display:flex; flex-direction:column; max-height:min(92vh,860px); overflow:auto; border-radius:24px; background:var(--surface-strong); }
 .player-stage, .result-stage, .cinematic-stage {
