@@ -1,7 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.0";
-import { corsHeaders, HttpError, jsonResponse, type JsonRecord } from "../_shared/http.ts";
-import { dispatchPushToUser, type PushPayload } from "../_shared/web-push.ts";
+import { corsHeaders, HttpError, jsonResponse, dispatchPushToUser, type JsonRecord, type PushPayload } from "./_shared.ts";
 
 const supabaseUrl = Deno.env.get("SUPABASE_URL");
 const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
