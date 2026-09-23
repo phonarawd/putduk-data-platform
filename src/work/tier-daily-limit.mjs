@@ -95,8 +95,8 @@ export function dailyQuotaSummary({ tier, limit, used, now = new Date() } = {}) 
 
 export function dailyQuotaLabel(quota) {
   if (!quota) return '';
-  if (quota.unlimited) return '오늘 작업 횟수 제한이 없어요.';
-  return `오늘 작업 가능 ${quota.remaining_today}/${quota.daily_limit}회 남음`;
+  if (quota.unlimited) return '오늘 남은 횟수 무제한';
+  return `오늘 남은 횟수 ${Math.max(0, Number(quota.remaining_today || 0))}회`;
 }
 
 // private.putduk_apply_principal_penalties()와 같은 강등 순서(전담→선임→크루→라인).
