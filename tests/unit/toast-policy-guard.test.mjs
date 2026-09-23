@@ -38,6 +38,6 @@ test('원금 출금 강등과 중복 화면이동 안내는 제거한다', async
 
 test('회원 문서는 새 정책 가드를 app.js 다음에 로드하고 구 출금 전용 가드는 로드하지 않는다', async () => {
   const html = await readRepo('dist', 'index.html');
-  assert.match(html, /app-ia13\.js\?v=20260924-phase10h[\s\S]*toast-policy-guard\.js\?v=20260924-toast6/);
+  assert.match(html, /app-ia13\.js\?v=20260924-phase1w1[\s\S]*toast-policy-guard\.js\?v=20260924-toast6/);
   assert.doesNotMatch(html, /withdrawal-policy-guard\.js/);
 });

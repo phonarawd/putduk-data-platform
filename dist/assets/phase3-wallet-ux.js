@@ -84,6 +84,8 @@
     const form = root.querySelector?.('#withdrawForm') || (root instanceof HTMLFormElement && root.id === 'withdrawForm' ? root : null);
     if (!(form instanceof HTMLFormElement) || form.dataset.phase3WithdrawGuide === '1') return;
     const kind = String(form.querySelector('input[name="withdraw_kind"]')?.value || 'allowance');
+    const hero = form.querySelector('.withdraw-hero');
+    if (hero) { form.dataset.phase3WithdrawGuide = '1'; return; }
     const notice = form.querySelector('.notice');
     if (!notice) return;
     const originalText = String(notice.textContent || '').replace(/\s+/g, ' ').trim();

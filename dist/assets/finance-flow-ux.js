@@ -210,7 +210,11 @@
   function requestFinished(meta, ok, message = '') {
     if (!meta) return;
     if (meta.action === 'set_withdrawal_pin' && document.getElementById('withdrawForm')) {
-      if (!ok) setStatus(document.getElementById('withdrawForm'), message || '출금 비밀번호 확인을 이어서 진행합니다.', 'info');
+      if (!ok) {
+        const form = document.getElementById('withdrawForm');
+        setWithdrawBusy(form, false);
+        setStatus(form, message || '출금 비밀번호를 저장하지 못했어요. 다시 확인해 주세요.', 'error');
+      }
       return;
     }
     if (meta.action === 'withdraw_request' || meta.action === 'submit_withdrawal') {
