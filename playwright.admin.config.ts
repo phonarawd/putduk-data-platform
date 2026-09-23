@@ -2,7 +2,7 @@ import { defineConfig } from '@playwright/test';
 
 export default defineConfig({
   testDir: './tests/e2e',
-  testMatch: 'admin-authenticated.spec.ts',
+  testMatch: 'admin-*.spec.ts',
   fullyParallel: false,
   forbidOnly: true,
   retries: 1,
