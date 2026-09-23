@@ -50,8 +50,10 @@ if (!memberRuntime.includes('getMemberExperience') || !memberRuntime.includes('s
 }
 if (js.includes("light && nodes.length ? Promise.resolve() : hydratePublishedCatalog()")
   || !js.includes('const needsCatalogForRunState = runRows.some')
+  || !js.includes('if (needsCatalogForRunState)')
+  || !js.includes('else if (!light || nodes.length === 0)')
   || !js.includes('void hydratePublishedCatalog().then')) {
-  throw new Error('성능 기준: 공개 카탈로그는 인증 critical path에서 조건부로만 대기하고, 그 외에는 백그라운드 hydration이어야 합니다.');
+  throw new Error('성능 기준: 공개 카탈로그는 활성/검수 상태가 있을 때만 인증 critical path에서 기다리고, 그 외에는 백그라운드 hydration이어야 합니다.');
 }
 if (!memberCatalog.includes('const PAGE_SIZE = 12') || !memberCatalog.includes('rows.slice(0, state.visibleCount)')) {
   throw new Error('성능 기준: 12개 증분 catalog 렌더링이 유지되어야 합니다.');

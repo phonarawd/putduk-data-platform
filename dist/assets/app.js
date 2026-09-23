@@ -1641,9 +1641,9 @@
       ]);
       const runRows = Array.isArray(runResult.data) ? runResult.data : [];
       const needsCatalogForRunState = runRows.some((row) => row.status === 'approved' || isActiveRunStatus(row.status) || isReviewWaitStatus(row.status) || REWORK_RUN_STATUSES.includes(row.status));
-      if (needsCatalogForRunState || nodes.length === 0) {
+      if (needsCatalogForRunState) {
         await hydratePublishedCatalog();
-      } else if (!light) {
+      } else if (!light || nodes.length === 0) {
         void hydratePublishedCatalog().then(() => {
           if (authState.session?.user?.id === session.user.id && !state.modal) render();
         }).catch(() => {});

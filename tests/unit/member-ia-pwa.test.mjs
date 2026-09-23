@@ -26,7 +26,7 @@ assert.match(app, /data-action="install-app"/);
 assert.match(lineUx, /\['업무 매칭'\]/);
 assert.doesNotMatch(lineUx, /\['라인 찾기'/);
 assert.equal(app, bundle);
-assert.match(index, /putduk-boot-v47-member-ia8-pwa-off-perf-fomo-catalog-cloudflare-production-20260924/);
+assert.match(index, /putduk-boot-v48-member-ia9-pwa-off-perf-fomo-catalog-bg-cloudflare-production-20260924/);
 assert.match(index, /assets\\/app-ia7\\.js/);
 assert.match(adminIndex, /assets\\/app-ia7\\.js/);
 assert.doesNotMatch(index, /assets\\/motion-runtime\\.js/);
