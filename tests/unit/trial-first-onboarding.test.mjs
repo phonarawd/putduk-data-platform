@@ -19,6 +19,8 @@ test('general work explanation follows approved trial', () => {
   assert.match(app, /업무 보증금은 진행 중에만 잠기고/);
 });
 
-test('PWA prompt is gated behind approved trial and general explanation', () => {
-  assert.match(app, /trialApproved && state\.onboardingGeneralSeen && !state\.onboardingPwaDone/);
+test('PWA install is user-triggered through the explicit install action', () => {
+  assert.match(app, /window\.addEventListener\('beforeinstallprompt'/);
+  assert.match(app, /if \(action === 'install-app'\) \{ installApp\(\); return; \}/);
+  assert.match(app, /await prompt\.prompt\(\)/);
 });

@@ -84,7 +84,7 @@ test('연출 슬라이더는 서버에 저장되고 회원은 집계만 읽는�
   assert.match(adminOps, /stored: "api"/);
   assert.match(adminJs, /연출 값을 서버에 저장하지 못했어요/);
   assert.equal(adminJs.includes('이 브라우저에 연출 값을 저장했어요'), false);
-  const fomoRuntime = await readRepo('dist', 'assets', 'fomo-bot-runtime.js');
+  const fomoRuntime = await readRepo('dist', 'assets', 'fomo-bot-runtime-v2.js');
   assert.doesNotMatch(appJs, /action: 'real_activity'/);
   assert.doesNotMatch(appJs, /hydrateCrewPulse/);
   assert.match(fomoRuntime, /from\('crew_pulse'\)/);
