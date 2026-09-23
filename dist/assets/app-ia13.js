@@ -4950,7 +4950,7 @@
     nodes = [];
     try {
       if (previousStorageKey) window.localStorage.removeItem(previousStorageKey);
-      if (previousUserId) window.localStorage.removeItem(`${storageKey}:${previousUserId}`);
+      if (signedOutUserId) window.localStorage.removeItem(`${storageKey}:${signedOutUserId}`);
       for (let i = window.localStorage.length - 1; i >= 0; i -= 1) {
         const key = window.localStorage.key(i);
         if (key && key.startsWith(`${storageKey}:`)) window.localStorage.removeItem(key);
@@ -4976,10 +4976,11 @@
   async function signOut() {
     signedOutLock = true;
     const session = authState.session;
+    const signedOutUserId = session?.user?.id || null;
     noticesHydrated = false;
     stopMemberLive();
     // 로그아웃 UI를 먼저 반영한다. 푸시/토큰 정리는 뒤에서 이어간다.
-    applySignedOutState({ navigate: true, userId: session?.user?.id || null });
+    applySignedOutState({ navigate: true, userId: signedOutUserId });
     try {
       await lockDepositReveal({ silent: true });
     } catch (_) {}
@@ -5191,13 +5192,13 @@
     let data;
     try {
       const result = await supabaseClient.auth.signInWithPassword({ email, password });
-      if (result.error) { showToast(loginErrorMessage(result.error), 'info'); return; }
+      if (result.error) { showToast(loginErrorMessage(result.error), 'error'); return; }
       data = result.data;
       if (!data?.session) { showToast('로그인 세션을 만들지 못했어요. 이메일 인증 상태를 확인해 주세요.', 'info'); return; }
       signedOutLock = false;
       await hydrateSession(data.session);
     } catch (error) {
-      showToast(loginErrorMessage(error), 'info');
+      showToast(loginErrorMessage(error), 'error');
       return;
     }
     state.modal = null;
