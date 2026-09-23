@@ -213,6 +213,10 @@
     "putduk_payout_destination_type_isolation_catalog": [
       "20260923165000",
       "20260923040523"
+    ],
+    "harden_security_definer_pg_temp": [
+      "20260923171000",
+      "20260923042820"
     ]
   },
   "remote_history_only": [
