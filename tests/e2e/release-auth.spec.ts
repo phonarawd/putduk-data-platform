@@ -55,7 +55,7 @@ for (const scenario of LOGIN_CASES) {
     await page.locator('#loginPassword').fill('not-a-real-password');
     await page.locator('#loginForm').getByRole('button', { name: '로그인', exact: true }).click();
 
-    await expect(page.getByText(scenario.expected, { exact: true })).toBeVisible();
+    await expect(page.locator('[data-auth-feedback]').filter({ hasText: scenario.expected })).toBeVisible();
   });
 }
 
