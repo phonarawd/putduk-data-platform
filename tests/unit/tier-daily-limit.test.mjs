@@ -183,7 +183,7 @@ test('라인 찾기 목록·업무 카드·출근 확인 화면이 대시보드�
 
   const dashboardStart = appJs.indexOf('function renderMemberDashboard');
   const dashboardBody = appJs.slice(dashboardStart, dashboardStart + 2500);
-  assert.match(dashboardBody, /dailyQuotaParts\(\)/);
+  assert.match(dashboardBody, /dailyQuotaDisplay\(\)/);
 });
 
 test('관리자 회원 상세는 같은 putduk_member_daily_task_quota RPC로 대상 회원의 오늘 사용/한도를 조회만 한다', async () => {
@@ -244,5 +244,5 @@ test('회원 화면의 오늘 남은 횟수 표시가 단일 표시 계약을 �
   const index = await readRepo('dist', 'index.html');
   const headers = await readRepo('dist', '_headers');
   assert.match(index, /app-ia13\.js\?v=20260924-phase10e/);
-  assert.match(headers, /\/assets\/app\.js[\\s\\S]*! Cache-Control[\\s\\S]*Cache-Control: public, max-age=0, must-revalidate/);
+  assert.match(headers, /\/assets\/app-ia13\.js[\\s\\S]*! Cache-Control[\\s\\S]*Cache-Control: public, max-age=0, must-revalidate/);
 });

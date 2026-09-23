@@ -7,7 +7,7 @@ test('member index의 리터럴 줄바꿈 표기와 Phase 3 wiring을 정리한�
 
   assert.equal(html.includes('\\n'), false);
   assert.match(html, /phase3-wallet-ux\.css\?v=20260921-phase3/);
-  assert.match(html, /phase3-wallet-ux\.js\?v=20260921-phase3/);
+  assert.match(html, /phase3-wallet-ux\.js\?v=20260923-wallet-perf1/);
   assert.ok(html.indexOf('phase3-wallet-ux.js?v=20260923-wallet-perf1') > html.indexOf('finance-flow-ux.js?v=20260923-finance-perf1'));
 });
 

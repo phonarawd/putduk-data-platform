@@ -11,7 +11,7 @@ const index = fs.readFileSync(path.join(root, 'dist/index.html'), 'utf8');
 
 assert.match(app, /id: 'operations', label: '업무 운영'/);
 assert.doesNotMatch(app, /id: 'benefits', label: '등급·혜택'/);
-assert.match(app, /isAdmin ? 5000 : 30000/);
+assert.match(app, /isAdmin \? 5000 : 30000/);
 assert.match(app, /loadAdminReviews\(\{ silent: true \}\)/);
 assert.match(app, /loadAdminFinance\(\{ silent: true \}\)/);
 assert.match(app, /putduk_archive_notification/);

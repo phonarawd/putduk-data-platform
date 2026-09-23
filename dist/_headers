@@ -15,6 +15,10 @@
   ! Cache-Control
   Cache-Control: public, max-age=0, must-revalidate
 
+/assets/app-ia13.js
+  ! Cache-Control
+  Cache-Control: public, max-age=0, must-revalidate
+
 /assets/app.css
   Cache-Control: public, max-age=0, must-revalidate
 

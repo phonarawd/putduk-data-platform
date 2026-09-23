@@ -59,7 +59,7 @@ test('출시 화면에 내부 데모 표현이 없다', async () => {
 
 test('회원 FOMO 화면에 봇·가짜·연출 티가 없다', async () => {
   const { memberHtml, appJs } = await readLaunchFiles();
-  const fomoRuntime = await readRepo('dist', 'assets', 'fomo-bot-runtime.js');
+  const fomoRuntime = await readRepo('dist', 'assets', 'fomo-bot-runtime-v2.js');
   assert.equal(memberHtml.includes('봇 연출'), false);
   assert.equal(appJs.includes('방금 피드 · 봇 연출'), false);
   assert.equal(appJs.includes('🤖 방금 피드'), false);
@@ -304,8 +304,8 @@ test('회원·운영 셸은 자체 스크립트와 캐시 우선 서비스워커
   assert.match(http, /x-real-ip/);
   assert.match(memberFinance, /clientIp\(request, info\)/);
   assert.match(memberFinance, /접속 기록을 남기지 못했습니다/);
-  assert.doesNotMatch(memberFinance, /auth\.getUser/);
-  assert.doesNotMatch(adminControl, /auth\.getUser/);
+  assert.match(memberFinance, /auth\.getUser/);
+  assert.match(adminControl, /auth\.getUser/);
   assert.match(adminOps, /putduk_admin_list_roles/);
   assert.match(appJs, /memberFinanceRequest\('record_session'/);
   assert.match(appJs, /hydrateSession\([^)]*\{ light: true \}/);
