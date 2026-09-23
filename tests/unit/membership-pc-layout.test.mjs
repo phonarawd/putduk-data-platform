@@ -55,5 +55,5 @@ test('사원증 PC 여백 최적화는 FOMO·봇 보호 설정을 수정하지 �
 
 test('회원 문서는 사원증 PC 레이아웃 캐시 버스트를 반영한다', async () => {
   const html = await readRepo('dist', 'index.html');
-  assert.match(html, /app\.css\?v=20260924-phase3i1/);
+  assert.match(html, /app\.css\?v=20260924-phase4h1/);
 });
