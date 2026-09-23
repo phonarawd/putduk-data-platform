@@ -12,6 +12,7 @@
   Cross-Origin-Resource-Policy: same-origin
 
 /assets/app.js
+  ! Cache-Control
   Cache-Control: public, max-age=0, must-revalidate
 
 /assets/app.css

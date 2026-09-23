@@ -236,4 +236,9 @@ test('회원 화면의 오늘 남은 횟수 표시가 단일 표시 계약을 �
   assert.match(appJs, /if \(retry < 2\)/);
   assert.match(appJs, /void hydrateDailyTaskQuota\(\);/);
   assert.doesNotMatch(appJs, /state\.dailyTaskQuota = quotaResult\.quota \|\| null;/);
+
+  const index = await readRepo('dist', 'index.html');
+  const headers = await readRepo('dist', '_headers');
+  assert.match(index, /app\.js\?v=20260923-quota3/);
+  assert.match(headers, /\/assets\/app\.js[\\s\\S]*! Cache-Control[\\s\\S]*Cache-Control: public, max-age=0, must-revalidate/);
 });
