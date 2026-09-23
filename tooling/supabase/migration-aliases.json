@@ -169,6 +169,14 @@
     "restore_push_dispatch_legacy_contract_v2": [
       "20260923123000",
       "20260923015900"
+    ],
+    "harden_member_rpc_live_auth": [
+      "20260923130000",
+      "20260923020851"
+    ],
+    "harden_member_work_live_auth": [
+      "20260923131500",
+      "20260923020927"
     ]
   },
   "remote_history_only": [
