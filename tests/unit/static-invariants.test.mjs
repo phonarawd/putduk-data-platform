@@ -305,7 +305,7 @@ test('회원·운영 셸은 자체 스크립트와 캐시 우선 서비스워커
   assert.match(memberFinance, /clientIp\(request, info\)/);
   assert.match(memberFinance, /접속 기록을 남기지 못했습니다/);
   assert.match(memberFinance, /auth\.getUser/);
-  assert.match(adminControl, /auth\.getUser/);
+  assert.doesNotMatch(adminControl, /auth\.getUser/);
   assert.match(adminOps, /putduk_admin_list_roles/);
   assert.match(appJs, /memberFinanceRequest\('record_session'/);
   assert.match(appJs, /hydrateSession\([^)]*\{ light: true \}/);
