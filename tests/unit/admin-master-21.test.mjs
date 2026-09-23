@@ -3,18 +3,29 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 
 const ia = fs.readFileSync(new URL('../../dist/admin/admin-master-ia.js', import.meta.url), 'utf8');
+const app = fs.readFileSync(new URL('../../dist/assets/app.js', import.meta.url), 'utf8');
 const html = fs.readFileSync(new URL('../../dist/admin/index.html', import.meta.url), 'utf8');
 const migration = fs.readFileSync(new URL('../../supabase/migrations/20260921120000_putduk_admin_master_21.sql', import.meta.url), 'utf8');
 const edge = fs.readFileSync(new URL('../../supabase/functions/admin-master/index.ts', import.meta.url), 'utf8');
 
 const labels = [
-  '운영 현황','회원','협력사','지급예산','업무 만들기','공개 업무','회원 업무 배정','업무 검수','입출금','가입 지원금','회원 등급','첫 이용 안내','자주 묻는 질문','회원 알림','실시간 현황 표시','공지','본인확인','변경 기록','화면 미리보기','랜딩 이용 현황','랜딩 회원 후기'
+  { id: 'overview', label: '전체 현황' },
+  { id: 'members', label: '회원 관리' },
+  { id: 'operations', label: '업무 운영' },
+  { id: 'reviews', label: '업무 검수' },
+  { id: 'finance', label: '입출금 처리' },
+  { id: 'notifications', label: '공지·알림' },
+  { id: 'settings', label: '설정·기타 운영' }
 ];
 
-test('MASTER 21 labels exist exactly once in the declared menu', () => {
-  for (const label of labels) assert.match(ia, new RegExp(`label: '${label.replace(/[.*+?^${}()|[\\]\\]/g, '\\$&')}'`));
-  assert.match(ia, /const MASTER_MENU = \[/);
-  assert.match(ia, /MASTER_MENU\.length !== 21/);
+test('admin sidebar keeps exactly seven core menus and master no longer replaces them', () => {
+  for (const item of labels) assert.match(app, new RegExp(`id: '${item.id}', label: '${item.label}'`));
+  assert.match(app, /isAdmin \? \[/);
+  assert.doesNotMatch(ia, /const MASTER_MENU = \[/);
+  assert.doesNotMatch(ia, /replaceSidebar/);
+  assert.doesNotMatch(ia, /운영 메뉴 · 21개/);
+  assert.match(ia, /page === 'operations'/);
+  assert.match(ia, /page === 'settings'/);
 });
 
 test('admin gateway is switched to admin-master without changing member endpoints', () => {
