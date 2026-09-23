@@ -44,6 +44,7 @@ for (const scenario of LOGIN_CASES) {
       await route.fulfill({
         status: scenario.status,
         contentType: 'application/json',
+        headers: { 'x-supabase-api-version': '2024-01-01' },
         body: JSON.stringify({ code: scenario.code, error_code: scenario.code, msg: scenario.message, message: scenario.message })
       });
     });
@@ -90,6 +91,7 @@ test('SIGNED_OUT/로그아웃은 회원 전용 캐시와 화면 상태를 정리
       memberPage: 'wallet',
       history: [{ id: 'phase6-private-history-sentinel', status: '검수 완료' }],
       notifications: [{ id: 'phase6-private-notice-sentinel' }],
+      onboardingExperienceStarted: true,
       wallet: { work: 123456, available: 7890 }
     }));
   }, { authStorageKey, memberStateKey, userId, email, accessToken });
