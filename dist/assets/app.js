@@ -398,7 +398,8 @@
       });
   }
 
-  function canStartNode(node) {    if (!node) return false;
+  function canStartNode(node) {
+    if (!node) return false;
     if (node.isTrial) return Number(state.wallet.support || 0) > 0;
     return Number(state.wallet.work || 0) >= nodeStake(node);
   }
@@ -803,7 +804,8 @@
   function inspectSeedFromRunId(runId) {
     const hex = String(runId || '')
       .replace(/-/g, '')
-      .toLowerCase()      .replace(/[^0-9a-f]/g, '')
+      .toLowerCase()
+      .replace(/[^0-9a-f]/g, '')
       .slice(0, 8)
       .padEnd(8, '0');
     return parseInt(hex, 16) >>> 0;
@@ -1202,7 +1204,8 @@
     };
   }
 
-  function applyAssignmentOverlay(assignment) {    const node = nodes.find((item) => String(item.id) === String(assignment.node_id));
+  function applyAssignmentOverlay(assignment) {
+    const node = nodes.find((item) => String(item.id) === String(assignment.node_id));
     if (!node) return;
     node.assigned = true;
     node.assignmentId = assignment.id;
@@ -1604,7 +1607,8 @@
     }
     void hydrateDailyTaskQuota();
     startMemberLive(session.user.id);
-    if (!sameUser) {      state.wallet = { support: null, work: null, task: null, referral: null, available: null, held: null };
+    if (!sameUser) {
+      state.wallet = { support: null, work: null, task: null, referral: null, available: null, held: null };
       state.dailyTaskQuota = null;
       state.history = [];
       state.referrals = [];
@@ -1930,7 +1934,13 @@
   }
 
   async function hydrateDailyTaskQuota({ retry = 0 } = {}) {
-    if (isAdmin || !authState.session || !memberFinanceUrl) return;
+    if (isAdmin || !authState.session) return;
+    if (!memberFinanceUrl) {
+      state.dailyTaskQuota = null;
+      state.dailyTaskQuotaError = '오늘 남은 횟수를 조회할 경로가 설정되지 않았어요.';
+      paintDailyQuota();
+      return;
+    }
     const requestId = ++dailyQuotaRequestId;
     const userId = authState.session.user.id;
     clearDailyQuotaRetry();
@@ -2047,7 +2057,8 @@
     const rows = Array.isArray(list) ? list : [];
     return rows.filter((item) => {
       if (item && item.enabled === false) return false;
-      if (!method) return true;      return depositDestinationKind(item) === method;
+      if (!method) return true;
+      return depositDestinationKind(item) === method;
     });
   }
 
@@ -2446,7 +2457,8 @@
               await hydrateAdminAuthorization();
               if (authState.adminAuthorized) queueAdminPageData({ silent: true });
               if (!state.modal) render();
-            }, 0);          }
+            }, 0);
+          }
           return;
         }
         window.setTimeout(async () => {
@@ -2845,7 +2857,8 @@
       return `<div class="empty-state compact"><div class="empty-icon">${icon('clipboard-list', 22)}</div><strong>아직 기록된 업무가 없어요.</strong><p>업무를 제출하면 진행·검수·보상 상태가 이곳에 순서대로 표시됩니다.</p></div>`;
     }
     return `<div class="timeline">${recent.map((item) => {
-      const node = nodeById(item.nodeId);      const company = companyById(node.companyId);
+      const node = nodeById(item.nodeId);
+      const company = companyById(node.companyId);
       const kind = rewardUiKind(item);
       const done = kind === 'posted';
       return `<div class="timeline-item"><div class="timeline-dot ${done ? '' : 'pending'}"></div><div class="timeline-content"><strong>${esc(item.status)}</strong><p>${esc(company.name)} · ${esc(node.title)} · ${esc(rewardUiLabel(kind))}</p></div><div class="timeline-time">${esc(item.date)}</div></div>`;
@@ -3244,7 +3257,8 @@
     const reasonLine = authState.session && authState.adminAuthError && !waiting
       ? `<p class="page-copy" style="margin:0 auto 14px;color:var(--muted,#888)">ℹ️ ${esc(authState.adminAuthError)}</p>`
       : '';
-    return `<section class="empty-state" style="max-width:640px;margin:80px auto;text-align:center"><div class="empty-icon">${icon(waiting ? 'loader-circle' : 'shield-alert', 28)}</div><h1 class="page-title">${title}</h1><p class="page-copy" style="margin:12px auto 22px">${copy}</p>${emailLine}${reasonLine}${!authState.session && !waiting ? '<button class="primary-button" data-action="open-login">운영자 로그인</button>' : ''}${authState.session && !waiting ? '<button class="secondary-button" data-action="logout" style="margin-left:8px">로그아웃</button>' : ''}</section>`;  }
+    return `<section class="empty-state" style="max-width:640px;margin:80px auto;text-align:center"><div class="empty-icon">${icon(waiting ? 'loader-circle' : 'shield-alert', 28)}</div><h1 class="page-title">${title}</h1><p class="page-copy" style="margin:12px auto 22px">${copy}</p>${emailLine}${reasonLine}${!authState.session && !waiting ? '<button class="primary-button" data-action="open-login">운영자 로그인</button>' : ''}${authState.session && !waiting ? '<button class="secondary-button" data-action="logout" style="margin-left:8px">로그아웃</button>' : ''}</section>`;
+  }
 
   function renderAdminPage() {
     if (window.PUTDUK_ADMIN && typeof window.PUTDUK_ADMIN.renderPage === 'function') {
@@ -3643,7 +3657,8 @@
 
   function renderMemberResetForm() {
     const member = state.modalPayload || state.adminMemberDetail || {};
-    return `<div class="modal-backdrop" data-modal="member-reset"><div class="modal"><div class="modal-head"><div><h2>비밀번호 재설정</h2><p>${esc(member.public_id || member.display_name || '회원')}</p></div><button class="icon-button" data-action="close-modal" aria-label="닫기">${icon('x',18)}</button></div><div class="modal-body"><div class="notice"><span style="color:var(--gold)">${icon('key-round',17)}</span><div>회원 이메일로 재설정 안내를 보냅니다. 운영자가 비밀번호를 직접 바꾸지 않습니다.</div></div><div class="modal-actions"><button class="secondary-button" type="button" data-action="close-modal">취소</button><button class="primary-button" type="button" data-action="confirm-reset" data-member-id="${esc(member.id || member.user_id || '')}">안내 보내기</button></div></div></div></div>`;  }
+    return `<div class="modal-backdrop" data-modal="member-reset"><div class="modal"><div class="modal-head"><div><h2>비밀번호 재설정</h2><p>${esc(member.public_id || member.display_name || '회원')}</p></div><button class="icon-button" data-action="close-modal" aria-label="닫기">${icon('x',18)}</button></div><div class="modal-body"><div class="notice"><span style="color:var(--gold)">${icon('key-round',17)}</span><div>회원 이메일로 재설정 안내를 보냅니다. 운영자가 비밀번호를 직접 바꾸지 않습니다.</div></div><div class="modal-actions"><button class="secondary-button" type="button" data-action="close-modal">취소</button><button class="primary-button" type="button" data-action="confirm-reset" data-member-id="${esc(member.id || member.user_id || '')}">안내 보내기</button></div></div></div></div>`;
+  }
 
   function renderAssignForm() {
     const preset = state.modalPayload || {};
@@ -4043,7 +4058,8 @@
       script.onerror = () => {
         chartLoading = null;
         reject(new Error('차트를 불러오지 못했어요.'));
-      };      document.head.appendChild(script);
+      };
+      document.head.appendChild(script);
     });
     return chartLoading;
   }
@@ -4442,7 +4458,8 @@
         render();
         setWorkActionBusy(false);
         showToast(message.includes('대조') || message.includes('번호') || message.includes('골라') || message.includes('물량') || message.includes('상품') ? message : taskApiErrorMessage(error), 'info');
-        return;      }
+        return;
+      }
 
       if (!data) {
         run._submitting = false;
@@ -4841,7 +4858,8 @@
     document.body?.classList.remove('sidebar-open', 'modal-open', 'overlay-open');
     if (navigate && !isAdmin && window.location.pathname !== '/') window.history.replaceState(null, '', '/');
     const app = document.getElementById('app');
-    if (app) {      // 오버레이 keep/patch 경로가 로그인 칩을 남기지 않게 셸을 강제로 다시 그린다.
+    if (app) {
+      // 오버레이 keep/patch 경로가 로그인 칩을 남기지 않게 셸을 강제로 다시 그린다.
       releaseAllMotionCanvases();
       app.innerHTML = `${renderAppShell()}<div class="toast-stack" id="toastStack" aria-live="polite" aria-relevant="additions" role="status"></div>`;
       finishPaint({ replayMotion: false, rebindOverlayUi: false });
@@ -5240,7 +5258,8 @@
       state.depositJump = null;
       if (state.resultScene) {
         releaseNamedCanvas('resultMotionCanvas');
-        state.resultScene = null;      }
+        state.resultScene = null;
+      }
       openDepositModal();
       return;
     }
@@ -5639,7 +5658,8 @@
             source_kind: 'photo',
             source_url: values.source_url,
             evidence_path: values.photo_asset_path || values.evidence_path || null,
-            verification_note: values.verification_note || null          });
+            verification_note: values.verification_note || null
+          });
         }
         showToast('협력사 설정을 저장했어요.', 'success');
       } else {
@@ -6039,3 +6059,177 @@
     const node = adminNodeViews().find((item) => item.id === nodeId);
     if (!node) { showToast('업무 카드를 찾지 못했어요.', 'info'); return; }
     const labels = { publish_node: '회원 공개', pause_node: '회원 공개 중지', archive_node: '업무 카드 보관' };
+    if (!window.confirm(labels[action] + ' 처리할까요? 회원 화면 노출이 바로 바뀝니다.')) return;
+    state.adminCatalogBusyId = nodeId;
+    state.adminCatalogError = null;
+    render();
+    try {
+      await adminRequest(action, { node_id: nodeId });
+      await loadAdminCatalog({ silent: true });
+      state.adminCatalogBusyId = null;
+      render();
+      showToast(action === 'publish_node' ? '✅ 업무 카드가 회원에게 공개됐어요.' : action === 'pause_node' ? '⏸ 업무 카드를 잠시 중지했어요.' : '📦 업무 카드를 보관했어요.', 'success');
+    } catch (error) {
+      state.adminCatalogBusyId = null;
+      state.adminCatalogError = error;
+      render();
+      showToast(error.message || '업무 카드 상태를 저장하지 못했어요.', 'info');
+    }
+  }
+
+  function approveCompany(companyId) {
+    const company = state.companies.find((item) => item.id === companyId);
+    if (!company) return;
+    if (!company.verified) { company.verified = true; company.published = true; saveState(); render(); showToast(`${company.name} 자료가 승인되어 회원 화면에 공개됐어요.`, 'success'); }
+    else showToast(`${company.name}의 협력 자료와 로고 상태를 확인했어요.`, 'info');
+  }
+
+  document.addEventListener('keydown', (event) => {
+    if (event.key !== 'Escape' || !state.modal) return;
+    if (['balance-adjust', 'member-tier', 'member-block', 'member-reset'].includes(state.modal) && state.adminMemberDetail) {
+      openModal('member-detail', state.adminMemberDetail);
+      return;
+    }
+    if ((state.modal === 'assign-task' || state.modal === 'notice-form') && state.adminMemberDetail && (state.modalPayload?.id || state.modalPayload?.user_id)) {
+      openModal('member-detail', state.adminMemberDetail);
+      return;
+    }
+    closeModal();
+  });
+  document.addEventListener('click', handleClick);
+  document.addEventListener('submit', (event) => {
+    if (event.target.id === 'signupForm') { submitSignup(event); return; }
+    if (event.target.dataset?.catalogEntry === '1' || event.target.classList?.contains('catalog-entry')) {
+      event.preventDefault();
+      submitPlayer();
+      return;
+    }
+    if (event.target.dataset?.inspectEntry === '1' || event.target.classList?.contains('inspect-entry')) {
+      event.preventDefault();
+      confirmInspectLabel();
+      return;
+    }
+    if (event.target.id === 'loginForm') { submitLogin(event); return; }
+    if (event.target.id === 'memberSearchForm') {
+      event.preventDefault();
+      state.adminMemberQuery = document.getElementById('memberSearchInput')?.value.trim() || '';
+      loadAdminMembers({ silent: false });
+      return;
+    }
+    if (event.target.id === 'companyForm') { submitCompanyForm(event); return; }
+    if (event.target.id === 'nodeForm') { submitNodeForm(event); return; }
+    if (event.target.id === 'assignForm') { submitAssignForm(event); return; }
+    if (event.target.id === 'noticeForm') { submitNoticeForm(event); return; }
+    if (event.target.id === 'balanceAdjustForm') { submitBalanceAdjustForm(event); return; }
+    if (event.target.id === 'memberTierForm') { submitMemberTierForm(event); return; }
+    if (event.target.id === 'memberBlockForm') { submitMemberBlockForm(event); return; }
+    if (event.target.id === 'depositPinSetForm') { submitDepositPinSet(event); return; }
+    if (event.target.id === 'depositPinForm') { submitDepositPin(event); return; }
+    if (event.target.id === 'depositForm') { submitDepositForm(event); return; }
+    if (event.target.id === 'depositJumpForm') { submitDepositJumpForm(event); return; }
+    if (event.target.id === 'withdrawForm') { submitWithdrawForm(event); return; }
+    if (event.target.id === 'kycForm') { submitKycForm(event); return; }
+  });
+  document.addEventListener('click', (event) => {
+    if (event.target.id === 'sidebarBackdrop') { document.getElementById('sidebar')?.classList.remove('open'); event.target.classList.remove('open'); }
+  });
+  document.addEventListener('click', (event) => {
+    const filter = event.target.closest('[data-filter]');
+    if (!filter) return;
+    document.querySelectorAll('[data-filter]').forEach((button) => button.classList.toggle('active', button === filter));
+    const value = filter.dataset.filter;
+    document.querySelectorAll('#nodeGrid .node-card').forEach((card) => {
+      card.style.display = value === 'all' || card.dataset.level === value ? '' : 'none';
+    });
+    const hint = document.getElementById('nodeFilterHint');
+    if (hint) hint.textContent = NODE_FILTER_HINTS[value] || NODE_FILTER_HINTS.all;
+  });
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+      if (window.PutdukMotion && typeof window.PutdukMotion.stopWorkPhase === 'function') {
+        window.PutdukMotion.stopWorkPhase();
+      }
+      return;
+    }
+    if (state.run) {
+      updateRunDom(motionSceneCopy(nodeById(state.run.nodeId), state.run.progress));
+      drawMotionCanvas();
+    }
+    if (authState.session) {
+      if (state.modal) {
+        if (isAdmin && authState.adminAuthorized) refreshAdminPageData({ silent: true }).catch(() => {});
+        if (!isAdmin) {
+          Promise.all([refreshMemberNotices({ toastNew: true }), hydrateMemberAssignments()]).then(() => {
+            if (state.modal === 'notifications') render();
+            else {
+              paintNoticeBadge();
+              flushPendingToast();
+            }
+          }).catch(() => {});
+        }
+        return;
+      }
+      hydrateSession(authState.session, { light: true }).then(async () => {
+        if (isAdmin && authState.adminAuthorized) {
+          await refreshAdminPageData({ silent: true });
+        }
+      }).then(() => render()).catch(() => {});
+    }
+  });
+  window.addEventListener('resize', () => { if (state.run) drawMotionCanvas(); });
+
+  if (isAdmin) {
+    window.PUTDUK_ADMIN_CORE = {
+      getState: () => state,
+      patchState(partial) { Object.assign(state, partial || {}); },
+      render,
+      adminRequest,
+      money,
+      esc,
+      icon,
+      adminBrandViews,
+      adminNodeViews,
+      adminBrandById,
+      showToast,
+      openModal,
+      closeModal,
+      formValues,
+      loadAdminFinance,
+      loadAdminCatalog,
+      loadAdminReviews,
+      loadAdminMembers,
+      refreshAdminPageData,
+      friendlyAdminError,
+      isUnsupportedAction,
+      submitBalanceAdjustForm,
+      submitMemberTierForm,
+      submitMemberBlockForm,
+      openMemberNotices,
+      openNoticeItem,
+      markAllNoticesRead,
+      patchNotificationsModal,
+      MOTION_PROFILES
+    };
+  }
+
+  window.__putdukShowToast = showToast;
+  window.__putdukOpenNotices = openMemberNotices;
+  window.__putdukOpenNoticeItem = openNoticeItem;
+  window.__putdukMarkAllNoticesRead = markAllNoticesRead;
+  window.__putdukOpenAuth = (action) => {
+    state.authMode = action === 'open-signup' ? 'signup' : 'login';
+    openModal('auth');
+  };
+  if (window.__putdukWantAuth) {
+    const pending = window.__putdukWantAuth;
+    window.__putdukWantAuth = null;
+    window.__putdukOpenAuth(pending);
+  }
+
+  initializePwa();
+  initializeAuth().then(() => render());
+  const overlay = overlayApi();
+  if (overlay && typeof overlay.shouldPaintBootImmediately === 'function'
+    ? overlay.shouldPaintBootImmediately(Boolean(supabaseClient))
+    : !supabaseClient) render();
+})();
