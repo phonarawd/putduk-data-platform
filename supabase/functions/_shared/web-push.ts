@@ -59,7 +59,7 @@ export async function dispatchPushToUser(admin: SupabaseClient, payload: PushPay
   }
 
   const rows = (Array.isArray(data) ? data : []) as PushSubscriptionRow[];
-  if (!rows.length) return { sent: 0, removed: 0, failed: 0 };
+  if (!rows.length) return { sent: 0, removed: 0 };
 
   const message = JSON.stringify({
     title: payload.title,

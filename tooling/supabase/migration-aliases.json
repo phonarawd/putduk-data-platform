@@ -151,7 +151,24 @@
       "20260923013931"
     ],
     "revoke_private_public_execute": [
-      "20260923115000"
+      "20260923115000",
+      "20260923014236"
+    ],
+    "harden_private_security_definer_exec": [
+      "20260923114500",
+      "20260923014202"
+    ],
+    "harden_push_dispatch_authorization": [
+      "20260923120000",
+      "20260923015217"
+    ],
+    "harden_push_dispatch_claim": [
+      "20260923121500",
+      "20260923015605"
+    ],
+    "restore_push_dispatch_legacy_contract": [
+      "20260923123000",
+      "20260923015900"
     ]
   },
   "remote_history_only": [
