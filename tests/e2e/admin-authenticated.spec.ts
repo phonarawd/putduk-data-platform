@@ -13,7 +13,8 @@ test.describe('Production Admin authenticated E2E', () => {
     let meResponse: { status: number; body: { ok?: boolean; roles?: string[] } } | null = null;
 
     page.on('response', async (response) => {
-      if (!response.url().includes('/functions/v1/admin-control')) return;
+      // 운영 페이지는 admin-master(→ admin-phase5 → admin-control) 체인으로 me를 호출한다.
+      if (!response.url().includes('/functions/v1/admin-master') && !response.url().includes('/functions/v1/admin-control')) return;
       try {
         const request = response.request();
         const payload = request.postDataJSON?.();
@@ -35,7 +36,7 @@ test.describe('Production Admin authenticated E2E', () => {
 
     await expect.poll(() => meResponse?.status ?? 0, { timeout: 15_000 }).toBe(200);
     expect(meResponse?.body.ok).toBe(true);
-    expect(meResponse?.body.roles || []).toEqual(expect.arrayContaining(['work_review']));
+    expect(meResponse?.body.roles || []).toEqual(expect.arrayContaining(['super_admin', 'work_review']));
     await expect(page.locator('[data-nav="reviews"], [data-nav="review"]').first()).toBeVisible();
   });
 });
