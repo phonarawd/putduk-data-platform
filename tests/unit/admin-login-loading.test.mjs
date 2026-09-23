@@ -19,8 +19,8 @@ test('admin authorization renders a safe shell before waiting on the authorizati
 test('admin login uses the shared authorization shell path and fresh asset', () => {
   assert.match(app, /await runAdminAuthorization\(\{ toast: true \}\);/);
   assert.match(index, /putduk-boot-v51-member-ia12-pwa-off-perf-fomo-catalog-bg-referral-one-button-admin-login-shell-cloudflare-production-20260924/);
-  assert.match(index, /assets\/app-ia12\.js/);
-  assert.match(adminIndex, /assets\/app-ia12\.js/);
+  assert.match(index, /assets\/app-ia13\.js/);
+  assert.match(adminIndex, /assets\/app-ia13\.js/);
 });
 
 new Function(app);
