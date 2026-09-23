@@ -149,14 +149,14 @@ test('관리자 등급 변경 저장은 서버에서 배지 라벨로 정규화�
   assert.doesNotMatch(appJs, /주임/);
 });
 
-test('회원 대시보드는 오늘 작업 가능 횟수를 실제 서버 값으로 보여준다', async () => {
+test('회원 대시보드는 오늘 남은 횟수를 실제 서버 값으로 보여준다', async () => {
   const { appJs } = await readLaunchFiles();
   const financeSource = await readRepo('supabase', 'functions', 'member-finance', 'index.ts');
   const guardSource = await readRepo('supabase', 'functions', '_shared', 'finance-api-guard.ts');
-  assert.match(appJs, /오늘 작업 가능/);
+  assert.match(appJs, /오늘 남은 횟수/);
   assert.match(appJs, /dailyTaskQuota/);
   assert.match(appJs, /memberFinanceRequest\('daily_task_quota'\)/);
-  assert.doesNotMatch(appJs, />오늘 작업 가능 \d+\/5회 남음</);
+  assert.doesNotMatch(appJs, />오늘 남은 횟수 \d+회</);
   assert.match(financeSource, /putduk_member_daily_task_quota/);
   assert.match(financeSource, /action === "daily_task_quota"/);
   assert.match(guardSource, /"daily_task_quota"/);
