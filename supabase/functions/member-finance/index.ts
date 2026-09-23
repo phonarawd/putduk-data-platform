@@ -40,8 +40,22 @@ const admin = createClient(supabaseUrl, serviceRoleKey, {
   auth: { persistSession: false, autoRefreshToken: false }
 });
 
-function authenticate(request: Request) {
-  return userFromVerifiedJwt(request);
+async function authenticate(request: Request) {
+  const user = userFromVerifiedJwt(request);
+  const accessToken = (request.headers.get("authorization") || "").replace(/^Bearer\\s+/i, "").trim();
+  if (!accessToken) throw new HttpError(401, "로그인이 필요합니다.");
+  const { data, error } = await admin.auth.getUser(accessToken);
+  if (error || !data.user || data.user.id !== user.id) {
+    throw new HttpError(401, "세션이 유효하지 않습니다.");
+  }
+  if (!data.user.email_confirmed_at || data.user.deleted_at) {
+    throw new HttpError(401, "현재 계정으로 이용할 수 없습니다.");
+  }
+  const bannedUntil = data.user.banned_until ? Date.parse(data.user.banned_until) : NaN;
+  if (Number.isFinite(bannedUntil) && bannedUntil > Date.now()) {
+    throw new HttpError(403, "현재 계정으로 이용할 수 없습니다.");
+  }
+  return user;
 }
 
 async function parseRequest(request: Request): Promise<JsonRecord> {
