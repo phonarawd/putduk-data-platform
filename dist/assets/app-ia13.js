@@ -4933,10 +4933,10 @@
     if (!isStandalone) showToast('📥 브라우저 메뉴에서 “앱 설치” 또는 “홈 화면에 추가”를 선택해 주세요.', 'info');
   }
 
-  function applySignedOutState({ navigate = false } = {}) {
+  function applySignedOutState({ navigate = false, userId = null } = {}) {
     signedOutLock = true;
     const previousStorageKey = activeStorageKey;
-    const previousUserId = authState.session?.user?.id || null;
+    const previousUserId = userId || authState.session?.user?.id || null;
     if (kstResetTimer) { window.clearTimeout(kstResetTimer); kstResetTimer = null; }
     authState.session = null;
     authState.profile = null;
@@ -4973,7 +4973,7 @@
     noticesHydrated = false;
     stopMemberLive();
     // 로그아웃 UI를 먼저 반영한다. 푸시/토큰 정리는 뒤에서 이어간다.
-    applySignedOutState({ navigate: true });
+    applySignedOutState({ navigate: true, userId: session?.user?.id || null });
     try {
       await lockDepositReveal({ silent: true });
     } catch (_) {}
