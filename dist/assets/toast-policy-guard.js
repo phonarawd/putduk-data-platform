@@ -145,10 +145,10 @@
     const text = toastText(node);
     if (!text) return 'keep';
     if (matchesAny(text, KEEP_PATTERNS)) return 'keep';
+    // 인증 오류는 입력 검증/일반 안내의 '이메일'·'인증 서버' 인라인 규칙보다 우선해 항상 유지한다.
+    if (/이메일 인증이 완료되지 않았어요|이 계정은 현재 이용이 제한되어 있어요|로그인 요청이 잠시 제한됐어요|인증 서버에 연결하지 못했어요|이메일 또는 비밀번호가 올바르지 않아요/.test(text)) return 'keep';
     if (matchesAny(text, DROP_PATTERNS)) return 'drop';
     if (matchesAny(text, INLINE_PATTERNS)) return 'inline';
-    // 인증 오류는 모달/폼 재렌더링과 무관하게 항상 보이는 피드백을 유지한다.
-    if (/이메일 인증이 완료되지 않았어요|이 계정은 현재 이용이 제한되어 있어요|로그인 요청이 잠시 제한됐어요|인증 서버에 연결하지 못했어요|이메일 또는 비밀번호가 올바르지 않아요/.test(text)) return 'keep';
 
     const tone = toneOf(node);
     if (tone === 'error' || tone === 'warning') return 'keep';
