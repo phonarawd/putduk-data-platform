@@ -225,6 +225,10 @@
     "harden_public_api_grants": [
       "20260923173000",
       "20260923043558"
+    ],
+    "harden_public_function_default_exec": [
+      "20260923174000",
+      "20260923043657"
     ]
   },
   "remote_history_only": [
