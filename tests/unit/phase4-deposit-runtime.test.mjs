@@ -40,7 +40,7 @@ test('네이티브 입금 신청은 실제 proof_path만 보내고 빈 경로는
 
 test('PHASE 4 오버레이는 기존 증빙 칸을 중복 넣지 않고 고액은 점프 폼만 가로챈다', async () => {
   const wiring = await readRepo('dist', 'assets', 'phase4-finance-wiring.js');
-  assert.match(wiring, /new MutationObserver\(scan\)/);
+  assert.match(wiring, /new MutationObserver\(\(records\) =>/);
   assert.match(wiring, /augmentDepositForm\(document\.getElementById\('depositForm'\)\)/);
   assert.match(wiring, /if \(form\.querySelector\('#depositProofFile'\)\)/);
   assert.match(wiring, /form\.dataset\.phase4FinanceWired = '1'/);

@@ -5,7 +5,7 @@ import { readRepo } from '../helpers/repo.mjs';
 test('Phase 4 자산은 기존 UIUX 변환 뒤 마지막 표시 보정으로 연결한다', async () => {
   const html = await readRepo('dist', 'index.html');
   const growth = html.indexOf('uiux-growth-2026.js?v=20260919-uiux3');
-  const phase4 = html.indexOf('phase4-member-clarity.js?v=20260921-phase4');
+  const phase4 = html.indexOf('phase4-member-clarity.js?v=20260923-clarity1');
   assert.match(html, /phase4-member-clarity\.css\?v=20260921-phase4/);
   assert.ok(growth >= 0 && phase4 > growth);
 });

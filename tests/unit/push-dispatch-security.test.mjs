@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const edge = fs.readFileSync(path.join(root, "supabase/functions/push-dispatch/index.ts"), "utf8");
 const migration = fs.readFileSync(
-  path.join(root, "supabase/migrations/20260923123000_restore_push_dispatch_legacy_contract.sql"),
+  path.join(root, "supabase/migrations/20260923123000_restore_push_dispatch_legacy_contract_v2.sql"),
   "utf8"
 );
 

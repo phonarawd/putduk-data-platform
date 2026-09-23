@@ -26,7 +26,7 @@ export async function readLaunchFiles() {
   const [memberHtml, adminHtml, appJs, appCss, manifest] = await Promise.all([
     readRepo('dist', 'index.html'),
     readRepo('dist', 'admin', 'index.html'),
-    readRepo('dist', 'assets', 'app.js'),
+    readRepo('dist', 'assets', 'app-ia13.js'),
     readRepo('dist', 'assets', 'app.css'),
     readRepo('dist', 'manifest.webmanifest')
   ]);
