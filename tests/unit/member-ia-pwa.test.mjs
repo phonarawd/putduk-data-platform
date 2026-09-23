@@ -29,8 +29,8 @@ assert.equal(app, bundle);
 assert.match(index, /putduk-boot-v50-member-ia11-pwa-off-perf-fomo-catalog-bg-referral-copy-one-button-cloudflare-production-20260924/);
 assert.match(index, /assets\/app-ia13\.js/);
 assert.match(adminIndex, /assets\/app-ia13\.js/);
-assert.doesNotMatch(index, /assets\\/motion-runtime\\.js/);
-assert.match(index, /assets\\/perf-deferred\\.js/);
+assert.doesNotMatch(index, /assets\/motion-runtime\.js/);
+assert.match(index, /assets\/perf-deferred\.js/);
 assert.match(perfDeferred, /requestIdleCallback/);
 assert.match(perfDeferred, /ensure\('motion'\)/);
 
