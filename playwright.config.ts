@@ -9,7 +9,8 @@ export default defineConfig({
   use: {
     baseURL: process.env.PLAYWRIGHT_BASE_URL || 'http://127.0.0.1:4173',
     locale: 'ko-KR',
-    trace: 'on-first-retry'
+    trace: 'on-first-retry',
+    serviceWorkers: 'block'
   },
   webServer: {
     command: 'node tooling/scripts/serve-dist.mjs',
