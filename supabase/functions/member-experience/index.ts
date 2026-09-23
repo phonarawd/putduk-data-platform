@@ -110,6 +110,7 @@ Deno.serve(async (request) => {
 
   try {
     const userId = verifiedUserId(request);
+    await requireLiveAuthUser(request, userId);
     let payload: JsonRecord = {};
     try { payload = await request.json() as JsonRecord; } catch (_) {}
     const action = String(payload.action || "member_experience");
