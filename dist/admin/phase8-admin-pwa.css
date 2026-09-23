@@ -1,0 +1,161 @@
+/* PUTDUK Admin / Static / PWA UX — PHASE 8
+ * Presentation-only hardening. Admin IA and server actions remain unchanged.
+ */
+html[data-mode="admin"] {
+  --pd-admin-gap: 18px;
+}
+html[data-mode="admin"] .main {
+  min-width: 0;
+  padding-bottom: calc(32px + env(safe-area-inset-bottom));
+}
+html[data-mode="admin"] .admin-card,
+html[data-mode="admin"] .uiux-admin-card-premium,
+html[data-mode="admin"] .uiux-admin-members-card {
+  border-radius: var(--pd-radius-xl) !important;
+}
+html[data-mode="admin"] .admin-card-head {
+  gap: 12px;
+}
+html[data-mode="admin"] .admin-card-head h3 {
+  line-height: var(--pd-line-tight);
+}
+html[data-mode="admin"] .admin-stat-grid {
+  gap: 12px;
+}
+html[data-mode="admin"] .admin-stat,
+html[data-mode="admin"] .uiux-admin-stat,
+html[data-mode="admin"] .uiux-admin-finance-stat {
+  border-radius: var(--pd-radius-lg);
+}
+html[data-mode="admin"] .filter-row,
+html[data-mode="admin"] .search-bar,
+html[data-mode="admin"] .action-row {
+  min-width: 0;
+}
+html[data-mode="admin"] .filter-row {
+  flex-wrap: wrap;
+}
+html[data-mode="admin"] .table-wrap,
+html[data-mode="admin"] .uiux-admin-table-wrap {
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+html[data-mode="admin"] table th,
+html[data-mode="admin"] .uiux-admin-table thead th {
+  font-weight: 800;
+}
+html[data-mode="admin"] table td,
+html[data-mode="admin"] table th {
+  word-break: keep-all;
+}
+html[data-mode="admin"] .review-card,
+html[data-mode="admin"] .admin-mobile-card {
+  box-shadow: var(--pd-shadow-xs);
+}
+html[data-mode="admin"] .review-actions,
+html[data-mode="admin"] .modal-actions {
+  gap: 8px;
+}
+html[data-mode="admin"] .review-actions button,
+html[data-mode="admin"] .modal-actions button,
+html[data-mode="admin"] .action-row button,
+html[data-mode="admin"] .small-button {
+  min-height: 44px;
+}
+html[data-mode="admin"] .modal,
+html[data-mode="admin"] [role="dialog"],
+html[data-mode="admin"] .uiux-admin-modal {
+  max-height: min(92dvh, 920px);
+}
+html[data-mode="admin"] .modal-body,
+html[data-mode="admin"] .uiux-admin-modal .modal-body {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+html[data-mode="admin"] .sidebar nav[aria-label="주요 메뉴"] {
+  overscroll-behavior: contain;
+}
+html[data-mode="admin"] .empty-state {
+  border-radius: var(--pd-radius-xl);
+}
+html[data-mode="admin"] .notice {
+  border-radius: var(--pd-radius-lg);
+}
+html[data-mode="admin"] .skeleton,
+html[data-mode="admin"] [aria-busy="true"] {
+  cursor: progress;
+}
+html[data-mode="admin"] button:focus-visible,
+html[data-mode="admin"] a:focus-visible,
+html[data-mode="admin"] input:focus-visible,
+html[data-mode="admin"] select:focus-visible,
+html[data-mode="admin"] textarea:focus-visible {
+  outline: 3px solid var(--pd-color-focus);
+  outline-offset: 2px;
+}
+html[data-mode="admin"] .table-wrap:focus-visible {
+  outline: 3px solid var(--pd-color-focus);
+  outline-offset: -3px;
+}
+html[data-mode="admin"] .admin-mobile-card .action-row > * {
+  min-width: 0;
+}
+html[data-mode="admin"] .member-detail-modal {
+  max-height: min(92dvh, 920px);
+}
+@media (max-width: 840px) {
+  html[data-mode="admin"] .admin-card {
+    border-radius: var(--pd-radius-lg);
+  }
+  html[data-mode="admin"] .sidebar nav[aria-label="주요 메뉴"] {
+    max-height: calc(100dvh - 190px);
+  }
+}
+@media (max-width: 520px) {
+  html[data-mode="admin"] .main {
+    padding-bottom: calc(24px + env(safe-area-inset-bottom));
+  }
+  html[data-mode="admin"] .admin-card {
+    padding: 15px;
+  }
+  html[data-mode="admin"] .admin-card-head {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+  html[data-mode="admin"] .filter-row {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+  html[data-mode="admin"] .filter-button {
+    width: 100%;
+    justify-content: center;
+  }
+  html[data-mode="admin"] .review-actions,
+  html[data-mode="admin"] .modal-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+  html[data-mode="admin"] .review-actions > *,
+  html[data-mode="admin"] .modal-actions > * {
+    width: 100%;
+  }
+}
+/* Static/standalone surfaces share the same foundation without changing content. */
+html[data-mode="member"] body {
+  min-height: 100dvh;
+  padding-bottom: env(safe-area-inset-bottom);
+}
+html[data-mode="member"] .static-page,
+html[data-mode="member"] .legal-page,
+html[data-mode="member"] .help-page {
+  max-width: var(--pd-content-max);
+  margin-inline: auto;
+}
+@media (display-mode: standalone) {
+  html[data-mode="member"] .member-tabbar,
+  html[data-mode="admin"] .sidebar {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+}
