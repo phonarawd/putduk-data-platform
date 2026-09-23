@@ -16,17 +16,22 @@ export class HttpError extends Error {
   }
 }
 
+const BUILTIN_ALLOWED_ORIGINS = new Set([
+  "https://app.hiptk.app",
+  "https://ops.hiptk.app"
+]);
+
 export function corsHeaders(request: Request): HeadersInit {
-  const configured = (Deno.env.get("PUTDUK_ALLOWED_ORIGINS") || "*")
+  const configured = (Deno.env.get("PUTDUK_ALLOWED_ORIGINS") || "")
     .split(",")
     .map((value) => value.trim())
     .filter(Boolean);
   const requestOrigin = request.headers.get("origin") || "";
   const allowOrigin = configured.includes("*")
     ? "*"
-    : configured.includes(requestOrigin)
+    : requestOrigin && (configured.includes(requestOrigin) || BUILTIN_ALLOWED_ORIGINS.has(requestOrigin))
       ? requestOrigin
-      : configured[0] || "null";
+      : configured[0] || [...BUILTIN_ALLOWED_ORIGINS][0];
 
   return {
     "Access-Control-Allow-Origin": allowOrigin,
