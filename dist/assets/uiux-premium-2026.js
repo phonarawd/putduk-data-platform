@@ -242,7 +242,8 @@
 
   function start() {
     enhanceAll();
-    observer.observe(document.body || document.documentElement, { childList: true, subtree: true });
+    const app = document.getElementById('app');
+    if (app) observer.observe(app, { childList: true, subtree: true });
   }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start, { once: true });
