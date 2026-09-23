@@ -233,6 +233,10 @@
     "harden_public_sequence_privileges": [
       "20260923175000",
       "20260923044043"
+    ],
+    "harden_storage_api_grants": [
+      "20260923180000",
+      "20260923044231"
     ]
   },
   "remote_history_only": [
