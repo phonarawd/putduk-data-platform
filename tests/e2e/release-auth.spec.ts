@@ -40,12 +40,12 @@ const LOGIN_CASES = [
 
 for (const scenario of LOGIN_CASES) {
   test(`로그인 오류 분류: ${scenario.name}`, async ({ page }) => {
-    await page.route(/\/auth\/v1\/token\?grant_type=password(?:&.*)?$/, async (route) => {
+    await page.route('**/auth/v1/token?grant_type=password**', async (route) => {
       await route.fulfill({
         status: scenario.status,
         contentType: 'application/json',
         headers: { 'x-supabase-api-version': '2024-01-01' },
-        body: JSON.stringify({ code: scenario.code, error_code: scenario.code, msg: scenario.message, message: scenario.message })
+        body: JSON.stringify({ error: 'invalid_grant', error_description: scenario.message, error_code: scenario.code, code: scenario.code, msg: scenario.message, message: scenario.message })
       });
     });
 
@@ -134,6 +134,7 @@ test('SIGNED_OUT/로그아웃은 회원 전용 캐시와 화면 상태를 정리
 
   await page.locator('[data-action="logout"]').first().click();
   await expect(page.locator('[data-action="open-login"]').first()).toBeVisible();
+  await page.waitForTimeout(250);
 
   const snapshot = await page.evaluate(({ memberStateKey }) => ({
     path: location.pathname,
