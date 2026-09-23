@@ -193,6 +193,10 @@
     "harden_pin_failure_atomic_and_withdraw_ref": [
       "20260923143000",
       "20260923024033"
+    ],
+    "harden_referral_reward_ledger_bucket": [
+      "20260923150000",
+      "202609230?"
     ]
   },
   "remote_history_only": [
