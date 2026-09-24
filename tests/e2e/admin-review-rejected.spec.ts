@@ -10,8 +10,8 @@ const memberUrl = process.env.PLAYWRIGHT_MEMBER_URL || 'https://app.hiptk.app';
 // Review E2E — REJECTED 경로
 // 회원 E2E로 실제 근무를 제출해 pending run을 만들고(서버 seed = 클라이언트 번들 동일 알고리즘),
 // Admin이 반려하면 서버에서 rejected/reversed + stake release가 발생하는지 검증한다.
-// 온보딩 모달(일반 업무 보기 등)은 렌더마다 다시 그려지므로,
-// render 루프가 끝난 뒤 state를 직접 정리하고(같은 화면 상태 유지) 남은 모달이 사라질 때까지 기다린다.
+// 온보딩 모달은 queueOnboarding이 렌더마다 다시 그릴 수 있으므로
+// 로그인 후 user-scoped localStorage에 완료 플래그를 심고 새로고침해 근본 차단을 끊는다.
 
 test.describe('Production Admin Review E2E — rejected', () => {
   test.beforeAll(() => {
@@ -33,8 +33,7 @@ test.describe('Production Admin Review E2E — rejected', () => {
     await expect(page.locator('[data-nav="reviews"]').first()).toBeVisible({ timeout: 20_000 });
   }
 
-  // 온보딩 모달의 원인 상태(onboardingStep)를 앱 상태에서 직접 정리해 재표시를 끊는다.
-  // 앱의 공개 API가 없으므로 ack-general-work 클릭(정식 경로) 후에도 남아 있으면 반복 닫는다.
+  // 남은 온보딩/오버레이 모달을 모두 닫을 때까지 반복한다.
   async function dismissBlockingOverlays(page: Page, maxAttempts = 12) {
     const blocker = page.locator(
       '[data-modal="onboard-general-work"], [data-modal="onboard-pwa"], [data-modal="onboard-first-work"], [data-modal="result-scene"], [data-modal="review-wait"]'
@@ -45,7 +44,6 @@ test.describe('Production Admin Review E2E — rejected', () => {
       for (const action of closeActions) {
         const btn = page.locator(`[data-action="${action}"]`).first();
         if (await btn.isVisible().catch(() => false)) {
-          // 렌더 경합으로 실패할 수 있어 여러 번 시도
           for (let clickTry = 0; clickTry < 3; clickTry++) {
             try {
               await btn.click({ timeout: 2_000 });
@@ -75,7 +73,28 @@ test.describe('Production Admin Review E2E — rejected', () => {
     await memberPage.locator('#loginPassword').fill(memberPassword);
     await memberPage.locator('#loginForm').getByRole('button', { name: '로그인', exact: true }).click();
 
-    // 로그인 직후 온보딩/오버레이 모달을 모두 닫는다 (재표시 대응 포함)
+    // 로그인 직후 user-scoped 상태에 온보딩 완료 플래그를 심고 새로고침한다.
+    // (queueOnboarding이 렌더마다 모달을 다시 그리는 것을 근본 차단)
+    await memberPage.evaluate(() => {
+      const authKey = Object.keys(localStorage).find((key) => key.startsWith('sb-') && key.endsWith('-auth-token'));
+      const raw = authKey ? localStorage.getItem(authKey) : null;
+      const userId = raw ? (JSON.parse(raw)?.user?.id ?? null) : null;
+      if (!userId) return;
+      const stateKey = `putduk-state-v2:${userId}`;
+      const existing = localStorage.getItem(stateKey);
+      const parsed = existing ? JSON.parse(existing) : {};
+      localStorage.setItem(stateKey, JSON.stringify({
+        ...parsed,
+        onboardingStep: null,
+        onboardingPwaDone: true,
+        onboardingGrantSeen: true,
+        onboardingGeneralSeen: true,
+        onboardingExperienceStarted: true
+      }));
+    });
+    await memberPage.reload({ waitUntil: 'domcontentloaded' });
+
+    // 남은 온보딩/오버레이 모달 정리 (재표시 대응 포함)
     await dismissBlockingOverlays(memberPage);
 
     // 근무 카드(업무 매칭)에서 출근 가능한 첫 카드 선택
