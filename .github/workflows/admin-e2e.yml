@@ -14,6 +14,8 @@ jobs:
       PLAYWRIGHT_BASE_URL: https://ops.hiptk.app
       PUTDUK_ADMIN_EMAIL: ${{ secrets.PUTDUK_ADMIN_EMAIL }}
       PUTDUK_ADMIN_PASSWORD: ${{ secrets.PUTDUK_ADMIN_PASSWORD }}
+      PUTDUK_TRIAL_EMAIL: ${{ secrets.PUTDUK_TRIAL_EMAIL }}
+      PUTDUK_TRIAL_PASSWORD: ${{ secrets.PUTDUK_TRIAL_PASSWORD }}
     steps:
       - name: 저장소 가져오기
         uses: actions/checkout@v4
