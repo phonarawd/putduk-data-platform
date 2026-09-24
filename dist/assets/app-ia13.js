@@ -2788,10 +2788,13 @@
     const mobileMenu = isAdmin
       ? `<button class="icon-button" data-menu="open" aria-label="메뉴 열기">${icon('menu', 19)}</button>`
       : '';
+    const mobileLogout = !isAdmin && authState.session && !signedOutLock
+      ? `<button class="icon-button mobile-logout" data-action="logout" aria-label="로그아웃" title="로그아웃">${icon('door-closed', 17)}</button>`
+      : '';
     const brandSrc = isAdmin ? '../favicon.svg' : './favicon.svg';
     const crumbTitle = (!isAdmin && state.memberPage === 'membership') ? '' : ` <strong>${title}</strong>`;
     return `
-      <div class="mobile-topbar">${mobileMenu}<button type="button" class="mobile-brand" data-nav="${isAdmin ? 'overview' : 'dashboard'}" aria-label="퍼뜩 홈"><img class="mobile-brand-logo" src="${brandSrc}" alt="" width="28" height="28" /><span class="brand-name">퍼뜩</span></button><div class="mobile-topbar-actions">${installButton}${alertButton}<button class="icon-button" data-theme-toggle aria-label="테마 전환">${icon(state.theme === 'dark' ? 'sun' : 'moon', 17)}</button></div></div>
+      <div class="mobile-topbar">${mobileMenu}<button type="button" class="mobile-brand" data-nav="${isAdmin ? 'overview' : 'dashboard'}" aria-label="퍼뜩 홈"><img class="mobile-brand-logo" src="${brandSrc}" alt="" width="28" height="28" /><span class="brand-name">퍼뜩</span></button><div class="mobile-topbar-actions">${installButton}${alertButton}<button class="icon-button" data-theme-toggle aria-label="테마 전환">${icon(state.theme === 'dark' ? 'sun' : 'moon', 17)}</button>${mobileLogout}</div></div>
       <div class="topbar"><div class="breadcrumb">퍼뜩 ${isAdmin ? '운영자 관리센터' : '라인 근무'}${crumbTitle}</div><div class="top-actions">${installButton}<button class="icon-button" data-theme-toggle aria-label="테마 전환">${icon(state.theme === 'dark' ? 'sun' : 'moon', 17)}</button>${alertButton}${isAdmin ? adminIdentity : memberIdentity}</div></div>
     `;
   }
