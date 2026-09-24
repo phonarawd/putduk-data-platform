@@ -31,7 +31,13 @@
 
   function enhanceSupportBusinessInfo() {
     const helpBody = document.querySelector('.help-body');
-    if (!helpBody || document.querySelector('.uiux-business-info-card')) return;
+    if (!helpBody) return;
+
+    const existingCards = Array.from(document.querySelectorAll('.uiux-business-info-card'));
+    if (existingCards.length) {
+      existingCards.slice(1).forEach((card) => card.remove());
+      return;
+    }
 
     const card = document.createElement('div');
     card.className = 'panel panel-pad uiux-business-info-card';
