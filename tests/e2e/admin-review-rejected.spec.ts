@@ -106,8 +106,10 @@ test.describe('Production Admin Review E2E — rejected', () => {
     await dismissBlockingOverlays(memberPage);
 
     // 근무 카드(업무 매칭)에서 출근 가능한 첫 카드 선택
-    await expect(memberPage.locator('[data-nav="nodes"]').first()).toBeVisible({ timeout: 25_000 });
-    await memberPage.locator('[data-nav="nodes"]').first().click();
+    // [data-nav="nodes"]는 모바일 탭바(uiux-final 동적 추가) 또는 대시보드 hero CTA에 있다.
+    const nodesNav = memberPage.locator('[data-nav="nodes"]').first();
+    await expect(nodesNav).toBeVisible({ timeout: 25_000 });
+    await nodesNav.click();
 
     const workCard = memberPage.locator('[data-start-node]').filter({ hasNot: memberPage.locator('[disabled]') }).first();
     await expect(workCard).toBeVisible({ timeout: 25_000 });
