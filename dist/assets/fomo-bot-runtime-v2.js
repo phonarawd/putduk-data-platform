@@ -201,9 +201,10 @@
     try {
       const config = window.PUTDUK_CONFIG || {};
       if (!window.supabase || !config.supabaseUrl || !config.supabasePublishableKey) return;
-      const client = window.supabase.createClient(config.supabaseUrl, config.supabasePublishableKey, {
+      const client = window.__PUTDUK_SUPABASE_CLIENT__ || window.supabase.createClient(config.supabaseUrl, config.supabasePublishableKey, {
         auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false }
       });
+      window.__PUTDUK_SUPABASE_CLIENT__ = client;
       const result = await client
         .from('crew_pulse')
         .select('live,crowd_min,crowd_max,burn_per_minute')

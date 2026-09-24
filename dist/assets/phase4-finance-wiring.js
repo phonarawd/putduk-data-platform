@@ -14,9 +14,10 @@
   function financeClient() {
     if (client) return client;
     if (!window.supabase || !config.supabaseUrl || !config.supabasePublishableKey) return null;
-    client = window.supabase.createClient(config.supabaseUrl, config.supabasePublishableKey, {
+    client = window.__PUTDUK_SUPABASE_CLIENT__ || window.supabase.createClient(config.supabaseUrl, config.supabasePublishableKey, {
       auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false }
     });
+    window.__PUTDUK_SUPABASE_CLIENT__ = client;
     return client;
   }
 
