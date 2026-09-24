@@ -34,8 +34,8 @@ test('핸드오프에 적힌 정적 출시 파일이 있다', async () => {
 test('회원·운영자 셸은 canonical app-ia13 runtime만 사용한다', async () => {
   const { memberHtml, adminHtml } = await readLaunchFiles();
   assert.equal(await existsRepo('dist', 'assets', 'app.js'), false);
-  assert.match(memberHtml, /assets\/app-ia13\.js\?v=20260925-canonical1/);
-  assert.match(adminHtml, /assets\/app-ia13\.js\?v=20260925-canonical1/);
+  assert.match(memberHtml, /assets\/app-ia13\.js\?v=20260925-console2/);
+  assert.match(adminHtml, /assets\/app-ia13\.js\?v=20260925-console2/);
   assert.doesNotMatch(memberHtml, /assets\/app\.js/);
   assert.doesNotMatch(adminHtml, /assets\/app\.js/);
 });
