@@ -3,3 +3,6 @@
 .modal-backdrop[data-stable="1"] .modal,
 .player-backdrop,
 .player-backdrop .player-sheet { animation: none; }
+
+.player-backdrop { pointer-events:none; }
+.player-backdrop .player-sheet { pointer-events:auto; }

@@ -825,7 +825,8 @@ html[data-theme="dark"] .toast {
 .help-contact-line { display:flex; flex-wrap:wrap; align-items:center; gap:4px; margin:16px 2px 0; color:var(--muted); font-size:13px; }
 .help-contact-line .text-link { min-height:0; font-size:13px; }
 @media (max-width: 640px) { .help-card { grid-template-columns:36px minmax(0,1fr); gap:10px; padding:12px 12px 12px 10px; } .help-card-icon { width:36px; height:36px; } }
-.player-backdrop { align-items:stretch; }
+.player-backdrop { align-items:stretch; pointer-events:none; }
+.player-backdrop .player-sheet { pointer-events:auto; }
 .player-sheet { width:min(560px,100%); margin:auto; display:flex; flex-direction:column; max-height:min(92vh,860px); overflow:auto; border-radius:24px; background:var(--surface-strong); }
 .player-stage, .result-stage, .cinematic-stage {
   position:relative;
