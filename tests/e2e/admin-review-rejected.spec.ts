@@ -10,7 +10,7 @@ const memberUrl = process.env.PLAYWRIGHT_MEMBER_URL || 'https://app.hiptk.app';
 // Review E2E — REJECTED 경로
 // 회원 E2E로 실제 근무를 제출해 pending run을 만들고(서버 seed = 클라이언트 번들 동일 알고리즘),
 // Admin이 반려하면 서버에서 rejected/reversed + stake release가 발생하는지 검증한다.
-// 온보딩 모달은 로그인 전 localStorage로 미리 완료 처리해 근무 클릭을 가리지 않게 한다.
+// 온보딩 모달(일반 업무 보기 등)은 렌더링 경합으로 재표시될 수 있어, 모달이 사라질 때까지 닫기를 반복한다.
 
 test.describe('Production Admin Review E2E — rejected', () => {
   test.beforeAll(() => {
@@ -32,30 +32,33 @@ test.describe('Production Admin Review E2E — rejected', () => {
     await expect(page.locator('[data-nav="reviews"]').first()).toBeVisible({ timeout: 20_000 });
   }
 
-  // 온보딩/오버레이 모달이 클릭을 가리면 닫고 재시도한다 (overlay-surface가 같은 surface를 유지하므로 재표시될 수 있다)
-  async function clickThroughOverlays(page: Page, click: () => Promise<void>, maxAttempts = 6) {
+  // 온보딩/오버레이 모달이 완전히 사라질 때까지 닫기를 반복한다.
+  async function dismissBlockingOverlays(page: Page, maxAttempts = 10) {
+    const blocker = page.locator(
+      '[data-modal="onboard-general-work"], [data-modal="onboard-pwa"], [data-modal="onboard-first-work"], [data-modal="result-scene"], [data-modal="review-wait"]'
+    );
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
-      const blocker = page.locator(
-        '[data-modal="onboard-general-work"], [data-modal="onboard-pwa"], [data-modal="onboard-first-work"], [data-modal="result-scene"], [data-modal="review-wait"]'
-      );
-      if (await blocker.first().isVisible().catch(() => false)) {
-        const closeActions = ['ack-general-work', 'skip-pwa', 'start-first-work', 'close-result', 'close-review-wait'];
-        for (const action of closeActions) {
-          const btn = page.locator(`[data-action="${action}"]`);
-          if (await btn.first().isVisible().catch(() => false)) {
-            await btn.first().click();
-            await page.waitForTimeout(400);
-            break;
-          }
+      if (!(await blocker.first().isVisible().catch(() => false))) return;
+      const closeActions = ['ack-general-work', 'skip-pwa', 'start-first-work', 'close-result', 'close-review-wait'];
+      let closed = false;
+      for (const action of closeActions) {
+        const btn = page.locator(`[data-action="${action}"]`).first();
+        if (await btn.isVisible().catch(() => false)) {
+          await btn.click().catch(() => {});
+          closed = true;
+          break;
         }
+      }
+      if (!closed) {
+        // 닫기 버튼을 못 찾으면 잠시 대기 후 재확인 (렌더 경합)
+        await page.waitForTimeout(800);
         continue;
       }
+      // 모달이 사라질 때까지 대기 (최대 3초)
       try {
-        await click();
-        return;
-      } catch (error) {
-        if (attempt === maxAttempts - 1) throw error;
-        await page.waitForTimeout(500);
+        await blocker.first().waitFor({ state: 'detached', timeout: 3_000 });
+      } catch {
+        // 재표시되면 루프에서 다시 닫는다
       }
     }
   }
@@ -67,23 +70,6 @@ test.describe('Production Admin Review E2E — rejected', () => {
     const memberContext = await browser.newContext({ locale: 'ko-KR' });
     const memberPage = await memberContext.newPage();
 
-    // 로그인 전 온보딩 상태를 완료로 미리 세팅해 모달이 근무를 가리지 않게 한다.
-    await memberContext.addInitScript(() => {
-      const stateKey = 'putduk-state-v2:prelogin-onboarding-done';
-      const payload = {
-        theme: 'light',
-        onboardingStep: null,
-        onboardingPwaDone: true,
-        onboardingGrantSeen: true,
-        onboardingGeneralSeen: true,
-        onboardingExperienceStarted: true
-      };
-      // userId는 로그인 후 알 수 있으므로, 공통 프리셋 키에는 두지 않고
-      // 로그인 직후 스위칭되는 user-scoped 키에 넣기 위해 아래에서 처리한다.
-      void stateKey;
-      (window as unknown as Record<string, unknown>).__putdukE2EOnboardingPreset = payload;
-    });
-
     await memberPage.goto(memberUrl, { waitUntil: 'domcontentloaded' });
     await expect(memberPage.locator('html')).toHaveAttribute('data-mode', 'member');
     await memberPage.locator('[data-action="open-login"]').first().click();
@@ -91,19 +77,8 @@ test.describe('Production Admin Review E2E — rejected', () => {
     await memberPage.locator('#loginPassword').fill(memberPassword);
     await memberPage.locator('#loginForm').getByRole('button', { name: '로그인', exact: true }).click();
 
-    // 로그인 직후 user-scoped 상태 키에 온보딩 완료 플래그를 심는다.
-    await memberPage.evaluate(() => {
-      const payload = (window as unknown as Record<string, unknown>).__putdukE2EOnboardingPreset as Record<string, unknown> | undefined;
-      if (!payload) return;
-      const authKey = Object.keys(localStorage).find((key) => key.startsWith('sb-') && key.endsWith('-auth-token'));
-      const raw = authKey ? localStorage.getItem(authKey) : null;
-      const userId = raw ? (JSON.parse(raw)?.user?.id ?? null) : null;
-      if (!userId) return;
-      const stateKey = `putduk-state-v2:${userId}`;
-      const existing = localStorage.getItem(stateKey);
-      const parsed = existing ? JSON.parse(existing) : {};
-      localStorage.setItem(stateKey, JSON.stringify({ ...parsed, ...payload }));
-    });
+    // 로그인 직후 온보딩/오버레이 모달을 모두 닫는다 (렌더 경합 재시도 포함)
+    await dismissBlockingOverlays(memberPage);
 
     // 근무 카드(업무 매칭)에서 출근 가능한 첫 카드 선택
     await expect(memberPage.locator('[data-nav="nodes"]').first()).toBeVisible({ timeout: 25_000 });
@@ -111,12 +86,13 @@ test.describe('Production Admin Review E2E — rejected', () => {
 
     const workCard = memberPage.locator('[data-start-node]').filter({ hasNot: memberPage.locator('[disabled]') }).first();
     await expect(workCard).toBeVisible({ timeout: 25_000 });
-    await clickThroughOverlays(memberPage, () => workCard.click());
+    await dismissBlockingOverlays(memberPage);
+    await workCard.click();
 
     // 출근 확인 모달 → 출근하기
     const startConfirm = memberPage.locator('[data-modal="start-confirm"]');
     await expect(startConfirm).toBeVisible({ timeout: 20_000 });
-    await clickThroughOverlays(memberPage, () => startConfirm.getByRole('button', { name: '출근하기' }).click());
+    await startConfirm.getByRole('button', { name: '출근하기' }).click();
 
     // 근무 오버레이(inspect-entry) 표시 대기
     const inspectEntry = memberPage.locator('.inspect-entry');
@@ -128,14 +104,14 @@ test.describe('Production Admin Review E2E — rejected', () => {
       await expect(labelInput).toBeVisible({ timeout: 25_000 });
       const invoiceCode = await memberPage.locator('.wms-code-num .wms-code-tail').first().textContent();
       await labelInput.fill((invoiceCode || '').trim());
-      await clickThroughOverlays(memberPage, () => inspectEntry.getByRole('button', { name: '이 번호로 확인' }).click());
+      await inspectEntry.getByRole('button', { name: '이 번호로 확인' }).click();
       await memberPage.waitForTimeout(700);
     }
 
     // 5건 완료 → 제출 버튼
     const submitButton = memberPage.locator('[data-action="submit-player"]');
     await expect(submitButton).toBeVisible({ timeout: 25_000 });
-    await clickThroughOverlays(memberPage, () => submitButton.click());
+    await submitButton.click();
 
     // 제출 완료 확인
     await expect(memberPage.getByText('근무 제출이 완료됐어요')).toBeVisible({ timeout: 60_000 });
