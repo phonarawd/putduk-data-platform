@@ -31,7 +31,7 @@
 
   function enhanceSupportBusinessInfo() {
     const helpBody = document.querySelector('.help-body');
-    if (!helpBody || helpBody.querySelector('.uiux-business-info-card')) return;
+    if (!helpBody || document.querySelector('.uiux-business-info-card')) return;
 
     const card = document.createElement('div');
     card.className = 'panel panel-pad uiux-business-info-card';

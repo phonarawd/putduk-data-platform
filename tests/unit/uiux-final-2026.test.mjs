@@ -127,6 +127,16 @@ test('premium member layer rebuilds history wallet identity and help wording wit
   assert.doesNotMatch(runtime, /submit_deposit|withdrawal_requests|admin-phase5|service_role|nodeStake\(|nodePay\(/);
 });
 
+test('business information card is idempotent across mutation observer rerenders', async () => {
+  const runtime = await readRepo('dist', 'assets', 'uiux-compliance-2026.js');
+  assert.match(runtime, /function enhanceSupportBusinessInfo/);
+  assert.match(runtime, /document\.querySelector\('\.uiux-business-info-card'\)/);
+  assert.match(runtime, /helpBody\.insertAdjacentElement\('afterend', card\)/);
+  assert.doesNotMatch(runtime, /helpBody\.querySelector\('\.uiux-business-info-card'\)/);
+  assert.match(runtime, /const observer = new MutationObserver/);
+  assert.match(runtime, /queued = true/);
+});
+ 
 test('premium visual system replaces demo-like blur and card styling with restrained SaaS surfaces', async () => {
   const css = await readRepo('dist', 'assets', 'uiux-premium-2026.css');
   assert.match(css, /--premium-surface:\s*#ffffff/);
