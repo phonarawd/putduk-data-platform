@@ -68,9 +68,9 @@ test('지갑·도움말·혜택 안내의 원금 출금 문구는 실제 정책�
 test('출금 Premium UX는 FOMO·봇 보호 설정을 수정하지 않는다', async () => {
   const appJs = await readRepo('dist', 'assets', 'app-ia13.js');
   const css = await readRepo('dist', 'assets', 'app.css');
-  for (const protectedName of ['bot_enabled', 'crowd_min', 'crowd_max', 'burn_per_minute', 'crew_pulse', 'FOMO_ACTIONS']) {
-    const before = appJs.split(protectedName).length - 1;
-    assert.ok(before >= 0, `app-ia13.js에서 ${protectedName} 확인 실패`);
+  // app-ia13의 FOMO 보호 계약(어드민 motion 설정 기본값)은 그대로 존재해야 한다.
+  for (const protectedName of ['bot_enabled', 'crowd_min', 'crowd_max', 'burn_per_minute']) {
+    assert.ok(appJs.includes(protectedName), `app-ia13.js에 ${protectedName} FOMO 계약이 사라졌어요`);
   }
   assert.doesNotMatch(css, /bot_enabled|crowd_min|crowd_max|burn_per_minute|crew_pulse/);
 });

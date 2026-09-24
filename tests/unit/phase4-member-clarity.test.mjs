@@ -5,7 +5,7 @@ import { readRepo } from '../helpers/repo.mjs';
 test('Phase 4 자산은 기존 UIUX 변환 뒤 마지막 표시 보정으로 연결한다', async () => {
   const html = await readRepo('dist', 'index.html');
   const growth = html.indexOf('uiux-growth-2026.js?v=20260919-uiux3');
-  const phase4 = html.indexOf('phase4-member-clarity.js?v=20260923-clarity1');
+  const phase4 = html.indexOf('phase4-member-clarity.js?v=20260924-phase41f1');
   assert.match(html, /phase4-member-clarity\.css\?v=20260921-phase4/);
   assert.ok(growth >= 0 && phase4 > growth);
 });
@@ -28,13 +28,14 @@ test('추천 화면은 서버 기본 보상액·확정 조건·원장 기준을 
   assert.match(js, /실제 금액은 확정 원장 기록 기준/);
 });
 
-test('도움말은 빠른 찾기 4개 주제와 접근 가능한 탭 구조를 제공한다', async () => {
+test('도움말은 접근 가능한 탭 구조를 제공하고 빠른 찾기 이중 주입을 하지 않는다', async () => {
   const js = await readRepo('dist', 'assets', 'phase4-member-clarity.js');
-  for (const label of ['오늘 근무', '사원증', '정산·지갑', '출금']) assert.match(js, new RegExp(label));
-  assert.match(js, /data-phase4-help-index/);
   assert.match(js, /role', 'tablist'/);
   assert.match(js, /aria-selected/);
-  assert.match(js, /자주 찾는 추가 안내/);
+  // 탭과 중복되던 빠른 찾기 카드 주입은 제거했다.
+  assert.doesNotMatch(js, /data-phase4-help-index/);
+  assert.doesNotMatch(js, /자주 찾는 추가 안내/);
+  assert.doesNotMatch(js, /HELP_TOPICS/);
 });
 
 test('Phase 4 표시 모듈은 금융·DB·브라우저 저장소에 직접 접근하지 않는다', async () => {
