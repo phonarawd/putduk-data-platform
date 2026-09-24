@@ -8,10 +8,11 @@
   const memberFinanceUrl = config.memberFinanceUrl || (config.supabaseUrl ? `${config.supabaseUrl}/functions/v1/member-finance` : '');
   const storageKey = 'putduk-state-v2';
   const supabaseClient = !launchBlock && window.supabase && config.supabaseUrl && config.supabasePublishableKey
-    ? window.supabase.createClient(config.supabaseUrl, config.supabasePublishableKey, {
+    ? (window.__PUTDUK_SUPABASE_CLIENT__ || window.supabase.createClient(config.supabaseUrl, config.supabasePublishableKey, {
       auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
-    })
+    }))
     : null;
+  if (supabaseClient) window.__PUTDUK_SUPABASE_CLIENT__ = supabaseClient;
   const authState = { session: null, profile: null, loading: Boolean(supabaseClient), error: null, adminLoading: isAdmin && Boolean(supabaseClient), adminAuthorized: !isAdmin, adminRoles: [], adminAuthError: null };
 
   // 회원 화면은 서버에서 공개된 협력사·업무만 채운다. 정적 샘플을 두지 않는다.
