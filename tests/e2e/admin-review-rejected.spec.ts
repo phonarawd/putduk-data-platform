@@ -63,7 +63,15 @@ test.describe('Production Admin Review E2E — rejected', () => {
     test.setTimeout(300_000);
 
     // ── 1. 회원: 실제 근무 제출 (pending run 생성) ──
-    const memberContext = await browser.newContext({ locale: 'ko-KR' });
+    // member 모드는 840px 이하에서 모바일 셸(tabbar)을 쓴다. PC 뷰포트에서는
+    // sidebar도 tabbar도 숨겨 data-nav가 없으므로 모바일 뷰포트로 진입한다.
+    const memberContext = await browser.newContext({
+      viewport: { width: 390, height: 844 },
+      locale: 'ko-KR',
+      isMobile: true,
+      hasTouch: true,
+      userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1'
+    });
     const memberPage = await memberContext.newPage();
 
     await memberPage.goto(memberUrl, { waitUntil: 'domcontentloaded' });
