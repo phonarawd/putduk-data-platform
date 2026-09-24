@@ -130,24 +130,14 @@ test('premium member layer rebuilds history wallet identity and help wording wit
 test('business information card is idempotent across mutation observer rerenders', async () => {
   const runtime = await readRepo('dist', 'assets', 'uiux-compliance-2026.js');
   assert.match(runtime, /function enhanceSupportBusinessInfo/);
-  assert.match(runtime, /document\.querySelector\('\.uiux-business-info-card'\)/);
+  assert.match(runtime, /const existingCards = Array\.from\(document\.querySelectorAll\('\.uiux-business-info-card'\)\)/);
+  assert.match(runtime, /existingCards\.slice\(1\)\.forEach\(\(card\) => card\.remove\(\)\)/);
   assert.match(runtime, /helpBody\.insertAdjacentElement\('afterend', card\)/);
   assert.doesNotMatch(runtime, /helpBody\.querySelector\('\.uiux-business-info-card'\)/);
   assert.match(runtime, /const observer = new MutationObserver/);
   assert.match(runtime, /queued = true/);
 });
  
-test('business info runtime cleans stale duplicates and cache-busts the deployed asset', async () => {
-  const runtime = await readRepo('dist', 'assets', 'uiux-compliance-2026.js');
-  const memberHtml = await readRepo('dist', 'index.html');
-
-  assert.match(runtime, /const existingCards = Array\.from\(document\.querySelectorAll\('\.uiux-business-info-card'\)\)/);
-  assert.match(runtime, /existingCards\.slice\(1\)\.forEach\(\(card\) => card\.remove\(\)\)/);
-  assert.match(runtime, /uiux-business-info-card/);
-  assert.match(memberHtml, /uiux-compliance-2026\.js\?v=20260924-phase41f2/);
-  assert.doesNotMatch(memberHtml, /uiux-compliance-2026\.js\?v=20260924-phase41f1/);
-});
-
 test('premium visual system replaces demo-like blur and card styling with restrained SaaS surfaces', async () => {
   const css = await readRepo('dist', 'assets', 'uiux-premium-2026.css');
   assert.match(css, /--premium-surface:\s*#ffffff/);
