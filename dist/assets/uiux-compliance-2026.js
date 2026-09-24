@@ -36,6 +36,8 @@
     const existingCards = Array.from(document.querySelectorAll('.uiux-business-info-card'));
     if (existingCards.length) {
       existingCards.slice(1).forEach((card) => card.remove());
+      const existingCard = existingCards[0];
+      if (helpBody.nextElementSibling !== existingCard) helpBody.insertAdjacentElement('afterend', existingCard);
       return;
     }
 

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readRepo } from '../helpers/repo.mjs';
 
 test('5건 검수와 서버 제출·검수 대기 전환 계약이 앱에 유지된다', async () => {
-  const app = await readRepo('dist', 'assets', 'app.js');
+  const app = await readRepo('dist', 'assets', 'app-ia13.js');
 
   assert.match(app, /const INSPECT_TOTAL = 5/);
   assert.match(app, /inspect_answers: bundle\.answers\.slice\(0, INSPECT_TOTAL\)/);
@@ -14,7 +14,7 @@ test('5건 검수와 서버 제출·검수 대기 전환 계약이 앱에 유지
 });
 
 test('중간 저장은 checkpoint_work 서버 경로를 사용하고 복원 payload를 읽는다', async () => {
-  const app = await readRepo('dist', 'assets', 'app.js');
+  const app = await readRepo('dist', 'assets', 'app-ia13.js');
 
   assert.match(app, /memberFinanceRequest\('checkpoint_work'/);
   assert.match(app, /checkpoint_key', 'work-draft'/);

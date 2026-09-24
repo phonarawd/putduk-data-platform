@@ -14,6 +14,9 @@ test('referral copy gives explicit success and failure feedback', () => {
   assert.match(app, /추천 코드를 복사했어요\./);
   assert.match(app, /추천 코드를 복사하지 못했어요\. 코드를 길게 눌러 복사해 주세요\./);
   assert.match(app, /await navigator\.clipboard\.writeText\(code\)/);
+  assert.match(app, /function copyTextFallback\(text\)/);
+  assert.match(app, /document\.execCommand\('copy'\)/);
+  assert.match(app, /else copyTextFallback\(code\)/);
 });
 
 test('referral copy ships on fresh member asset ia11', () => {

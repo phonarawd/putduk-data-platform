@@ -25,7 +25,7 @@ function distOk() {
   const index = join(root, "dist/index.html");
   const admin = join(root, "dist/admin/index.html");
   const css = join(root, "dist/assets/app.css");
-  const js = join(root, "dist/assets/app.js");
+  const js = join(root, "dist/assets/app-ia13.js");
   const manifest = join(root, "dist/manifest.webmanifest");
   const sw = join(root, "dist/sw.js");
   return [index, admin, css, js, manifest, sw].every((file) => existsSync(file));
@@ -90,7 +90,7 @@ function leakScan() {
   const files = [
     "dist/index.html",
     "dist/admin/index.html",
-    "dist/assets/app.js",
+    "dist/assets/app-ia13.js",
     "dist/admin/admin.js"
   ];
   const haystack = files.map((file) => {

@@ -27,7 +27,7 @@ const items = [];
 
 const memberHtml = await read('dist/index.html');
 const adminHtml = await read('dist/admin/index.html');
-const appJs = await read('dist/assets/app.js');
+const appJs = await read('dist/assets/app-ia13.js');
 const appCss = await read('dist/assets/app.css');
 const pkg = JSON.parse(await read('package.json'));
 const html = `${memberHtml}\n${adminHtml}`;
@@ -36,7 +36,7 @@ const launch = `${html}\n${appJs}`;
 const requiredStatic = [
   'dist/index.html',
   'dist/admin/index.html',
-  'dist/assets/app.js',
+  'dist/assets/app-ia13.js',
   'dist/assets/app.css',
   'dist/assets/overlay-surface.js',
   'dist/assets/overlay-surface.css',

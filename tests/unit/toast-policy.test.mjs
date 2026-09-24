@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
-const app = await readFile(new URL('../../dist/assets/app.js', import.meta.url), 'utf8');
+const app = await readFile(new URL('../../dist/assets/app-ia13.js', import.meta.url), 'utf8');
 const finance = await readFile(new URL('../../dist/assets/phase4-finance-wiring.js', import.meta.url), 'utf8');
 
 test('toast engine displays only one message at a time', () => {

@@ -17,7 +17,7 @@ test('원금 출금 회원 UI는 강등·라인 폐쇄 대신 실제 잔액 계�
 
 test('도움말의 원금 출금 강등·라인 하락 문구와 링크 이름을 실제 계약으로 치환한다', async () => {
   const guard = await readRepo('dist', 'assets', 'toast-policy-guard.js');
-  const appJs = await readRepo('dist', 'assets', 'app.js');
+  const appJs = await readRepo('dist', 'assets', 'app-ia13.js');
 
   const staleHelpCopy = '보증금까지 신청하면 대기 일수 없이 바로 지급하고, 등급과 라인은 내려가요.';
   const staleHelpLink = '강등·혜택 안내';

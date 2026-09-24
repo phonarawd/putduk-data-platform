@@ -1,3 +1,4 @@
+import { existsSync } from 'node:fs';
 import { access, readFile } from 'node:fs/promises';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
@@ -15,7 +16,7 @@ const requiredFiles = [
   'dist/admin/admin.js',
   'dist/assets/phase4-finance-wiring.js',
   'dist/assets/app.css',
-  'dist/assets/app.js',
+  'dist/assets/app-ia13.js',
   'dist/assets/overlay-surface.js',
   'dist/assets/overlay-surface.css',
   'dist/assets/channel-talk.js',
@@ -49,12 +50,23 @@ for (const relativePath of requiredFiles) {
 
 const memberHtml = await readFile(join(root, 'dist/index.html'), 'utf8');
 const adminHtml = await readFile(join(root, 'dist/admin/index.html'), 'utf8');
-const appJs = await readFile(join(root, 'dist/assets/app.js'), 'utf8');
+const appJs = await readFile(join(root, 'dist/assets/app-ia13.js'), 'utf8');
 const legalJs = await readFile(join(root, 'dist/assets/uiux-legal-2026.js'), 'utf8');
 const complianceJs = await readFile(join(root, 'dist/assets/uiux-compliance-2026.js'), 'utf8');
 const sw = await readFile(join(root, 'dist/sw.js'), 'utf8');
 
-await execFileAsync(process.execPath, ['--check', join(root, 'dist/assets/app.js')]);
+if (!memberHtml.includes('assets/app-ia13.js')
+  || !adminHtml.includes('assets/app-ia13.js')
+  || memberHtml.includes('assets/app.js')
+  || adminHtml.includes('assets/app.js')) {
+  throw new Error('회원·운영자 셸은 app-ia13.js만 core runtime으로 로드해야 합니다.');
+}
+
+if (existsSync(join(root, 'dist/assets/app.js'))) {
+  throw new Error('legacy dist/assets/app.js는 존재하면 안 됩니다. app-ia13.js를 사용하세요.');
+}
+
+await execFileAsync(process.execPath, ['--check', join(root, 'dist/assets/app-ia13.js')]);
 await execFileAsync(process.execPath, ['--check', join(root, 'dist/admin/phase3-admin-wiring.js')]);
 await execFileAsync(process.execPath, ['--check', join(root, 'dist/admin/admin.js')]);
 await execFileAsync(process.execPath, ['--check', join(root, 'dist/assets/phase4-finance-wiring.js')]);

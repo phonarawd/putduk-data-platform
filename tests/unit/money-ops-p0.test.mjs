@@ -69,7 +69,7 @@ test('관리자 잔액조정 UI는 같은 확인 창에서 operation_id를 재�
   const adminIndex = await readRepo('dist', 'admin', 'index.html');
   const safety = await readRepo('dist', 'admin', 'balance-adjust-safety.js');
   const clickSafety = await readRepo('dist', 'admin', 'withdrawal-safety.js');
-  const appJs = await readRepo('dist', 'assets', 'app.js');
+  const appJs = await readRepo('dist', 'assets', 'app-ia13.js');
 
   assert.match(adminIndex, /balance-adjust-safety\.js\?v=20260920-p0money1/);
   assert.match(adminIndex, /withdrawal-safety\.js\?v=20260920-p0money1/);

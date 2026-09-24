@@ -53,7 +53,7 @@ test('반려 시 reason 필수는 RPC에 남아 있다', async () => {
 
 test('admin preview·reveal은 saveState/localStorage에 저장하지 않는다', async () => {
   const adminJs = await readRepo('dist', 'admin', 'admin.js');
-  const appJs = await readRepo('dist', 'assets', 'app.js');
+  const appJs = await readRepo('dist', 'assets', 'app-ia13.js');
   assert.match(adminJs, /adminKycPreview/);
   assert.match(adminJs, /close-kyc-preview/);
   assert.doesNotMatch(adminJs, /localStorage.*signed_url|sessionStorage.*signed_url/);
@@ -96,7 +96,7 @@ test('admin preview·reveal은 saveState/localStorage에 저장하지 않는다'
 });
 
 test('theme toggle saveState 트리거 후에도 지급정보 plaintext가 localStorage payload에 없다', async () => {
-  const appJs = await readRepo('dist', 'assets', 'app.js');
+  const appJs = await readRepo('dist', 'assets', 'app-ia13.js');
   assert.match(appJs, /data-theme-toggle[\s\S]*saveState\(\)/);
   const state = {
     theme: 'light',

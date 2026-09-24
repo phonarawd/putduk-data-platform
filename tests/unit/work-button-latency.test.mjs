@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readRepo } from '../helpers/repo.mjs';
 
 test('출근·검수·제출 버튼은 서버 응답 전에 바로 바쁘게 바뀐다', async () => {
-  const appJs = await readRepo('dist', 'assets', 'app.js');
+  const appJs = await readRepo('dist', 'assets', 'app-ia13.js');
   const startBlock = appJs.slice(
     appJs.indexOf('async function confirmStartWork()'),
     appJs.indexOf('function openResultScene')

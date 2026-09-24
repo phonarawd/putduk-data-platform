@@ -5,7 +5,7 @@ import { readRepo } from '../helpers/repo.mjs';
 test('회원 출시 화면은 실제 서버 기능이 없는 내역 내려받기 버튼을 노출하지 않는다', async () => {
   const guard = await readRepo('dist', 'assets', 'launch-readiness-guard.js');
   const indexHtml = await readRepo('dist', 'index.html');
-  const appJs = await readRepo('dist', 'assets', 'app.js');
+  const appJs = await readRepo('dist', 'assets', 'app-ia13.js');
 
   assert.match(indexHtml, /launch-readiness-guard\.js\?v=20260920-p0ready1/);
   assert.match(guard, /\[data-action="export-history"\]/);
@@ -17,7 +17,7 @@ test('회원 출시 화면은 실제 서버 기능이 없는 내역 내려받기
 
 test('비동기·재고 상태 문구는 개발 중 표현 대신 실제 상태로 표시한다', async () => {
   const guard = await readRepo('dist', 'assets', 'launch-readiness-guard.js');
-  const appJs = await readRepo('dist', 'assets', 'app.js');
+  const appJs = await readRepo('dist', 'assets', 'app-ia13.js');
 
   assert.match(guard, /\['회원번호 준비 중', '회원번호 확인 중'\]/);
   assert.match(guard, /\['코드 준비 중', '추천 코드 확인 중'\]/);

@@ -18,6 +18,7 @@ export const BLOCKED_DIR_NAMES = new Set(BLOCKED_REPOS.map((repo) => repo.name.t
 const SKIP_WALK_DIRS = new Set([
   'node_modules',
   '.git',
+  '.worktrees',
   '.turbo',
   'playwright-report',
   'test-results',
