@@ -90,7 +90,11 @@ function clearLoop(canvas: HTMLCanvasElement) {
 function resolvePlayCanvas(candidate: unknown): HTMLCanvasElement | null {
   if (isCanvas(candidate)) return candidate;
   if (typeof document === 'undefined') return null;
-  return document.getElementById('motionCanvas') as HTMLCanvasElement | null;
+  const canvases = Array.from(document.querySelectorAll('canvas#motionCanvas')) as HTMLCanvasElement[];
+  return canvases.reverse().find((canvas) => {
+    const rect = canvas.getBoundingClientRect();
+    return rect.width > 0 && rect.height > 0;
+  }) || canvases[0] || null;
 }
 
 function parsePlayArgs(a: unknown, b: unknown, c: unknown, d: unknown) {

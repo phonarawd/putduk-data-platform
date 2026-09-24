@@ -4,7 +4,7 @@
   const isAdmin = document.documentElement.dataset.mode === 'admin';
   const config = window.PUTDUK_CONFIG || {};
   const launchBlock = window.__PUTDUK_LAUNCH_BLOCK__ || null;
-  const adminFunctionUrl = config.adminFunctionUrl || (config.supabaseUrl ? `${config.supabaseUrl}/functions/v1/admin-control` : '');
+  const adminFunctionUrl = config.adminFunctionUrl || (config.supabaseUrl ? `${config.supabaseUrl}/functions/v1/admin-master` : '');
   const memberFinanceUrl = config.memberFinanceUrl || (config.supabaseUrl ? `${config.supabaseUrl}/functions/v1/member-finance` : '');
   const storageKey = 'putduk-state-v2';
   const supabaseClient = !launchBlock && window.supabase && config.supabaseUrl && config.supabasePublishableKey
@@ -4691,7 +4691,11 @@
   }
 
   function drawMotionCanvas() {
-    const canvas = document.getElementById('motionCanvas');
+    const canvases = Array.from(document.querySelectorAll('canvas#motionCanvas'));
+    const canvas = canvases.reverse().find((candidate) => {
+      const rect = candidate.getBoundingClientRect();
+      return rect.width > 0 && rect.height > 0;
+    }) || canvases[0] || null;
     if (!canvas || !state.run) return;
     const node = nodeById(state.run.nodeId) || {};
     if (window.PutdukMotion && typeof window.PutdukMotion.tick === 'function') {

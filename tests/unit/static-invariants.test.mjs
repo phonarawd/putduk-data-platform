@@ -263,6 +263,7 @@ test('같은 오버레이는 다시 페이드하지 않고 부트는 인증 전�
   assert.match(motionEngine, /lastRect/);
   assert.match(motionEngine, /hints\.hidden \|\| !this\.visible/);
   assert.match(browserApi, /if \(document\.hidden\) stopWorkPhase/);
+  assert.match(appJs, /querySelectorAll\(\s*['"]canvas#motionCanvas['"]\s*\)/);
 });
 
 test('배포 헤더에 CSP가 있고 자동 정산 플래그는 꺼져 있다', async () => {

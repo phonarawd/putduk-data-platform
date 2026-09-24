@@ -1917,7 +1917,11 @@ void main() {
   function resolvePlayCanvas(candidate) {
     if (isCanvas(candidate)) return candidate;
     if (typeof document === "undefined") return null;
-    return document.getElementById("motionCanvas");
+    const canvases = Array.from(document.querySelectorAll('canvas#motionCanvas'));
+    return canvases.reverse().find((canvas) => {
+      const rect = canvas.getBoundingClientRect();
+      return rect.width > 0 && rect.height > 0;
+    }) || canvases[0] || null;
   }
   function parsePlayArgs(a, b, c, d) {
     if (isCanvas(a)) return { canvas: a, partner: b, phase: c, extras: d || {} };

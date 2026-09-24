@@ -31,6 +31,8 @@ test('admin sidebar keeps exactly seven core menus and master no longer replaces
 test('admin gateway is switched to admin-master without changing member endpoints', () => {
   assert.match(html, /functions\/v1\/admin-master/);
   assert.match(html, /memberOrigin: 'https:\/\/app\.hiptk\.app'/);
+  assert.doesNotMatch(app, /functions\/v1\/admin-control/);
+  assert.match(app, /functions\/v1\/admin-master/);
 });
 
 test('funding foundation is private and settlement tables are not altered', () => {
