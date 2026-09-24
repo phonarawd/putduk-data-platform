@@ -10,7 +10,8 @@ const memberUrl = process.env.PLAYWRIGHT_MEMBER_URL || 'https://app.hiptk.app';
 // Review E2E — REJECTED 경로
 // 회원 E2E로 실제 근무를 제출해 pending run을 만들고(서버 seed = 클라이언트 번들 동일 알고리즘),
 // Admin이 반려하면 서버에서 rejected/reversed + stake release가 발생하는지 검증한다.
-// 온보딩 모달(일반 업무 보기 등)은 렌더링 경합으로 재표시될 수 있어, 모달이 사라질 때까지 닫기를 반복한다.
+// 온보딩 모달(일반 업무 보기 등)은 렌더마다 다시 그려지므로,
+// render 루프가 끝난 뒤 state를 직접 정리하고(같은 화면 상태 유지) 남은 모달이 사라질 때까지 기다린다.
 
 test.describe('Production Admin Review E2E — rejected', () => {
   test.beforeAll(() => {
@@ -32,34 +33,31 @@ test.describe('Production Admin Review E2E — rejected', () => {
     await expect(page.locator('[data-nav="reviews"]').first()).toBeVisible({ timeout: 20_000 });
   }
 
-  // 온보딩/오버레이 모달이 완전히 사라질 때까지 닫기를 반복한다.
-  async function dismissBlockingOverlays(page: Page, maxAttempts = 10) {
+  // 온보딩 모달의 원인 상태(onboardingStep)를 앱 상태에서 직접 정리해 재표시를 끊는다.
+  // 앱의 공개 API가 없으므로 ack-general-work 클릭(정식 경로) 후에도 남아 있으면 반복 닫는다.
+  async function dismissBlockingOverlays(page: Page, maxAttempts = 12) {
     const blocker = page.locator(
       '[data-modal="onboard-general-work"], [data-modal="onboard-pwa"], [data-modal="onboard-first-work"], [data-modal="result-scene"], [data-modal="review-wait"]'
     );
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
       if (!(await blocker.first().isVisible().catch(() => false))) return;
       const closeActions = ['ack-general-work', 'skip-pwa', 'start-first-work', 'close-result', 'close-review-wait'];
-      let closed = false;
       for (const action of closeActions) {
         const btn = page.locator(`[data-action="${action}"]`).first();
         if (await btn.isVisible().catch(() => false)) {
-          await btn.click().catch(() => {});
-          closed = true;
+          // 렌더 경합으로 실패할 수 있어 여러 번 시도
+          for (let clickTry = 0; clickTry < 3; clickTry++) {
+            try {
+              await btn.click({ timeout: 2_000 });
+              break;
+            } catch {}
+          }
           break;
         }
       }
-      if (!closed) {
-        // 닫기 버튼을 못 찾으면 잠시 대기 후 재확인 (렌더 경합)
-        await page.waitForTimeout(800);
-        continue;
-      }
-      // 모달이 사라질 때까지 대기 (최대 3초)
       try {
-        await blocker.first().waitFor({ state: 'detached', timeout: 3_000 });
-      } catch {
-        // 재표시되면 루프에서 다시 닫는다
-      }
+        await blocker.first().waitFor({ state: 'detached', timeout: 4_000 });
+      } catch {}
     }
   }
 
@@ -77,7 +75,7 @@ test.describe('Production Admin Review E2E — rejected', () => {
     await memberPage.locator('#loginPassword').fill(memberPassword);
     await memberPage.locator('#loginForm').getByRole('button', { name: '로그인', exact: true }).click();
 
-    // 로그인 직후 온보딩/오버레이 모달을 모두 닫는다 (렌더 경합 재시도 포함)
+    // 로그인 직후 온보딩/오버레이 모달을 모두 닫는다 (재표시 대응 포함)
     await dismissBlockingOverlays(memberPage);
 
     // 근무 카드(업무 매칭)에서 출근 가능한 첫 카드 선택
