@@ -9,7 +9,7 @@ const ledger = read('supabase/migrations/20260917210000_putduk_three_bucket_ledg
 const lifecycle = read('supabase/migrations/20260920041000_putduk_work_lifecycle_rework_and_timing_guard.sql');
 const memberEdge = read('supabase/functions/member-finance/index.ts');
 const adminEdge = read('supabase/functions/admin-control/index.ts');
-const appJs = read('dist/assets/app.js');
+const appJs = read('dist/assets/app-ia13.js');
 
 // 시작: run 행이 생긴 뒤 AFTER INSERT에서만 시작 이벤트를 남겨 FK 오류를 막는다.
 assert.match(start, /create trigger record_putduk_task_run_started\s+after insert on public\.task_runs/i);

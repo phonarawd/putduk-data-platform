@@ -4,7 +4,7 @@ import fs from 'node:fs';
 const core = fs.readFileSync(new URL('../../dist/assets/member-runtime-core.js', import.meta.url), 'utf8');
 const p4 = fs.readFileSync(new URL('../../dist/assets/member-experience-p4.js', import.meta.url), 'utf8');
 const catalog = fs.readFileSync(new URL('../../dist/assets/member-catalog-runtime.js', import.meta.url), 'utf8');
-const app = fs.readFileSync(new URL('../../dist/assets/app.js', import.meta.url), 'utf8');
+const app = fs.readFileSync(new URL('../../dist/assets/app-ia13.js', import.meta.url), 'utf8');
 const fomoBot = fs.readFileSync(new URL('../../dist/assets/fomo-bot-runtime.js', import.meta.url), 'utf8');
 const css = fs.readFileSync(new URL('../../dist/assets/member-catalog-runtime.css', import.meta.url), 'utf8');
 const stage4 = fs.readFileSync(new URL('../../supabase/migrations/20260921104500_putduk_120_work_catalog_seed.sql', import.meta.url), 'utf8');

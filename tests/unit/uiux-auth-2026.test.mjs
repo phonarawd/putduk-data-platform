@@ -47,7 +47,7 @@ test('auth UX exposes required labels, password visibility, password validation 
 });
 
 test('signup consent evidence uses the FINAL 2026-09-19 legal version', async () => {
-  const app = await readRepo('dist', 'assets', 'app.js');
+  const app = await readRepo('dist', 'assets', 'app-ia13.js');
 
   assert.match(app, /terms_accepted:\s*termsAccepted/);
   assert.match(app, /privacy_accepted:\s*privacyAccepted/);

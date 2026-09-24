@@ -258,6 +258,19 @@
     return authState.profile?.referral_code || (authState.session ? '추천 코드 확인 중' : '로그인 후 확인');
   }
 
+  function copyTextFallback(text) {
+    const textarea = document.createElement('textarea');
+    textarea.value = text;
+    textarea.setAttribute('readonly', '');
+    textarea.style.position = 'fixed';
+    textarea.style.opacity = '0';
+    document.body.appendChild(textarea);
+    textarea.select();
+    const copied = document.execCommand('copy');
+    textarea.remove();
+    if (!copied) throw new Error('clipboard_fallback_failed');
+  }
+
   function financeEnabled() {
     return config.enableFinanceApi === true;
   }
@@ -5484,8 +5497,8 @@
       const code = referralCode();
       void (async () => {
         try {
-          if (!navigator.clipboard?.writeText) throw new Error('clipboard_unavailable');
-          await navigator.clipboard.writeText(code);
+          if (navigator.clipboard?.writeText) await navigator.clipboard.writeText(code);
+          else copyTextFallback(code);
           showToast('추천 코드를 복사했어요.', 'success');
         } catch (_) {
           showToast('추천 코드를 복사하지 못했어요. 코드를 길게 눌러 복사해 주세요.', 'warning');

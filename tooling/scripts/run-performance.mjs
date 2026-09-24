@@ -12,7 +12,7 @@ if (!config.ci?.collect?.url?.length) {
 
 const memberHtml = await readFile(join(root, 'dist/index.html'), 'utf8');
 const css = await readFile(join(root, 'dist/assets/app.css'), 'utf8');
-const js = await readFile(join(root, 'dist/assets/app.js'), 'utf8');
+const js = await readFile(join(root, 'dist/assets/app-ia13.js'), 'utf8');
 const fomoBot = await readFile(join(root, 'dist/assets/fomo-bot-runtime-v2.js'), 'utf8');
 const perfDeferred = await readFile(join(root, 'dist/assets/perf-deferred.js'), 'utf8');
 if (!memberHtml.includes('assets/fomo-bot-runtime-v2.js') || memberHtml.includes('assets/fomo-bot-runtime.js?v=')) {
@@ -32,7 +32,7 @@ if (!js.includes('devicePixelRatio')) {
 }
 
 if (js.includes('realActivityFetchedAt') || js.includes("action: 'real_activity'")) {
-  throw new Error('성능 기준: 회원 app.js에 real_activity FOMO 폴링이 남아 있습니다.');
+  throw new Error('성능 기준: 회원 app-ia13.js에 real_activity FOMO 폴링이 남아 있습니다.');
 }
 if (!fomoBot.includes("from('crew_pulse')") || !fomoBot.includes('4000')) {
   throw new Error('성능 기준: FOMO bot runtime crew_pulse 폴링 완화가 없습니다.');

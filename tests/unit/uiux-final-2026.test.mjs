@@ -132,6 +132,8 @@ test('business information card is idempotent across mutation observer rerenders
   assert.match(runtime, /function enhanceSupportBusinessInfo/);
   assert.match(runtime, /const existingCards = Array\.from\(document\.querySelectorAll\('\.uiux-business-info-card'\)\)/);
   assert.match(runtime, /existingCards\.slice\(1\)\.forEach\(\(card\) => card\.remove\(\)\)/);
+  assert.match(runtime, /helpBody\.nextElementSibling !== existingCard/);
+  assert.match(runtime, /helpBody\.insertAdjacentElement\('afterend', existingCard\)/);
   assert.match(runtime, /helpBody\.insertAdjacentElement\('afterend', card\)/);
   assert.doesNotMatch(runtime, /helpBody\.querySelector\('\.uiux-business-info-card'\)/);
   assert.match(runtime, /const observer = new MutationObserver/);

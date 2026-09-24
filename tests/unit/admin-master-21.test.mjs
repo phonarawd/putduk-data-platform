@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 
 const ia = fs.readFileSync(new URL('../../dist/admin/admin-master-ia.js', import.meta.url), 'utf8');
-const app = fs.readFileSync(new URL('../../dist/assets/app.js', import.meta.url), 'utf8');
+const app = fs.readFileSync(new URL('../../dist/assets/app-ia13.js', import.meta.url), 'utf8');
 const html = fs.readFileSync(new URL('../../dist/admin/index.html', import.meta.url), 'utf8');
 const migration = fs.readFileSync(new URL('../../supabase/migrations/20260921120000_putduk_admin_master_21.sql', import.meta.url), 'utf8');
 const edge = fs.readFileSync(new URL('../../supabase/functions/admin-master/index.ts', import.meta.url), 'utf8');
