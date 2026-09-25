@@ -1766,6 +1766,7 @@ html[data-theme="dark"] .toast {
 .grant-modal .modal-head p { letter-spacing:0; word-break:keep-all; }
 @media (max-width: 720px) {
   html[data-mode="member"] .mobile-topbar { position:relative; z-index:101; }
+  html[data-mode="member"] .mobile-logout { position:fixed; top:18px; right:12px; z-index:101; }
   .benefit-stats { grid-template-columns:1fr; }
   .deposit-method-grid { grid-template-columns:1fr; }
 }
