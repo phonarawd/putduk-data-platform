@@ -1743,7 +1743,7 @@ html[data-theme="dark"] .toast {
 .review-wait-copy { margin:14px 0 0; }
 .review-wait-sheet .player-card,
 .review-wait-sheet .work-receipt-card { letter-spacing:0; word-break:keep-all; }
-.review-wait-sheet { pointer-events:none; }
+.player-backdrop .review-wait-sheet { pointer-events:none; }
 .review-wait-sheet button { pointer-events:auto; }
 .grant-copy { margin:0; padding:0; list-style:none; display:flex; flex-direction:column; gap:12px; }
 .grant-copy li { font-size:15px; font-weight:750; line-height:1.55; letter-spacing:0; word-break:keep-all; }
