@@ -18,6 +18,7 @@ const always = new Set([
   "deposit_info_lock",
   "wallet",
   "wallet_snapshot",
+  "withdrawal_pin_status",
   "set_withdrawal_pin",
   "lock_stake",
   "start_lock",

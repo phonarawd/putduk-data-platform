@@ -647,6 +647,10 @@ html[data-theme="dark"] .toast {
   grid-template-columns: 1fr 1fr;
   gap: 10px;
 }
+.pin-settings-grid { display: grid; gap: 18px; }
+.pin-settings-grid .pin-gate { padding: 16px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface-soft); }
+.pin-settings-grid h3 { margin: 0 0 6px; }
+.pin-settings-grid .page-copy { margin: 0 0 14px; }
 .wallet-toolbar .secondary-button,
 .withdraw-actions .primary-button,
 .withdraw-actions .secondary-button,

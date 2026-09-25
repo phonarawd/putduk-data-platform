@@ -50,6 +50,9 @@ function overlayBodyToken(state = {}, helpers = {}) {
     const revealed = Array.isArray(state.depositReveal) ? state.depositReveal.length : 0;
     return `${list.length}:${state.depositPinSet ? 1 : 0}:${revealed}:${state.depositDestinationsError ? 1 : 0}:${state.depositPresetAmount || ''}:${state.depositMethod || ''}`;
   }
+  if (key === 'modal:pin-settings') {
+    return `${state.depositPinSet ? 1 : 0}:${state.depositPinLocked ? 1 : 0}:${state.depositDestinationsError ? 1 : 0}:${state.withdrawalPinSet ? 1 : 0}:${state.withdrawalPinLocked ? 1 : 0}:${state.withdrawalPinError ? 1 : 0}`;
+  }
   if (key.startsWith('review:')) return String(state.reviewWait?.status || '');
   if (key === 'modal:member-detail') {
     return String(state.modalPayload?.id || state.adminMemberDetail?.id || '');

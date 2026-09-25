@@ -200,6 +200,24 @@ async function setPin(userId: string, payload: JsonRecord) {
   return { saved: true };
 }
 
+async function withdrawalPinStatus(userId: string) {
+  const { data, error } = await admin
+    .schema("private")
+    .from("withdrawal_pins")
+    .select("failed_attempts,locked_until")
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (error) throw new HttpError(503, "출금 PIN 상태를 확인하지 못했어요.");
+  const lockedUntil = data?.locked_until || null;
+  const locked = Boolean(lockedUntil && Date.parse(String(lockedUntil)) > Date.now());
+  return {
+    pin_set: Boolean(data),
+    locked,
+    locked_until: locked ? lockedUntil : null,
+    failed_attempts: Number(data?.failed_attempts || 0)
+  };
+}
+
 async function lockStake(userId: string, payload: JsonRecord) {
   const runId = String(payload.task_run_id || payload.run_id || "").trim();
   if (!isUuid(runId)) throw new HttpError(400, "근무 정보가 필요해요.");
@@ -496,6 +514,10 @@ Deno.serve(async (request: Request, info) => {
 
     if (action === "set_withdrawal_pin") {
       return jsonResponse(request, { ok: true, ...(await setPin(user.id, payload)) });
+    }
+
+    if (action === "withdrawal_pin_status") {
+      return jsonResponse(request, { ok: true, ...(await withdrawalPinStatus(user.id)) });
     }
 
     if (action === "lock_stake" || action === "start_lock") {
