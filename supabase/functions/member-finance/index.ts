@@ -42,7 +42,9 @@ const admin = createClient(supabaseUrl, serviceRoleKey, {
 
 async function authenticate(request: Request) {
   const user = userFromVerifiedJwt(request);
-  const accessToken = (request.headers.get("authorization") || "").replace(/^Bearer\\s+/i, "").trim();
+  const accessToken = (request.headers.get("authorization") || "")
+    .replace(/^Bearer\s+/i, "")
+    .trim();
   if (!accessToken) throw new HttpError(401, "로그인이 필요합니다.");
   const { data, error } = await admin.auth.getUser(accessToken);
   if (error || !data.user || data.user.id !== user.id) {
