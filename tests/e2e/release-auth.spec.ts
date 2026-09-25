@@ -125,14 +125,15 @@ test('SIGNED_OUT/로그아웃은 회원 전용 캐시와 화면 상태를 정리
   });
 
   await page.goto('/');
-  await expect(page.locator('[data-action="logout"]').first()).toBeVisible();
+  const logout = page.locator('[data-action="logout"]:visible').first();
+  await expect(logout).toBeVisible();
 
   await page.evaluate(() => {
     history.pushState(null, '', '/wallet');
     document.body.classList.add('sidebar-open', 'modal-open', 'overlay-open');
   });
 
-  await page.locator('[data-action="logout"]').first().click();
+  await logout.click();
   await expect(page.locator('[data-action="open-login"]').first()).toBeVisible();
   await page.waitForTimeout(250);
 
