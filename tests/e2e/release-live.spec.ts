@@ -20,7 +20,7 @@ test('live gate: 전용 회원 계정 로그인 → 로그아웃 후 사용자 �
 
   await page.goto(memberUrl);
   await login(page, memberEmail, memberPassword);
-  await expect(page.locator('[data-action="logout"]').first()).toBeVisible();
+  await expect(page.locator('[data-action="logout"]:visible').first()).toBeVisible();
 
   // 온보딩 모달이 있으면 닫아 로그아웃 클릭이 가려지지 않게 한다.
   const ackGeneral = page.locator('[data-action="ack-general-work"]');
