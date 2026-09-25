@@ -92,6 +92,10 @@
     depositDestinationsError: false,
     depositPinSet: false,
     depositPinLocked: false,
+    withdrawalPinSet: false,
+    withdrawalPinLocked: false,
+    withdrawalPinError: false,
+    withdrawalPinCopy: '',
     depositPinCopy: '',
     depositReveal: null,
     depositRevealExpiresAt: null,
@@ -2234,13 +2238,69 @@
       return;
     }
     try {
-      await memberFinanceRequest('set_security_pin', { pin: values.pin, scope: 'deposit_info_reveal' });
+      await memberFinanceRequest('set_security_pin', { pin: values.pin, current_pin: values.current_pin, scope: 'deposit_info_reveal' });
       state.depositPinSet = true;
       showToast('🔐 보안 PIN을 저장했어요. 이제 입금 안내를 확인할 수 있어요.', 'success');
       await loadDepositDestinations();
       render();
     } catch (error) {
       showToast(error?.message || '보안 PIN을 저장하지 못했어요.', 'warning');
+    }
+  }
+
+  async function loadPinSettings() {
+    await loadDepositDestinations();
+    try {
+      const result = await memberFinanceRequest('withdrawal_pin_status');
+      state.withdrawalPinSet = result.pin_set === true;
+      state.withdrawalPinLocked = result.locked === true;
+      state.withdrawalPinError = false;
+      state.withdrawalPinCopy = state.withdrawalPinLocked
+        ? '출금 PIN이 잠시 잠겨 있어요. 15분 뒤에 다시 시도해 주세요.'
+        : '';
+    } catch (error) {
+      state.withdrawalPinError = true;
+      state.withdrawalPinCopy = '출금 PIN 상태를 확인하지 못했어요. 다시 시도해 주세요.';
+    }
+  }
+
+  function renderPinSettingsModal() {
+    const securityChange = state.depositPinSet;
+    const withdrawalChange = state.withdrawalPinSet;
+    const securityForm = state.depositDestinationsError
+      ? `<div class="notice"><strong>보안 PIN 상태를 확인하지 못했어요.</strong><br>${esc(state.depositPinCopy)}</div>`
+      : state.depositPinLocked
+      ? `<div class="notice"><strong>보안 PIN이 잠시 잠겨 있어요.</strong><br>${esc(state.depositPinCopy || '15분 뒤에 다시 시도해 주세요.')}</div>`
+      : `<form id="securityPinSettingsForm" class="pin-gate"><h3>입금 안내 보안 PIN</h3><p class="page-copy">출금 PIN과 별도로 관리됩니다.</p>${securityChange ? '<label class="field"><span>현재 PIN</span><input name="current_pin" type="password" inputmode="numeric" maxlength="6" pattern="[0-9]{6}" required /></label>' : ''}<label class="field"><span>${securityChange ? '새 PIN' : 'PIN 설정'}</span><input name="pin" type="password" inputmode="numeric" maxlength="6" pattern="[0-9]{6}" required /></label><label class="field"><span>새 PIN 확인</span><input name="pin_confirm" type="password" inputmode="numeric" maxlength="6" pattern="[0-9]{6}" required /></label><button class="secondary-button" type="submit">${securityChange ? '보안 PIN 변경' : '보안 PIN 설정'}</button></form>`;
+    const withdrawalForm = state.withdrawalPinError
+      ? `<div class="notice"><strong>출금 PIN 상태를 확인하지 못했어요.</strong><br>${esc(state.withdrawalPinCopy)}</div>`
+      : state.withdrawalPinLocked
+      ? `<div class="notice"><strong>출금 PIN이 잠시 잠겨 있어요.</strong><br>${esc(state.withdrawalPinCopy || '15분 뒤에 다시 시도해 주세요.')}</div>`
+      : `<form id="withdrawalPinSettingsForm" class="pin-gate"><h3>출금 PIN</h3><p class="page-copy">출금 요청에만 사용하는 별도 PIN입니다.</p>${withdrawalChange ? '<label class="field"><span>현재 PIN</span><input name="current_pin" type="password" inputmode="numeric" maxlength="6" pattern="[0-9]{6}" required /></label>' : ''}<label class="field"><span>${withdrawalChange ? '새 PIN' : 'PIN 설정'}</span><input name="pin" type="password" inputmode="numeric" maxlength="6" pattern="[0-9]{6}" required /></label><label class="field"><span>새 PIN 확인</span><input name="pin_confirm" type="password" inputmode="numeric" maxlength="6" pattern="[0-9]{6}" required /></label><button class="secondary-button" type="submit">${withdrawalChange ? '출금 PIN 변경' : '출금 PIN 설정'}</button></form>`;
+    return `<div class="modal-backdrop" data-modal="pin-settings"><div class="modal"><div class="modal-head"><div><h2>PIN 설정·변경</h2><p>두 PIN은 서로 다른 용도로 따로 관리됩니다.</p></div><button class="icon-button" data-action="close-modal" aria-label="닫기">${icon('x',18)}</button></div><div class="modal-body pin-settings-grid">${securityForm}${withdrawalForm}</div></div></div>`;
+  }
+
+  async function submitPinSettings(event, scope) {
+    event.preventDefault();
+    const values = formValues(event.target);
+    if (!/^[0-9]{6}$/.test(String(values.pin || ''))) {
+      showToast('PIN은 숫자 6자리여야 해요.', 'warning');
+      return;
+    }
+    if (String(values.pin) !== String(values.pin_confirm)) {
+      showToast('새 PIN을 두 칸에 똑같이 적어 주세요.', 'warning');
+      return;
+    }
+    try {
+      const action = scope === 'security' ? 'set_security_pin' : 'set_withdrawal_pin';
+      await memberFinanceRequest(action, { pin: values.pin, current_pin: values.current_pin, scope: scope === 'security' ? 'deposit_info_reveal' : undefined });
+      if (scope === 'security') state.depositPinSet = true;
+      else state.withdrawalPinSet = true;
+      showToast(`${scope === 'security' ? '보안' : '출금'} PIN을 저장했어요.`, 'success');
+      await loadPinSettings();
+      render();
+    } catch (error) {
+      showToast(error?.message || 'PIN을 저장하지 못했어요.', 'warning');
     }
   }
 
@@ -3075,7 +3135,7 @@
     const cards = rows.map((row) => `<article class="record-card"><div class="record-card-top"><strong>${esc(row.kind)}</strong><span class="pill ${row.ok ? 'ok' : 'wait'}">${esc(row.status)}</span></div><div class="record-card-meta"><span>${esc(row.copy)}</span><span>${esc(row.amount)}</span></div><p class="record-card-id">${row.at ? new Date(row.at).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '-'}</p></article>`).join('');
     const tableRows = rows.map((row) => `<tr><td>${esc(row.kind)}</td><td>${esc(row.copy)}</td><td><strong>${esc(row.amount)}</strong></td><td><span class="pill ${row.ok ? 'ok' : 'wait'}">${esc(row.status)}</span></td><td>${row.at ? new Date(row.at).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '-'}</td></tr>`).join('');
     const body = renderWalletLedgerBody(allRows, rows);
-    return `<div class="section-heading" style="margin-top:0"><div><h1 class="page-title">지갑</h1><p class="page-copy">지원금·업무잔액·출금가능 세 칸을 나눠 봐요.</p></div><div class="wallet-toolbar"><button class="secondary-button" data-action="open-kyc">${icon('shield-check', 16)} 본인확인</button><button class="secondary-button" data-action="deposit-info">${icon('credit-card', 16)} 입금하기</button></div></div>
+    return `<div class="section-heading" style="margin-top:0"><div><h1 class="page-title">지갑</h1><p class="page-copy">지원금·업무잔액·출금가능 세 칸을 나눠 봐요.</p></div><div class="wallet-toolbar"><button class="secondary-button" data-action="open-kyc">${icon('shield-check', 16)} 본인확인</button><button class="secondary-button" data-action="deposit-info">${icon('credit-card', 16)} 입금하기</button><button class="secondary-button" data-action="open-pin-settings">${icon('key-round', 16)} PIN 설정</button></div></div>
       <div class="wallet-card" style="margin-bottom:18px"><div class="eyebrow" style="color:#a8f3d2">${icon('layout-grid',14)} 세 칸 잔액</div>${renderWalletSlots()}</div>
       ${pendingOut ? `<div class="notice" style="margin-bottom:18px"><span style="color:var(--gold)">${icon('hourglass',17)}</span><div><strong>출금 ${pendingOut}건이 처리 중이에요.</strong><br>운영자가 같은 날 바로 처리해요. 화면에서 금액을 숨기지 않아요.</div></div>` : ''}
       <div class="withdraw-actions"><button class="primary-button" data-action="withdraw-allowance">${icon('banknote', 16)} 수당만 출금</button><button class="secondary-button" data-action="withdraw-principal">${icon('landmark', 16)} 보증금까지 출금</button></div>
@@ -3819,6 +3879,7 @@
     if (state.modal === 'deposit-jump') return renderDepositJumpConfirm();
     if (state.modal === 'withdraw') return renderInfoModal('withdraw');
     if (state.modal === 'withdraw-principal') return renderPrincipalConfirm();
+    if (state.modal === 'pin-settings') return renderPinSettingsModal();
     if (state.modal === 'kyc') return renderKycModal();
     if (state.modal === 'notifications') return renderNotificationsModal();
     if (state.modal === 'company-form') return renderCompanyForm();
@@ -4000,6 +4061,9 @@
       const list = Array.isArray(state.depositDestinations) ? state.depositDestinations : [];
       const revealed = isDepositRevealed() ? (Array.isArray(state.depositReveal) ? state.depositReveal.length : 1) : 0;
       return `${list.length}:${state.depositPinSet ? 1 : 0}:${revealed}:${state.depositDestinationsError ? 1 : 0}:${state.depositPresetAmount || ''}:${state.depositMethod || ''}`;
+    }
+    if (key === 'modal:pin-settings') {
+      return `${state.depositPinSet ? 1 : 0}:${state.depositPinLocked ? 1 : 0}:${state.depositDestinationsError ? 1 : 0}:${state.withdrawalPinSet ? 1 : 0}:${state.withdrawalPinLocked ? 1 : 0}:${state.withdrawalPinError ? 1 : 0}`;
     }
     if (key.startsWith('review:')) return String(state.reviewWait?.status || '');
     if (key === 'modal:member-detail') return String(state.modalPayload?.id || state.adminMemberDetail?.id || '');
@@ -5392,6 +5456,11 @@
     if (action === 'open-signup') { state.authMode = 'signup'; openModal('auth'); return; }
     if (action === 'open-login') { state.authMode = 'login'; openModal('auth'); return; }
     if (action === 'logout') { signOut(); return; }
+    if (action === 'open-pin-settings') {
+      openModal('pin-settings');
+      void loadPinSettings().then(() => { if (state.modal === 'pin-settings') render(); });
+      return;
+    }
     if (action === 'open-channel-talk') {
       const api = window.PutdukChannelTalk;
       if (api && typeof api.openMessenger === 'function') api.openMessenger();
@@ -6326,6 +6395,8 @@
     if (event.target.id === 'memberBlockForm') { submitMemberBlockForm(event); return; }
     if (event.target.id === 'depositPinSetForm') { submitDepositPinSet(event); return; }
     if (event.target.id === 'depositPinForm') { submitDepositPin(event); return; }
+    if (event.target.id === 'securityPinSettingsForm') { submitPinSettings(event, 'security'); return; }
+    if (event.target.id === 'withdrawalPinSettingsForm') { submitPinSettings(event, 'withdrawal'); return; }
     if (event.target.id === 'depositForm') { submitDepositForm(event); return; }
     if (event.target.id === 'depositJumpForm') { submitDepositJumpForm(event); return; }
     if (event.target.id === 'withdrawForm') { submitWithdrawForm(event); return; }

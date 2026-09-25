@@ -81,6 +81,18 @@ test('잔액 입금·차감 모달은 확인 단계로 넘어갈 때 표면 본�
   }).action, 'patch-overlay');
 });
 
+test('PIN 설정 모달은 각 scope의 조회·잠금·오류 상태가 바뀌면 다시 그린다', () => {
+  const initial = { modal: 'pin-settings' };
+  const securitySet = { ...initial, depositPinSet: true };
+  const withdrawalSet = { ...initial, withdrawalPinSet: true };
+  const statusError = { ...initial, depositDestinationsError: true, withdrawalPinError: true };
+  const withdrawalLocked = { ...initial, withdrawalPinLocked: true };
+  const tokens = [initial, securitySet, withdrawalSet, statusError, withdrawalLocked]
+    .map((state) => overlayBodyToken(state));
+
+  assert.equal(new Set(tokens).size, tokens.length);
+});
+
 test('같은 표면은 패치하고 부트는 바로 그린다', () => {
   assert.deepEqual(overlayPaintPlan({
     nextKey: 'run:1',
